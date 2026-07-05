@@ -50,6 +50,10 @@ Add these **Redirect URLs** (Authentication → URL Configuration):
 
 **Site URL** (dev): `http://localhost:5173`
 
+### Vercel SPA routing
+
+`Frontend/vercel.json` rewrites all routes to `index.html` so client-side routes (`/login`, `/auth/callback`, `/dashboard`, etc.) work on direct navigation and refresh in production.
+
 ### Email provider
 
 - Email sign-up/sign-in enabled
