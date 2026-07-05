@@ -1,0 +1,24 @@
+---
+description: Security review checklist for backend and frontend changes
+alwaysApply: true
+---
+
+# Security Review
+
+Always perform a security review for backend and frontend changes.
+
+Check for:
+- Authentication issues
+- Authorization issues
+- Input validation
+- Injection vulnerabilities
+- Sensitive data exposure
+- Secret management
+- File upload security
+- API abuse risks
+- Dependency risks
+- Proper permission checks
+
+Never expose secrets, API keys, or credentials in generated code.
+
+Highlight any potential security concerns before finalizing implementation.

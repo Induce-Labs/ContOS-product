@@ -1,0 +1,20 @@
+@import "tailwindcss";
+
+@theme {
+  --color-canvas: #faf9f7;
+  --color-canvas-raised: #ffffff;
+  --color-ink: #1c1b29;
+  --color-ink-muted: #5b5868;
+  --color-accent-primary: #744fb9;
+  --color-accent-primary-soft: #ede7f9;
+  --color-accent-primary-deep: #4e3380;
+  --color-signal-positive: #1fa97e;
+  --color-border-hairline: #e7e4de;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background-color: var(--color-canvas);
+  color: var(--color-ink);
+}

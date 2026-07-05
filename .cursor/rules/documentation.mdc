@@ -1,0 +1,21 @@
+---
+description: Documentation requirements for completed features
+alwaysApply: true
+---
+
+# Documentation
+
+Every completed feature or significant change must include concise documentation.
+
+Documentation should include:
+- Purpose of the feature
+- High-level implementation overview
+- Architecture decisions
+- API endpoints added or modified
+- Database or schema changes
+- Configuration or environment variable changes
+- Dependencies introduced
+- Known limitations
+- Future improvements where applicable
+
+Keep documentation concise, structured, and easy for another developer to understand.

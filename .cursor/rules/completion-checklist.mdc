@@ -1,0 +1,17 @@
+---
+description: Pre-completion verification checklist
+alwaysApply: true
+---
+
+# Completion Checklist
+
+Before considering any feature complete, verify:
+
+- Functionality implemented
+- Code is clean and maintainable
+- Error handling exists
+- Documentation updated
+- Security reviewed
+- No unnecessary complexity introduced
+
+If any item cannot be verified, explicitly state it instead of assuming it is complete.

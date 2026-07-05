@@ -1,0 +1,22 @@
+---
+description: API design and implementation standards
+alwaysApply: true
+---
+
+# API Design & Implementation
+
+When creating or modifying APIs:
+
+- Design RESTful, predictable endpoints.
+- Validate all incoming requests.
+- Return consistent response formats.
+- Use appropriate HTTP status codes.
+- Implement proper error handling.
+- Avoid exposing internal implementation details.
+- Separate controllers/routes from business logic.
+- Keep business logic inside services.
+- Keep database logic isolated.
+- Ensure endpoints are idempotent where appropriate.
+- Consider pagination, filtering, and rate limiting for large datasets.
+- Maintain backward compatibility whenever possible.
+- Document request and response formats.

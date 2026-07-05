@@ -1,0 +1,14 @@
+---
+description: Error handling and logging standards
+alwaysApply: true
+---
+
+# Error Handling
+
+- Always raise errors explicitly, never silently ignore them
+- Use specific error types that clearly indicate what went wrong
+- Avoid catch-all exception handlers that hide the root cause
+- No fallbacks, symptom-masking guards, or silent recovery unless explicitly asked; fix root causes and make code either succeed or fail with a clear error
+- External API or service calls: use retries with warnings, then raise the last error
+- Error messages must be clear, actionable, and specific: explain what failed and why, include request params, response body, status codes, and avoid generic "something went wrong"
+- Logging should use structured fields instead of interpolating dynamic values into message strings

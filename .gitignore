@@ -10,7 +10,23 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+
+# Monorepo build outputs
+Frontend/dist
+Backend/dist
+
+# Environment and secrets
+.env
+.env.local
+.env.*.local
+Frontend/.env.local
+Backend/.env
 *.local
+
+# Python
+Backend/.venv/
+__pycache__/
+*.pyc
 
 # Editor directories and files
 .vscode/*
