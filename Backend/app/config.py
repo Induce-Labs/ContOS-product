@@ -23,10 +23,42 @@ class Settings(BaseSettings):
         default="http://localhost:5173,http://localhost:5174",
         validation_alias="CORS_ORIGINS",
     )
+    apify_instagram_actor_id: str = Field(
+        default="apify/instagram-post-scraper",
+        validation_alias="APIFY_INSTAGRAM_ACTOR_ID",
+    )
+    apify_transcriber_actor_id: str = Field(
+        default="tictechid/anoxvanzi-transcriber",
+        validation_alias="APIFY_TRANSCRIBER_ACTOR_ID",
+    )
+    apify_wait_secs: int = Field(default=300, validation_alias="APIFY_WAIT_SECS")
+    scrape_lookback_days: int = Field(default=10, validation_alias="SCRAPE_LOOKBACK_DAYS")
+    pipeline_verbose: bool = Field(default=False, validation_alias="PIPELINE_VERBOSE")
+    llm_provider: str = Field(default="auto", validation_alias="LLM_PROVIDER")
+    openrouter_model: str = Field(
+        default="openrouter/free",
+        validation_alias="OPENROUTER_MODEL",
+    )
+    openai_model: str = Field(default="gpt-4o", validation_alias="OPENAI_MODEL")
+    llm_max_retries: int = Field(default=2, validation_alias="LLM_MAX_RETRIES")
 
     @property
     def cors_origin_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+
+    def resolved_llm_provider(self) -> str:
+        provider = self.llm_provider.strip().lower()
+
+        if provider in {"openrouter", "openai"}:
+            return provider
+
+        if self.openrouter_api_key:
+            return "openrouter"
+
+        if self.openai_api_key:
+            return "openai"
+
+        return "openrouter"
 
 
 @lru_cache

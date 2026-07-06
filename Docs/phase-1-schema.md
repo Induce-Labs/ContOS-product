@@ -29,8 +29,10 @@ auth.users
 - `projects.status`: `onboarding` | `scraping` | `ready` | `failed`
 - `competitors.platform`: `instagram` | `twitter` | `reddit`
 - `competitors.scrape_status`: `pending` | `in_progress` | `completed` | `failed`
-- `competitors.pipeline_step`: `queued` | `scraping` | `analyzing` | `done` | `failed`
+- `competitors.pipeline_step`: `queued` | `scraping` | `transcribing` | `analyzing` | `done` | `failed`
 - `scraped_content`: unique (`competitor_id`, `external_id`) for idempotent re-scrapes
+- `scraped_content.post_url`: canonical Instagram link (transcriber input)
+- `scraped_content.transcription_status`: `pending` | `in_progress` | `completed` | `failed` | `not_applicable`
 - `content_summaries.embedding`: nullable `extensions.vector(1536)` for future MLOps
 
 ## Row Level Security

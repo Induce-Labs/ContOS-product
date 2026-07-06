@@ -143,12 +143,14 @@ export type Database = {
           id: string
           likes: number | null
           platform: string
+          post_url: string | null
           posted_at: string | null
           raw_payload: Json | null
           scraped_at: string
           shares: number | null
           transcript: string | null
           transcript_source: string | null
+          transcription_status: string
           views: number | null
         }
         Insert: {
@@ -160,12 +162,14 @@ export type Database = {
           id?: string
           likes?: number | null
           platform: string
+          post_url?: string | null
           posted_at?: string | null
           raw_payload?: Json | null
           scraped_at?: string
           shares?: number | null
           transcript?: string | null
           transcript_source?: string | null
+          transcription_status?: string
           views?: number | null
         }
         Update: {
@@ -177,12 +181,14 @@ export type Database = {
           id?: string
           likes?: number | null
           platform?: string
+          post_url?: string | null
           posted_at?: string | null
           raw_payload?: Json | null
           scraped_at?: string
           shares?: number | null
           transcript?: string | null
           transcript_source?: string | null
+          transcription_status?: string
           views?: number | null
         }
         Relationships: [

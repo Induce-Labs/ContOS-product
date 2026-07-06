@@ -73,44 +73,44 @@
 
 ## Phase 4 — FastAPI Backend: Pipeline Orchestration
 
-- [ ]  Define API contract: endpoint(s) the frontend calls to enqueue competitor scrape jobs
+- [x]  Define API contract: endpoint(s) the frontend calls to enqueue competitor scrape jobs
     - e.g. `POST /projects/{project_id}/competitors/scrape` accepting a list of competitor IDs
-- [ ]  Implement async job handling (FastAPI background tasks)
-- [ ]  Per-competitor pipeline function:
-    - [ ]  Set `pipeline_step = scraping`, `scrape_status = in_progress`
-    - [ ]  Call **Instagram post scraper — apify** for the competitor's handle/URL (gets posts + reels)
-    - [ ]  Filter results: **Reels only**, **posted within last 30 days**
-    - [ ]  Parse and write rows to `scraped_content` (likes, views, shares, comments_count, caption, transcript, raw_payload)
-    - [ ]  Generate transcripts via **tictechid/anoxvanzi-Transcriber** — **no Whisper/transcription step**
-    - [ ]  Set `pipeline_step = analyzing`
-    - [ ]  Build GPT-4o prompt from the scraped batch (captions + transcripts + metrics)
-    - [ ]  Dev/testing: call OpenRouter (free) with structured JSON output/schema enforcement
-    - [ ]  Production: call OpenAI GPT-4o with structured JSON output/schema enforcement
-    - [ ]  Write result to `content_summaries` (summary jsonb, model_used, generated_at)
-    - [ ]  Set `pipeline_step = done`, `scrape_status = completed`, `last_scraped_at = now()`
-- [ ]  Error handling:
-    - [ ]  Wrap each competitor's pipeline so one failure doesn't kill others in the same batch
-    - [ ]  On failure: set `pipeline_step = failed`, `scrape_status = failed`, populate `error_message`
-- [ ]  Idempotency: re-running a scrape for the same competitor shouldn't duplicate `scraped_content` rows (rely on the uniqueness constraint from Phase 1)
-- [ ]  Support "add more competitors later" — endpoint/logic should work identically whether triggered from initial project creation or from the dashboard's "Add Competitor" action, and only process the newly added competitor(s)
+- [x]  Implement async job handling (FastAPI background tasks)
+- [x]  Per-competitor pipeline function:
+    - [x]  Set `pipeline_step = scraping`, `scrape_status = in_progress`
+    - [x]  Call **Instagram post scraper — apify** for the competitor's handle/URL (gets posts + reels)
+    - [x]  Filter results: **Reels only**, **posted within last 30 days**
+    - [x]  Parse and write rows to `scraped_content` (likes, views, shares, comments_count, caption, transcript, raw_payload)
+    - [x]  Generate transcripts via **tictechid/anoxvanzi-Transcriber** — **no Whisper/transcription step**
+    - [x]  Set `pipeline_step = analyzing`
+    - [x]  Build GPT-4o prompt from the scraped batch (captions + transcripts + metrics)
+    - [x]  Dev/testing: call OpenRouter (free) with structured JSON output/schema enforcement
+    - [x]  Production: call OpenAI GPT-4o with structured JSON output/schema enforcement
+    - [x]  Write result to `content_summaries` (summary jsonb, model_used, generated_at)
+    - [x]  Set `pipeline_step = done`, `scrape_status = completed`, `last_scraped_at = now()`
+- [x]  Error handling:
+    - [x]  Wrap each competitor's pipeline so one failure doesn't kill others in the same batch
+    - [x]  On failure: set `pipeline_step = failed`, `scrape_status = failed`, populate `error_message`
+- [x]  Idempotency: re-running a scrape for the same competitor shouldn't duplicate `scraped_content` rows (rely on the uniqueness constraint from Phase 1)
+- [x]  Support "add more competitors later" — endpoint/logic should work identically whether triggered from initial project creation or from the dashboard's "Add Competitor" action, and only process the newly added competitor(s)
 
 ---
 
 ## Phase 5 — Dashboard (Frontend)
 
-- [ ]  Layout shell: **sidebar (left) + main content area (right)**
-- [ ]  Sidebar:
-    - [ ]  List user's projects, allow switching between them
-    - [ ]  Once a project is selected, list its competitors
-    - [ ]  "Add Competitor" action (opens same intake form as Phase 3, minus project creation)
-    - [ ]  Disable/tooltip "Add Competitor" once a project hits the 10-competitor cap
-- [ ]  Main content area:
-    - [ ]  **Progress card** per competitor: step tracker (Queued → Scraping → Analyzing → Done), reflecting `pipeline_step`
-    - [ ]  Inline failed-state UI showing `error_message` when a competitor's pipeline fails
-    - [ ]  Live updates: implement polling or Supabase Realtime subscription on `competitors` (either approach is fine for v1)
-    - [ ]  Use user-friendly step copy, not raw enum values — e.g. "Researching your competitors...", "Analyzing top content...", "Done" (map `pipeline_step` values to display strings)
-    - [ ]  **Summary display**: once `content_summaries` exists for a competitor, render it (top-performing content, hooks, strategies, aggregated metrics) — replacing or sitting alongside that competitor's progress card
-    - [ ]  Summaries should appear incrementally per competitor, not wait for the whole batch
+- [x]  Layout shell: **sidebar (left) + main content area (right)**
+- [x]  Sidebar:
+    - [x]  List user's projects, allow switching between them
+    - [x]  Once a project is selected, list its competitors
+    - [x]  "Add Competitor" action (opens same intake form as Phase 3, minus project creation)
+    - [x]  Disable/tooltip "Add Competitor" once a project hits the 10-competitor cap
+- [x]  Main content area:
+    - [x]  **Progress card** per competitor: step tracker (Queued → Scraping → Transcribing → Analyzing → Done), reflecting `pipeline_step`
+    - [x]  Inline failed-state UI showing `error_message` when a competitor's pipeline fails
+    - [x]  Live updates: implement polling or Supabase Realtime subscription on `competitors` (either approach is fine for v1)
+    - [x]  Use user-friendly step copy, not raw enum values — e.g. "Researching your competitors...", "Analyzing top content...", "Done" (map `pipeline_step` values to display strings)
+    - [x]  **Summary display**: once `content_summaries` exists for a competitor, render it (top-performing content, hooks, strategies, aggregated metrics) — replacing or sitting alongside that competitor's progress card
+    - [x]  Summaries should appear incrementally per competitor, not wait for the whole batch
 
 ---
 

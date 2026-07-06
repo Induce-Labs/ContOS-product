@@ -45,7 +45,7 @@ Health check: [http://localhost:8000/health](http://localhost:8000/health)
 
 API docs: [http://localhost:8000/docs](http://localhost:8000/docs)
 
-### Scrape enqueue (Phase 3 stub)
+### Scrape enqueue
 
 ```
 POST /projects/{project_id}/competitors/scrape
@@ -53,7 +53,27 @@ Body: { "competitor_ids": ["uuid", ...] }
 Response: 202 Accepted
 ```
 
-Returns immediately; full pipeline orchestration is implemented in Phase 4.
+Queues a FastAPI background task that:
+
+1. Scrapes all Instagram posts via Apify (`apify/instagram-post-scraper`) into `scraped_content` (10-day lookback)
+2. Transcribes reel URLs from `scraped_content` via `tictechid/anoxvanzi-transcriber`
+3. Summarizes all scraped content (posts, carousels, reels) via captions + metrics; reel transcripts included when available
+4. Writes to Supabase (`scraped_content`, `content_summaries`, competitor status)
+
+Set `PIPELINE_VERBOSE=true` in `.env` to see `[PIPELINE] Step 1/3 SCRAPE`, `Step 2/3 TRANSCRIBE`, and `Step 3/3 ANALYZE` in the console.
+
+**Verify in Supabase between phases:**
+
+```sql
+SELECT post_url, content_type, likes, transcription_status, transcript IS NOT NULL AS has_transcript
+FROM scraped_content
+WHERE competitor_id = 'YOUR_COMPETITOR_ID'
+ORDER BY posted_at DESC;
+```
+
+After scrape: reels show `transcription_status = pending`, `has_transcript = false`. After transcribe: reels show `completed` with transcripts.
+
+See `Docs/phase-4-pipeline.md` for full details and required env vars.
 
 ## Architecture (Phase 0)
 
