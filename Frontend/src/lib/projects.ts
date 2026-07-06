@@ -1,5 +1,6 @@
 import { supabase } from './supabase'
-import type { Tables } from '../types/database'
+import type { Tables, TablesInsert } from '../types/database'
+import type { ProjectType } from '../types/contos'
 
 export type Project = Tables<'projects'>
 
@@ -24,6 +25,69 @@ export async function fetchUserProjects(): Promise<Project[]> {
   if (error) {
     throw new ProjectsServiceError(
       `Failed to load projects: ${error.message}`,
+      error,
+    )
+  }
+
+  return data
+}
+
+export async function createProject(
+  name: string,
+  type: ProjectType,
+): Promise<Project> {
+  const trimmedName = name.trim()
+
+  if (!trimmedName) {
+    throw new ProjectsServiceError('Project name is required.')
+  }
+
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser()
+
+  if (userError) {
+    throw new ProjectsServiceError(
+      `Failed to read authenticated user: ${userError.message}`,
+      userError,
+    )
+  }
+
+  if (!user) {
+    throw new ProjectsServiceError('You must be signed in to create a project.')
+  }
+
+  const row: TablesInsert<'projects'> = {
+    name: trimmedName,
+    type,
+    user_id: user.id,
+    status: 'onboarding',
+  }
+
+  const { data, error } = await supabase.from('projects').insert(row).select().single()
+
+  if (error) {
+    throw new ProjectsServiceError(`Failed to create project: ${error.message}`, error)
+  }
+
+  return data
+}
+
+export async function updateProjectStatus(
+  projectId: string,
+  status: Project['status'],
+): Promise<Project> {
+  const { data, error } = await supabase
+    .from('projects')
+    .update({ status })
+    .eq('id', projectId)
+    .select()
+    .single()
+
+  if (error) {
+    throw new ProjectsServiceError(
+      `Failed to update project status: ${error.message}`,
       error,
     )
   }

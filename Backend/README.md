@@ -45,6 +45,16 @@ Health check: [http://localhost:8000/health](http://localhost:8000/health)
 
 API docs: [http://localhost:8000/docs](http://localhost:8000/docs)
 
+### Scrape enqueue (Phase 3 stub)
+
+```
+POST /projects/{project_id}/competitors/scrape
+Body: { "competitor_ids": ["uuid", ...] }
+Response: 202 Accepted
+```
+
+Returns immediately; full pipeline orchestration is implemented in Phase 4.
+
 ## Architecture (Phase 0)
 
 - `app/main.py` — FastAPI app, CORS, `/health`

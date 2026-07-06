@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import {
   fetchUserProjects,
@@ -107,6 +107,12 @@ export function DashboardPage() {
             <h1 className="text-lg font-semibold text-ink">Dashboard</h1>
           </div>
           <div className="flex items-center gap-4">
+            <Link
+              to="/projects/new"
+              className="rounded-xl bg-accent-primary px-4 py-2 text-sm font-medium text-white transition hover:bg-accent-primary-deep"
+            >
+              New project
+            </Link>
             <span className="text-sm text-ink-muted">{user?.email}</span>
             <button
               type="button"
@@ -148,16 +154,12 @@ function EmptyProjectsState() {
         Projects organize the competitors you track and the intelligence ContOS generates
         for your brand or business.
       </p>
-      <button
-        type="button"
-        disabled
-        className="mt-8 rounded-xl bg-accent-primary px-5 py-3 text-sm font-medium text-white opacity-60"
+      <Link
+        to="/projects/new"
+        className="mt-8 inline-block rounded-xl bg-accent-primary px-5 py-3 text-sm font-medium text-white transition hover:bg-accent-primary-deep"
       >
-        New project (Phase 3)
-      </button>
-      <p className="mt-3 text-xs text-ink-muted">
-        Project creation ships in the next phase.
-      </p>
+        New project
+      </Link>
     </section>
   )
 }
@@ -187,8 +189,7 @@ function ProjectDashboardPreview({ project, projectCount }: ProjectDashboardPrev
           {project.type.replace('_', ' ')} · {project.status}
         </p>
         <p className="mt-6 text-sm text-ink-muted">
-          Competitor tracking and progress cards arrive in Phase 5. You are signed in and
-          routed to your workspace.
+          Competitors are queued for research. Progress cards and summaries arrive in Phase 5.
         </p>
       </div>
 

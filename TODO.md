@@ -54,20 +54,20 @@
 
 ## Phase 3 — Project Creation Flow (Frontend)
 
-- [ ]  "New Project" entry point (button on empty state / projects list)
-- [ ]  Project creation step:
-    - [ ]  Text input for **project name** (required)
-    - [ ]  Selector: **Personal Branding** vs **Business** (required)
-- [ ]  Competitor intake form:
-    - [ ]  Instagram link/handle input, supports adding multiple
-    - [ ]  Enforce **min 1, recommended 5 (shown as guidance text), max 10**
-    - [ ]  Basic validation: valid Instagram URL/handle format
-    - [ ]  Instagram-only field(s); Twitter/Reddit inputs are **hidden entirely** in v1 (not shown, not disabled)
-- [ ]  On submit:
-    - [ ]  Create `project` row in Supabase
-    - [ ]  Create `competitor` rows in Supabase (status defaults: `scrape_status = pending`, `pipeline_step = queued`)
-    - [ ]  Call FastAPI endpoint to kick off the scrape/summarize pipeline for these competitors
-    - [ ]  Redirect to Dashboard **immediately** (do not block on pipeline call)
+- [x]  "New Project" entry point (button on empty state / projects list)
+- [x]  Project creation step:
+    - [x]  Text input for **project name** (required)
+    - [x]  Selector: **Personal Branding** vs **Business** (required)
+- [x]  Competitor intake form:
+    - [x]  Instagram link/handle input, supports adding multiple
+    - [x]  Enforce **min 1, recommended 5 (shown as guidance text), max 10**
+    - [x]  Basic validation: valid Instagram URL/handle format
+    - [x]  Instagram-only field(s); Twitter/Reddit inputs are **hidden entirely** in v1 (not shown, not disabled)
+- [x]  On submit:
+    - [x]  Create `project` row in Supabase
+    - [x]  Create `competitor` rows in Supabase (status defaults: `scrape_status = pending`, `pipeline_step = queued`)
+    - [x]  Call FastAPI endpoint to kick off the scrape/summarize pipeline for these competitors
+    - [x]  Redirect to Dashboard **immediately** (do not block on pipeline call)
 
 ---
 
@@ -75,7 +75,7 @@
 
 - [ ]  Define API contract: endpoint(s) the frontend calls to enqueue competitor scrape jobs
     - e.g. `POST /projects/{project_id}/competitors/scrape` accepting a list of competitor IDs
-- [ ]  Implement async job handling (FastAPI background tasks, or Celery/RQ — resolve Open Question 4 first)
+- [ ]  Implement async job handling (FastAPI background tasks)
 - [ ]  Per-competitor pipeline function:
     - [ ]  Set `pipeline_step = scraping`, `scrape_status = in_progress`
     - [ ]  Call **Instagram post scraper — apify** for the competitor's handle/URL (gets posts + reels)
