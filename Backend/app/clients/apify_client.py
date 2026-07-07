@@ -60,13 +60,6 @@ class ApifyClient:
         if not reel_urls:
             return {}
 
-        actor_input = {
-            "urls": reel_urls,
-            "include_timestamps": False,
-            "enable_diarization": False,
-            "language": "auto",
-        }
-
         logger.info(
             "Starting reel transcription batch",
             extra={
@@ -75,18 +68,29 @@ class ApifyClient:
             },
         )
 
-        items = self._run_actor_sync_get_dataset_items(self._transcriber_actor_id, actor_input)
-        transcript_map = self._map_transcription_items(items, reel_urls)
+        transcript_map: dict[str, str] = {}
+        batch_size = 25
+
+        for offset in range(0, len(reel_urls), batch_size):
+            batch = reel_urls[offset : offset + batch_size]
+            actor_input = {"bulkUrls": batch}
+            items = self._run_actor_sync_get_dataset_items(
+                self._transcriber_actor_id,
+                actor_input,
+            )
+            transcript_map.update(self._map_transcription_items(items, batch))
+
+        aligned_map = self._align_transcript_keys(transcript_map, reel_urls)
 
         logger.info(
             "Reel transcription batch complete",
             extra={
                 "urls_requested": len(reel_urls),
-                "transcripts_mapped": len(transcript_map),
+                "transcripts_mapped": len(aligned_map),
             },
         )
 
-        return transcript_map
+        return aligned_map
 
     def _run_actor_sync_get_dataset_items(
         self,
@@ -142,6 +146,27 @@ class ApifyClient:
         return actor_id.replace("/", "~")
 
     @staticmethod
+    def _normalize_instagram_url(url: str) -> str:
+        return url.strip().rstrip("/").split("?", maxsplit=1)[0]
+
+    @staticmethod
+    def _align_transcript_keys(
+        transcript_map: dict[str, str],
+        requested_urls: list[str],
+    ) -> dict[str, str]:
+        normalized_to_requested = {
+            ApifyClient._normalize_instagram_url(url): url for url in requested_urls
+        }
+        aligned: dict[str, str] = {}
+
+        for source_url, transcript in transcript_map.items():
+            normalized = ApifyClient._normalize_instagram_url(source_url)
+            requested_url = normalized_to_requested.get(normalized, source_url)
+            aligned[requested_url] = transcript
+
+        return aligned
+
+    @staticmethod
     def _map_transcription_items(
         items: list[dict[str, Any]],
         requested_urls: list[str],
@@ -149,10 +174,19 @@ class ApifyClient:
         transcripts_by_url: dict[str, str] = {}
 
         for item in items:
+            err_msg = item.get("errMsg") or item.get("error")
+            if isinstance(err_msg, str) and err_msg.strip():
+                logger.warning(
+                    "Transcriber returned error for item",
+                    extra={"error": err_msg.strip(), "item_url": item.get("url")},
+                )
+                continue
+
             source_url = (
                 item.get("url")
                 or item.get("sourceUrl")
                 or item.get("inputUrl")
+                or item.get("videoUrl")
                 or item.get("start_urls")
             )
             transcript = (

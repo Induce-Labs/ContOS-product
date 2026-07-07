@@ -16,6 +16,8 @@ from app.config import Settings
 
 from app.errors import ConfigurationError, RepositoryError
 
+from app.services.project_status import resolve_project_status
+
 
 
 logger = logging.getLogger(__name__)
@@ -98,7 +100,35 @@ class SupabaseRepository:
 
         return response.data
 
+    def verify_project_owner(self, project_id: UUID, user_id: UUID) -> None:
+        response = (
+            self._client.table("projects")
+            .select("id")
+            .eq("id", str(project_id))
+            .eq("user_id", str(user_id))
+            .maybe_single()
+            .execute()
+        )
 
+        if response.data is None:
+            raise RepositoryError(
+                "Project not found or you do not have permission to access it.",
+            )
+
+    def count_competitors_for_project(self, project_id: UUID) -> int:
+        response = (
+            self._client.table("competitors")
+            .select("id", count="exact")
+            .eq("project_id", str(project_id))
+            .execute()
+        )
+
+        if response.count is None:
+            raise RepositoryError(
+                f"Failed to count competitors for project {project_id}.",
+            )
+
+        return response.count
 
     def update_competitor_status(
 
@@ -462,28 +492,11 @@ class SupabaseRepository:
 
 
         if not response.data:
-
             return
 
-
-
-        statuses = [row["scrape_status"] for row in response.data]
-
-
-
-        if any(status == "failed" for status in statuses):
-
-            project_status = "failed"
-
-        elif all(status == "completed" for status in statuses):
-
-            project_status = "ready"
-
-        else:
-
-            project_status = "scraping"
-
-
+        project_status = resolve_project_status(
+            [row["scrape_status"] for row in response.data],
+        )
 
         update_response = (
 

@@ -66,9 +66,9 @@ export function CompetitorSummaryCard({
 
       <SummarySection title="Top performing content">
         <div className="space-y-3">
-          {summary.top_performing_content.map((item) => (
+          {summary.top_performing_content.map((item, index) => (
             <article
-              key={item.external_id}
+              key={`top-${index}-${item.external_id}-${item.rank}`}
               className="rounded-2xl border border-border-hairline bg-canvas-raised p-4"
             >
               <div className="flex flex-wrap items-center gap-2">
@@ -132,9 +132,9 @@ function BulletList({ items, emphasis = false }: BulletListProps) {
 
   return (
     <ul className="space-y-2">
-      {items.map((item) => (
+      {items.map((item, index) => (
         <li
-          key={item}
+          key={`bullet-${index}`}
           className={`text-sm ${emphasis ? 'font-medium text-ink' : 'text-ink-muted'}`}
         >
           • {item}

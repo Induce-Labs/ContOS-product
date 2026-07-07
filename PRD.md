@@ -98,7 +98,7 @@ Just for the context, there will be three sections:
 - Trigger: on competitor form submission (initial batch), or when a user adds new competitors later from the dashboard — either path calls the **Python/FastAPI backend**, which kicks off the scrape job asynchronously (see Section 6).
 - Scraper: **Apify actors**, invoked from the FastAPI service:
     - **Instagram post scraper — apify**: gets all posts + reels for an account; we filter by date (last 30 days) and extract caption, likes, comments count (and other metrics where available).
-    - **tictechid/anoxvanzi-Transcriber**: used to generate reel transcripts.
+    - **apple_yang/instagram-transcripts-scraper**: used to generate reel transcripts.
 - Data to collect **per competitor**, filtered to **Reels only, posted within the last 30 days**:
     - Reel URL / ID
     - Post date
@@ -254,7 +254,7 @@ Just for the context, there will be three sections:
 ## 8. Open Questions (for team/Cursor to resolve before or during build)
 
 1. Should Twitter/Reddit fields be visible-but-disabled in the v1 competitor form (to signal roadmap) or fully hidden until v2?
-2. Transcripts: we will use **tictechid/anoxvanzi-Transcriber** (no Whisper step in v1).
+2. Transcripts: we will use **apple_yang/instagram-transcripts-scraper** (no Whisper step in v1).
 3. Polling vs. Supabase Realtime for the dashboard progress card — Realtime is a better UX (instant updates) but adds implementation complexity; polling is simpler to ship first. Which should v1 start with?
 4. Should the FastAPI service run as a persistent server (with an in-process/Celery-style task queue) or as a serverless/on-demand deployment? This affects how background jobs are hosted and scaled.
 5. Exact visual design for the summary cards on the dashboard (Section 4.7) — layout, ordering, and whether raw metrics are shown alongside the AI-generated narrative — is left to design/Cursor discretion for v1 as long as all structured summary fields are represented.

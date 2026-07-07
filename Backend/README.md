@@ -49,14 +49,17 @@ API docs: [http://localhost:8000/docs](http://localhost:8000/docs)
 
 ```
 POST /projects/{project_id}/competitors/scrape
+Authorization: Bearer <supabase_access_token>
 Body: { "competitor_ids": ["uuid", ...] }
 Response: 202 Accepted
 ```
 
+Requires a valid Supabase user JWT. The backend verifies project ownership before enqueueing work.
+
 Queues a FastAPI background task that:
 
-1. Scrapes all Instagram posts via Apify (`apify/instagram-post-scraper`) into `scraped_content` (10-day lookback)
-2. Transcribes reel URLs from `scraped_content` via `tictechid/anoxvanzi-transcriber`
+1. Scrapes all Instagram posts via Apify (`apify/instagram-post-scraper`) into `scraped_content` (30-day lookback)
+2. Transcribes reel URLs from `scraped_content` via `apple_yang/instagram-transcripts-scraper`
 3. Summarizes all scraped content (posts, carousels, reels) via captions + metrics; reel transcripts included when available
 4. Writes to Supabase (`scraped_content`, `content_summaries`, competitor status)
 
@@ -73,7 +76,7 @@ ORDER BY posted_at DESC;
 
 After scrape: reels show `transcription_status = pending`, `has_transcript = false`. After transcribe: reels show `completed` with transcripts.
 
-See `Docs/phase-4-pipeline.md` for full details and required env vars.
+See `Docs/phase-4-pipeline.md` and `Docs/phase-6-hardening.md` for full details and required env vars.
 
 ## Architecture (Phase 0)
 

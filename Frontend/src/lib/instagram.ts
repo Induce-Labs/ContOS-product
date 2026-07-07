@@ -50,6 +50,15 @@ export function validateInstagramInput(rawValue: string): InstagramValidationRes
   }
 }
 
+export function getInstagramHandle(handleOrUrl: string): string {
+  const result = validateInstagramInput(handleOrUrl)
+  if (!result.valid) {
+    return handleOrUrl.trim().toLowerCase()
+  }
+
+  return result.handle.toLowerCase()
+}
+
 export function normalizeCompetitorInputs(values: string[]): string[] {
   const seenHandles = new Set<string>()
   const normalizedValues: string[] = []

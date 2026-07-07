@@ -6,8 +6,10 @@ import {
   fetchUserProjects,
   resolveActiveProject,
   setLastUsedProjectId,
+  updateProjectStatus,
   type Project,
 } from '../lib/projects'
+import { enqueueCompetitorScrapeJobsOrThrow } from '../lib/api'
 import { DashboardSidebar } from '../components/dashboard/DashboardSidebar'
 import { CompetitorProgressCard } from '../components/dashboard/CompetitorProgressCard'
 import { CompetitorSummaryCard } from '../components/dashboard/CompetitorSummaryCard'
@@ -26,6 +28,8 @@ export function DashboardPage() {
   const [selectedCompetitorId, setSelectedCompetitorId] = useState<string | null>(null)
   const [isAddCompetitorOpen, setIsAddCompetitorOpen] = useState(false)
   const [isSigningOut, setIsSigningOut] = useState(false)
+  const [retryingCompetitorId, setRetryingCompetitorId] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
 
   const {
     competitors,
@@ -94,6 +98,27 @@ export function DashboardPage() {
     }
   }, [navigate, projectId])
 
+  async function handleRetryCompetitor(competitorId: string) {
+    if (!activeProject) {
+      return
+    }
+
+    setActionError(null)
+    setRetryingCompetitorId(competitorId)
+
+    try {
+      await updateProjectStatus(activeProject.id, 'scraping')
+      await enqueueCompetitorScrapeJobsOrThrow(activeProject.id, [competitorId])
+      await refresh()
+    } catch (error) {
+      setActionError(
+        error instanceof Error ? error.message : 'Failed to retry competitor research.',
+      )
+    } finally {
+      setRetryingCompetitorId(null)
+    }
+  }
+
   async function handleSignOut() {
     setIsSigningOut(true)
 
@@ -115,6 +140,16 @@ export function DashboardPage() {
   const visibleCompetitors = activeCompetitorId
     ? competitors.filter((competitor) => competitor.id === activeCompetitorId)
     : competitors
+  const failedCompetitorCount = competitors.filter(
+    (competitor) => competitor.pipeline_step === 'failed',
+  ).length
+  const completedCompetitorCount = competitors.filter(
+    (competitor) => competitor.pipeline_step === 'done',
+  ).length
+  const hasPartialFailure =
+    failedCompetitorCount > 0 &&
+    completedCompetitorCount > 0 &&
+    activeProject?.status === 'ready'
 
   if (isLoading) {
     return (
@@ -159,9 +194,26 @@ export function DashboardPage() {
         />
 
         <main className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
-          {projectsError || dashboardError ? (
-            <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-              {projectsError ?? dashboardError}
+          {projectsError || dashboardError || actionError ? (
+            <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              <span>{projectsError ?? dashboardError ?? actionError}</span>
+              {dashboardError && !projectsError ? (
+                <button
+                  type="button"
+                  onClick={() => void refresh()}
+                  className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50"
+                >
+                  Retry
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+
+          {hasPartialFailure ? (
+            <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              {failedCompetitorCount} of {competitors.length} competitor
+              {competitors.length === 1 ? '' : 's'} failed research. Completed competitors still
+              have summaries below — use &quot;Retry research&quot; on failed cards.
             </div>
           ) : null}
 
@@ -198,6 +250,8 @@ export function DashboardPage() {
                       key={competitor.id}
                       competitor={competitor}
                       summary={summariesByCompetitorId.get(competitor.id) ?? null}
+                      onRetry={(competitorId) => void handleRetryCompetitor(competitorId)}
+                      isRetrying={retryingCompetitorId === competitor.id}
                     />
                   ))}
                 </div>
@@ -247,16 +301,29 @@ function DashboardHeader({ userEmail, isSigningOut, onSignOut }: DashboardHeader
 type CompetitorDashboardSectionProps = {
   competitor: Competitor
   summary: ContentSummary | null
+  onRetry?: (competitorId: string) => void
+  isRetrying?: boolean
 }
 
-function CompetitorDashboardSection({ competitor, summary }: CompetitorDashboardSectionProps) {
+function CompetitorDashboardSection({
+  competitor,
+  summary,
+  onRetry,
+  isRetrying = false,
+}: CompetitorDashboardSectionProps) {
   const isDone = competitor.pipeline_step === 'done' && summary !== null
 
   if (isDone) {
     return <CompetitorSummaryCard competitor={competitor} summaryRecord={summary} />
   }
 
-  return <CompetitorProgressCard competitor={competitor} />
+  return (
+    <CompetitorProgressCard
+      competitor={competitor}
+      onRetry={onRetry}
+      isRetrying={isRetrying}
+    />
+  )
 }
 
 function EmptyProjectsState() {

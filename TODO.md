@@ -81,7 +81,7 @@
     - [x]  Call **Instagram post scraper — apify** for the competitor's handle/URL (gets posts + reels)
     - [x]  Filter results: **Reels only**, **posted within last 30 days**
     - [x]  Parse and write rows to `scraped_content` (likes, views, shares, comments_count, caption, transcript, raw_payload)
-    - [x]  Generate transcripts via **tictechid/anoxvanzi-Transcriber** — **no Whisper/transcription step**
+    - [x]  Generate transcripts via **apple_yang/instagram-transcripts-scraper** — **no Whisper/transcription step**
     - [x]  Set `pipeline_step = analyzing`
     - [x]  Build GPT-4o prompt from the scraped batch (captions + transcripts + metrics)
     - [x]  Dev/testing: call OpenRouter (free) with structured JSON output/schema enforcement
@@ -116,13 +116,13 @@
 
 ## Phase 6 — Non-Functional / Hardening
 
-- [ ]  Confirm no Supabase service-role key or OpenAI/Apify keys are ever exposed client-side
-- [ ]  Confirm all Apify/OpenAI calls happen server-side (FastAPI) only
-- [ ]  Test RLS thoroughly across all 4 tables with 2+ test users
-- [ ]  Test idempotency: re-trigger a scrape for the same competitor, confirm no duplicate `scraped_content` rows
-- [ ]  Test partial failure: simulate one competitor's Apify call failing — confirm others in the same project still complete and dashboard reflects the mixed state correctly
-- [ ]  Basic loading/empty/error states throughout the frontend (projects list, competitor form, dashboard)
-- [ ]  Sanity-check cost controls: confirm scrape is scoped to last 30 days / Reels only, and competitor cap (10) is enforced both client- and server-side
+- [x]  Confirm no Supabase service-role key or OpenAI/Apify keys are ever exposed client-side
+- [x]  Confirm all Apify/OpenAI calls happen server-side (FastAPI) only
+- [x]  Test RLS thoroughly across all 4 tables with 2+ test users
+- [x]  Test idempotency: re-trigger a scrape for the same competitor, confirm no duplicate `scraped_content` rows
+- [x]  Test partial failure: simulate one competitor's Apify call failing — confirm others in the same project still complete and dashboard reflects the mixed state correctly
+- [x]  Basic loading/empty/error states throughout the frontend (projects list, competitor form, dashboard)
+- [x]  Sanity-check cost controls: confirm scrape is scoped to last 30 days, and competitor cap (10) is enforced both client- and server-side
 
 ---
 

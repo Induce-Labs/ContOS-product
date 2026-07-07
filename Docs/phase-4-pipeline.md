@@ -12,7 +12,7 @@ Run the async competitor intelligence pipeline on the FastAPI backend in three e
 
 1. **Scrape** — `apify/instagram-post-scraper` stores all posts (links + metrics) in `scraped_content`
 
-2. **Transcribe** — reel URLs read from `scraped_content` are sent to `tictechid/anoxvanzi-transcriber`; only transcript fields are updated
+2. **Transcribe** — reel URLs read from `scraped_content` are sent to `apple_yang/instagram-transcripts-scraper` (`bulkUrls`); only transcript fields are updated
 
 3. **Analyze** — all scraped content (posts, carousels, reels) summarized via LLM using captions + metrics; reel transcripts included when available
 
@@ -116,7 +116,7 @@ Failures are isolated per competitor: one failure does not stop others in the ba
 
 | `APIFY_INSTAGRAM_ACTOR_ID` | No | Default `apify/instagram-post-scraper` |
 
-| `APIFY_TRANSCRIBER_ACTOR_ID` | No | Default `tictechid/anoxvanzi-transcriber` |
+| `APIFY_TRANSCRIBER_ACTOR_ID` | No | Default `apple_yang/instagram-transcripts-scraper` |
 
 | `SCRAPE_LOOKBACK_DAYS` | No | Default `10` (testing window) |
 
@@ -228,7 +228,7 @@ Stored in `content_summaries.summary`:
 
 - Uses Apify sync actor endpoints (simple for v1; may need queue/worker at scale)
 
-- Transcription batching assumes transcriber output can be mapped back to reel URLs
+- Transcriber sends reel URLs in `bulkUrls` batches of 25; output `url` + `text` fields are mapped back to `post_url`
 
 - Transcription failures do not block summarization; posts and reels without transcripts use captions + metrics
 

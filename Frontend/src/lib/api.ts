@@ -1,4 +1,4 @@
-import { getApiBaseUrl } from './supabase'
+import { supabase, getApiBaseUrl } from './supabase'
 
 export class ApiServiceError extends Error {
   readonly statusCode: number | null
@@ -23,11 +23,27 @@ export async function enqueueCompetitorScrapeJobs(
     return
   }
 
+  const {
+    data: { session },
+    error: sessionError,
+  } = await supabase.auth.getSession()
+
+  if (sessionError) {
+    throw new ApiServiceError(`Failed to read auth session: ${sessionError.message}`)
+  }
+
+  if (!session?.access_token) {
+    throw new ApiServiceError('You must be signed in to start competitor research.')
+  }
+
   const response = await fetch(
     `${getApiBaseUrl()}/projects/${projectId}/competitors/scrape`,
     {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
       body: JSON.stringify({ competitor_ids: competitorIds }),
     },
   )
@@ -63,4 +79,12 @@ export function enqueueCompetitorScrapeJobsInBackground(
       error: error instanceof Error ? error.message : String(error),
     })
   })
+}
+
+/** Prefer this over the background helper when the UI should surface enqueue failures. */
+export async function enqueueCompetitorScrapeJobsOrThrow(
+  projectId: string,
+  competitorIds: string[],
+): Promise<void> {
+  await enqueueCompetitorScrapeJobs(projectId, competitorIds)
 }

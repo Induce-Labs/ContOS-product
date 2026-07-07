@@ -11,9 +11,15 @@ import { displayCompetitorHandle } from '../../lib/instagram-display'
 
 type CompetitorProgressCardProps = {
   competitor: Competitor
+  onRetry?: (competitorId: string) => void
+  isRetrying?: boolean
 }
 
-export function CompetitorProgressCard({ competitor }: CompetitorProgressCardProps) {
+export function CompetitorProgressCard({
+  competitor,
+  onRetry,
+  isRetrying = false,
+}: CompetitorProgressCardProps) {
   const pipelineStep = competitor.pipeline_step as PipelineStep
   const isFailed = pipelineStep === 'failed'
 
@@ -35,8 +41,20 @@ export function CompetitorProgressCard({ competitor }: CompetitorProgressCardPro
       </div>
 
       {isFailed && competitor.error_message ? (
-        <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {competitor.error_message}
+        <div className="mt-6 space-y-3">
+          <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {competitor.error_message}
+          </div>
+          {onRetry ? (
+            <button
+              type="button"
+              onClick={() => onRetry(competitor.id)}
+              disabled={isRetrying}
+              className="rounded-xl border border-red-200 bg-white px-4 py-2 text-sm font-medium text-red-700 transition hover:bg-red-50 disabled:opacity-60"
+            >
+              {isRetrying ? 'Retrying…' : 'Retry research'}
+            </button>
+          ) : null}
         </div>
       ) : null}
 

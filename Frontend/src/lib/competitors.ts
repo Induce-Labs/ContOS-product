@@ -1,6 +1,7 @@
 import { supabase } from './supabase'
 import type { Tables, TablesInsert } from '../types/database'
 import type { CompetitorPlatform } from '../types/contos'
+import { getInstagramHandle } from './instagram'
 
 export type Competitor = Tables<'competitors'>
 
@@ -46,6 +47,29 @@ export async function createCompetitors(
     )
   }
 
+  const existingCompetitors = await fetchCompetitorsForProject(projectId)
+
+  if (existingCompetitors.length + handleOrUrls.length > MAX_COMPETITORS_PER_PROJECT) {
+    const remainingSlots = MAX_COMPETITORS_PER_PROJECT - existingCompetitors.length
+    throw new CompetitorsServiceError(
+      remainingSlots <= 0
+        ? `This project already has the maximum of ${MAX_COMPETITORS_PER_PROJECT} competitors.`
+        : `You can add at most ${remainingSlots} more competitor(s) to this project.`,
+    )
+  }
+
+  const existingHandles = new Set(
+    existingCompetitors.map((competitor) => getInstagramHandle(competitor.handle_or_url)),
+  )
+
+  for (const handleOrUrl of handleOrUrls) {
+    const handle = getInstagramHandle(handleOrUrl)
+    if (existingHandles.has(handle)) {
+      throw new CompetitorsServiceError(`@${handle} is already tracked in this project.`)
+    }
+    existingHandles.add(handle)
+  }
+
   if (handleOrUrls.length > MAX_COMPETITORS_PER_PROJECT) {
     throw new CompetitorsServiceError(
       `A project can have at most ${MAX_COMPETITORS_PER_PROJECT} competitors.`,
@@ -63,11 +87,16 @@ export async function createCompetitors(
   const { data, error } = await supabase.from('competitors').insert(rows).select()
 
   if (error) {
-    throw new CompetitorsServiceError(
-      `Failed to create competitors: ${error.message}`,
-      error,
-    )
+    throw new CompetitorsServiceError(mapCompetitorCapError(error.message), error)
   }
 
   return data
+}
+
+function mapCompetitorCapError(message: string): string {
+  if (message.includes('competitor_cap_exceeded')) {
+    return 'This project already has the maximum of 10 competitors.'
+  }
+
+  return message
 }

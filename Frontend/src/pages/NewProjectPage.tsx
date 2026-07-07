@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { AuthAlert, PrimaryButton } from '../components/auth/AuthButtons'
 import { AuthFormField } from '../components/auth/AuthFormField'
-import { enqueueCompetitorScrapeJobsInBackground } from '../lib/api'
+import { enqueueCompetitorScrapeJobsOrThrow } from '../lib/api'
 import {
   MAX_COMPETITORS_PER_PROJECT,
   MIN_COMPETITORS_PER_PROJECT,
@@ -150,7 +150,7 @@ export function NewProjectPage() {
       const competitors = await createCompetitors(project.id, normalizedCompetitors)
       await updateProjectStatus(project.id, 'scraping')
 
-      enqueueCompetitorScrapeJobsInBackground(
+      await enqueueCompetitorScrapeJobsOrThrow(
         project.id,
         competitors.map((competitor) => competitor.id),
       )

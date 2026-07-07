@@ -8,7 +8,7 @@ import {
   type Competitor,
 } from '../../lib/competitors'
 import { normalizeCompetitorInputs, validateInstagramInput } from '../../lib/instagram'
-import { enqueueCompetitorScrapeJobsInBackground } from '../../lib/api'
+import { enqueueCompetitorScrapeJobsOrThrow } from '../../lib/api'
 import { updateProjectStatus } from '../../lib/projects'
 
 type AddCompetitorPanelProps = {
@@ -106,7 +106,7 @@ export function AddCompetitorPanel({
       const competitors = await createCompetitors(projectId, normalizedCompetitors)
       await updateProjectStatus(projectId, 'scraping')
 
-      enqueueCompetitorScrapeJobsInBackground(
+      await enqueueCompetitorScrapeJobsOrThrow(
         projectId,
         competitors.map((competitor) => competitor.id),
       )

@@ -28,11 +28,11 @@ class Settings(BaseSettings):
         validation_alias="APIFY_INSTAGRAM_ACTOR_ID",
     )
     apify_transcriber_actor_id: str = Field(
-        default="tictechid/anoxvanzi-transcriber",
+        default="apple_yang/instagram-transcripts-scraper",
         validation_alias="APIFY_TRANSCRIBER_ACTOR_ID",
     )
     apify_wait_secs: int = Field(default=300, validation_alias="APIFY_WAIT_SECS")
-    scrape_lookback_days: int = Field(default=10, validation_alias="SCRAPE_LOOKBACK_DAYS")
+    scrape_lookback_days: int = Field(default=30, validation_alias="SCRAPE_LOOKBACK_DAYS")
     pipeline_verbose: bool = Field(default=False, validation_alias="PIPELINE_VERBOSE")
     llm_provider: str = Field(default="auto", validation_alias="LLM_PROVIDER")
     openrouter_model: str = Field(

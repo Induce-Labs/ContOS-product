@@ -1,9 +1,11 @@
 import logging
 from uuid import UUID
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
+from app.api.deps import get_current_user_id
+from app.constants import MAX_COMPETITORS_PER_PROJECT
 from app.errors import ConfigurationError, RepositoryError
 from app.services.pipeline import run_pipeline_batch
 
@@ -31,12 +33,21 @@ def enqueue_competitor_scrape_jobs(
     project_id: UUID,
     body: ScrapeEnqueueRequest,
     background_tasks: BackgroundTasks,
+    user_id: UUID = Depends(get_current_user_id),
 ) -> ScrapeEnqueueResponse:
     try:
         from app.clients.supabase_repo import SupabaseRepository
         from app.config import get_settings
 
         repository = SupabaseRepository(get_settings())
+        repository.verify_project_owner(project_id, user_id)
+
+        competitor_count = repository.count_competitors_for_project(project_id)
+        if competitor_count > MAX_COMPETITORS_PER_PROJECT:
+            raise RepositoryError(
+                f"A project can have at most {MAX_COMPETITORS_PER_PROJECT} competitors.",
+            )
+
         repository.get_competitors_for_project(project_id, body.competitor_ids)
     except ConfigurationError as error:
         raise HTTPException(
@@ -55,6 +66,7 @@ def enqueue_competitor_scrape_jobs(
         "Queued competitor scrape batch",
         extra={
             "project_id": str(project_id),
+            "user_id": str(user_id),
             "competitor_ids": [str(competitor_id) for competitor_id in body.competitor_ids],
         },
     )
