@@ -41,6 +41,17 @@ Never commit `.env` or expose the service-role key to the frontend.
 uvicorn app.main:app --reload --port 8000
 ```
 
+## Deploy on Railway
+
+1. Create a new Railway service from this GitHub repo.
+2. Set **Root Directory** to `Backend`.
+3. Railway will install from `requirements.txt` and start via `Procfile`.
+4. Set the environment variables from `.env.example` (never commit real secrets).
+5. Generate a public domain and point the frontend `VITE_API_BASE_URL` at it.
+6. Set `CORS_ORIGINS` to your Vercel URL (and local origins if needed).
+
+Health check: `GET /health`
+
 Health check: [http://localhost:8000/health](http://localhost:8000/health)
 
 API docs: [http://localhost:8000/docs](http://localhost:8000/docs)
