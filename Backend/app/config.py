@@ -32,6 +32,15 @@ class Settings(BaseSettings):
         validation_alias="APIFY_TRANSCRIBER_ACTOR_ID",
     )
     apify_wait_secs: int = Field(default=300, validation_alias="APIFY_WAIT_SECS")
+    apify_instagram_session_id: str = Field(
+        default="",
+        validation_alias="APIFY_INSTAGRAM_SESSION_ID",
+    )
+    transcribe_batch_size: int = Field(default=5, validation_alias="TRANSCRIBE_BATCH_SIZE")
+    transcribe_retry_delay_secs: float = Field(
+        default=1.5,
+        validation_alias="TRANSCRIBE_RETRY_DELAY_SECS",
+    )
     scrape_lookback_days: int = Field(default=30, validation_alias="SCRAPE_LOOKBACK_DAYS")
     pipeline_verbose: bool = Field(default=False, validation_alias="PIPELINE_VERBOSE")
     llm_provider: str = Field(default="auto", validation_alias="LLM_PROVIDER")

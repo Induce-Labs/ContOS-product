@@ -7,6 +7,7 @@ import httpx
 
 from app.config import Settings
 from app.errors import ApifyServiceError, ConfigurationError
+from app.models.transcription import ReelTranscriptionResult
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +24,9 @@ class ApifyClient:
         self._transcriber_actor_id = settings.apify_transcriber_actor_id
         self._wait_secs = settings.apify_wait_secs
         self._lookback_days = settings.scrape_lookback_days
+        self._instagram_session_id = settings.apify_instagram_session_id.strip()
+        self._transcribe_batch_size = max(1, settings.transcribe_batch_size)
+        self._transcribe_retry_delay_secs = max(0.0, settings.transcribe_retry_delay_secs)
 
     def scrape_instagram_profile(self, profile_url: str) -> list[dict[str, Any]]:
         actor_input = {
@@ -56,7 +60,7 @@ class ApifyClient:
     def scrape_instagram_reels(self, profile_url: str) -> list[dict[str, Any]]:
         return self.scrape_instagram_profile(profile_url)
 
-    def transcribe_reel_urls(self, reel_urls: list[str]) -> dict[str, str]:
+    def transcribe_reel_urls(self, reel_urls: list[str]) -> dict[str, ReelTranscriptionResult]:
         if not reel_urls:
             return {}
 
@@ -65,32 +69,80 @@ class ApifyClient:
             extra={
                 "actor_id": self._transcriber_actor_id,
                 "reel_count": len(reel_urls),
+                "batch_size": self._transcribe_batch_size,
+                "has_instagram_session": bool(self._instagram_session_id),
             },
         )
 
-        transcript_map: dict[str, str] = {}
-        batch_size = 25
+        results_by_normalized: dict[str, ReelTranscriptionResult] = {}
 
-        for offset in range(0, len(reel_urls), batch_size):
-            batch = reel_urls[offset : offset + batch_size]
-            actor_input = {"bulkUrls": batch}
-            items = self._run_actor_sync_get_dataset_items(
-                self._transcriber_actor_id,
-                actor_input,
+        for offset in range(0, len(reel_urls), self._transcribe_batch_size):
+            batch = reel_urls[offset : offset + self._transcribe_batch_size]
+            items = self._run_transcriber_actor(batch)
+            batch_results = self._parse_transcription_items(items, batch)
+            self._merge_transcription_results(results_by_normalized, batch_results)
+
+        urls_missing_transcript = [
+            url
+            for url in reel_urls
+            if not self._result_for_url(url, results_by_normalized).succeeded
+        ]
+
+        if urls_missing_transcript:
+            logger.info(
+                "Retrying reel transcription individually",
+                extra={"retry_count": len(urls_missing_transcript)},
             )
-            transcript_map.update(self._map_transcription_items(items, batch))
 
-        aligned_map = self._align_transcript_keys(transcript_map, reel_urls)
+        for index, url in enumerate(urls_missing_transcript):
+            items = self._run_transcriber_actor([url])
+            retry_results = self._parse_transcription_items(items, [url])
+            self._merge_transcription_results(results_by_normalized, retry_results)
+
+            if index < len(urls_missing_transcript) - 1 and self._transcribe_retry_delay_secs > 0:
+                time.sleep(self._transcribe_retry_delay_secs)
+
+        aligned_results: dict[str, ReelTranscriptionResult] = {}
+        success_count = 0
+
+        for url in reel_urls:
+            result = self._result_for_url(url, results_by_normalized)
+            if not result.succeeded and result.error_message is None:
+                result = ReelTranscriptionResult(
+                    error_message="Transcriber returned no transcript for this reel URL.",
+                )
+            aligned_results[url] = result
+            if result.succeeded:
+                success_count += 1
 
         logger.info(
             "Reel transcription batch complete",
             extra={
                 "urls_requested": len(reel_urls),
-                "transcripts_mapped": len(aligned_map),
+                "transcripts_mapped": success_count,
+                "failures": len(reel_urls) - success_count,
             },
         )
 
-        return aligned_map
+        return aligned_results
+
+    def _run_transcriber_actor(self, reel_urls: list[str]) -> list[dict[str, Any]]:
+        actor_input = self._build_transcriber_input(reel_urls)
+        return self._run_actor_sync_get_dataset_items(self._transcriber_actor_id, actor_input)
+
+    def _build_transcriber_input(self, reel_urls: list[str]) -> dict[str, Any]:
+        if len(reel_urls) == 1:
+            actor_input: dict[str, Any] = {
+                "videoUrl": reel_urls[0],
+                "bulkUrls": [],
+            }
+        else:
+            actor_input = {"bulkUrls": reel_urls}
+
+        if self._instagram_session_id:
+            actor_input["sessionid"] = self._instagram_session_id
+
+        return actor_input
 
     def _run_actor_sync_get_dataset_items(
         self,
@@ -150,38 +202,40 @@ class ApifyClient:
         return url.strip().rstrip("/").split("?", maxsplit=1)[0]
 
     @staticmethod
-    def _align_transcript_keys(
-        transcript_map: dict[str, str],
-        requested_urls: list[str],
-    ) -> dict[str, str]:
-        normalized_to_requested = {
-            ApifyClient._normalize_instagram_url(url): url for url in requested_urls
-        }
-        aligned: dict[str, str] = {}
-
-        for source_url, transcript in transcript_map.items():
-            normalized = ApifyClient._normalize_instagram_url(source_url)
-            requested_url = normalized_to_requested.get(normalized, source_url)
-            aligned[requested_url] = transcript
-
-        return aligned
+    def _result_for_url(
+        url: str,
+        results_by_normalized: dict[str, ReelTranscriptionResult],
+    ) -> ReelTranscriptionResult:
+        normalized = ApifyClient._normalize_instagram_url(url)
+        return results_by_normalized.get(normalized, ReelTranscriptionResult())
 
     @staticmethod
-    def _map_transcription_items(
+    def _merge_transcription_results(
+        target: dict[str, ReelTranscriptionResult],
+        incoming: dict[str, ReelTranscriptionResult],
+    ) -> None:
+        for key, result in incoming.items():
+            storage_key = ApifyClient._normalize_instagram_url(key)
+            existing = target.get(storage_key)
+
+            if existing is None or (not existing.succeeded and result.succeeded):
+                target[storage_key] = result
+            elif (
+                not existing.succeeded
+                and not result.succeeded
+                and result.error_message
+                and not existing.error_message
+            ):
+                target[storage_key] = result
+
+    @staticmethod
+    def _parse_transcription_items(
         items: list[dict[str, Any]],
         requested_urls: list[str],
-    ) -> dict[str, str]:
-        transcripts_by_url: dict[str, str] = {}
+    ) -> dict[str, ReelTranscriptionResult]:
+        results: dict[str, ReelTranscriptionResult] = {}
 
         for item in items:
-            err_msg = item.get("errMsg") or item.get("error")
-            if isinstance(err_msg, str) and err_msg.strip():
-                logger.warning(
-                    "Transcriber returned error for item",
-                    extra={"error": err_msg.strip(), "item_url": item.get("url")},
-                )
-                continue
-
             source_url = (
                 item.get("url")
                 or item.get("sourceUrl")
@@ -189,6 +243,7 @@ class ApifyClient:
                 or item.get("videoUrl")
                 or item.get("start_urls")
             )
+            err_msg = item.get("errMsg") or item.get("error")
             transcript = (
                 item.get("transcript")
                 or item.get("text")
@@ -196,21 +251,40 @@ class ApifyClient:
                 or item.get("result")
             )
 
-            if isinstance(source_url, str) and isinstance(transcript, str) and transcript.strip():
-                transcripts_by_url[source_url] = transcript.strip()
+            if isinstance(err_msg, str) and err_msg.strip():
+                logger.warning(
+                    "Transcriber returned error for item",
+                    extra={
+                        "error": err_msg.strip(),
+                        "item_url": source_url,
+                    },
+                )
+                if isinstance(source_url, str) and source_url.strip():
+                    results[source_url] = ReelTranscriptionResult(error_message=err_msg.strip())
+                continue
 
-        if transcripts_by_url:
-            return transcripts_by_url
+            if isinstance(source_url, str) and isinstance(transcript, str) and transcript.strip():
+                results[source_url] = ReelTranscriptionResult(transcript=transcript.strip())
 
         if len(items) == len(requested_urls):
             for index, item in enumerate(items):
+                requested_url = requested_urls[index]
+                normalized_requested = ApifyClient._normalize_instagram_url(requested_url)
+                existing = results.get(requested_url) or results.get(normalized_requested)
+                if existing is not None and existing.succeeded:
+                    continue
+
                 transcript = (
                     item.get("transcript")
                     or item.get("text")
                     or item.get("transcription")
                     or item.get("result")
                 )
-                if isinstance(transcript, str) and transcript.strip():
-                    transcripts_by_url[requested_urls[index]] = transcript.strip()
+                err_msg = item.get("errMsg") or item.get("error")
 
-        return transcripts_by_url
+                if isinstance(transcript, str) and transcript.strip():
+                    results[requested_url] = ReelTranscriptionResult(transcript=transcript.strip())
+                elif isinstance(err_msg, str) and err_msg.strip():
+                    results[requested_url] = ReelTranscriptionResult(error_message=err_msg.strip())
+
+        return results

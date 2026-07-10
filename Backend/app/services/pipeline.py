@@ -18,6 +18,8 @@ from app.config import Settings, get_settings
 
 from app.errors import ConfigurationError, PipelineError
 
+from app.services.engagement_metrics import enrich_competitor_summary
+
 from app.services.instagram_parser import parse_instagram_posts
 
 
@@ -354,7 +356,7 @@ def run_competitor_pipeline(
 
         repository.mark_transcription_in_progress([str(row["id"]) for row in pending_rows])
 
-        transcript_map = apify_client.transcribe_reel_urls(pending_urls)
+        transcript_results = apify_client.transcribe_reel_urls(pending_urls)
 
 
 
@@ -362,7 +364,7 @@ def run_competitor_pipeline(
 
             "[PIPELINE] Step 2/3 TRANSCRIBE — transcriber returned %s transcripts for %s URLs",
 
-            len(transcript_map),
+            sum(1 for result in transcript_results.values() if result.succeeded),
 
             len(pending_urls),
 
@@ -372,7 +374,9 @@ def run_competitor_pipeline(
 
                 "urls_sent": len(pending_urls),
 
-                "transcripts_received": len(transcript_map),
+                "transcripts_received": sum(
+                    1 for result in transcript_results.values() if result.succeeded
+                ),
 
             },
 
@@ -384,11 +388,11 @@ def run_competitor_pipeline(
 
             post_url = str(row["post_url"])
 
-            transcript = transcript_map.get(post_url)
+            transcription_result = transcript_results.get(post_url)
 
 
 
-            if transcript:
+            if transcription_result and transcription_result.succeeded:
 
                 transcript_updates.append(
 
@@ -396,11 +400,13 @@ def run_competitor_pipeline(
 
                         "post_url": post_url,
 
-                        "transcript": transcript,
+                        "transcript": transcription_result.transcript,
 
                         "transcript_source": settings.apify_transcriber_actor_id,
 
                         "transcription_status": "completed",
+
+                        "transcription_error": None,
 
                     },
 
@@ -408,13 +414,23 @@ def run_competitor_pipeline(
 
             else:
 
+                error_message = (
+                    transcription_result.error_message
+                    if transcription_result and transcription_result.error_message
+                    else "Transcriber returned no transcript for this reel URL."
+                )
+
                 logger.warning(
 
                     "[PIPELINE] Step 2/3 TRANSCRIBE — no transcript returned for %s",
 
                     post_url,
 
-                    extra={"competitor_id": str(competitor_id), "post_url": post_url},
+                    extra={
+                        "competitor_id": str(competitor_id),
+                        "post_url": post_url,
+                        "transcription_error": error_message,
+                    },
 
                 )
 
@@ -429,6 +445,8 @@ def run_competitor_pipeline(
                         "transcript_source": None,
 
                         "transcription_status": "failed",
+
+                        "transcription_error": error_message,
 
                     },
 
@@ -559,6 +577,8 @@ def run_competitor_pipeline(
         competitor_handle=profile_url,
         content_items=summary_content,
     )
+
+    summary_payload = enrich_competitor_summary(summary_payload, summary_content)
 
 
 

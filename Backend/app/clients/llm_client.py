@@ -204,9 +204,12 @@ class LlmClient:
             "- top_performing_content: ranked list with content_type and why each performed well\n"
             "- recurring_hooks_patterns\n"
             "- content_strategies_themes\n"
-            "- aggregated_engagement_metrics: total_content_count, reel_count, post_count, "
-            "carousel_count, and averages across all content with valid metrics\n"
-            "- strategic_signals: actionable insights for a fractional CMO\n\n"
+            "- strategic_signals: actionable insights for a fractional CMO\n"
+            "Do not estimate engagement counts or averages; those are computed separately.\n"
+            "For top_performing_content, include external_id and content_type from the dataset, "
+            "and still include likes/comments/views/shares fields (they will be overwritten from "
+            "scraped metrics).\n"
+            "Set aggregated_engagement_metrics counts to 0 and averages to null placeholders.\n\n"
             "Content dataset:\n"
             + "\n\n".join(content_lines)
         )

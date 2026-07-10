@@ -118,7 +118,13 @@ Failures are isolated per competitor: one failure does not stop others in the ba
 
 | `APIFY_TRANSCRIBER_ACTOR_ID` | No | Default `apple_yang/instagram-transcripts-scraper` |
 
-| `SCRAPE_LOOKBACK_DAYS` | No | Default `10` (testing window) |
+| `APIFY_INSTAGRAM_SESSION_ID` | No | Instagram `sessionid` cookie for more reliable reel transcription |
+
+| `TRANSCRIBE_BATCH_SIZE` | No | Default `5` (Apify free-tier bulk URL cap) |
+
+| `TRANSCRIBE_RETRY_DELAY_SECS` | No | Default `1.5` seconds between single-URL retries |
+
+| `SCRAPE_LOOKBACK_DAYS` | No | Default `30` |
 
 | `PIPELINE_VERBOSE` | No | `true` enables DEBUG logs for pipeline/Apify/repo |
 
@@ -139,6 +145,8 @@ Failures are isolated per competitor: one failure does not stop others in the ba
 | `post_url` | Instagram URL | Link used for transcription |
 
 | `transcription_status` | `pending`, `in_progress`, `completed`, `failed`, `not_applicable` | Per-row phase-2 state |
+
+| `transcription_error` | text | Apify transcriber failure reason when `transcription_status = failed` |
 
 | `content_type` | `reel`, `post`, `carousel`, `video` | From Apify payload |
 
@@ -185,7 +193,8 @@ Stored in `content_summaries.summary`:
 - `top_performing_content[]` (includes `content_type` per item)
 - `recurring_hooks_patterns[]`
 - `content_strategies_themes[]`
-- `aggregated_engagement_metrics` (`total_content_count`, `reel_count`, `post_count`, `carousel_count`, averages)
+- `aggregated_engagement_metrics` (`total_content_count`, `reel_count`, `post_count`, `carousel_count`, averages) — **computed server-side from `scraped_content`**, not by the LLM
+- `top_performing_content` engagement numbers are **enriched from `scraped_content`** by `external_id` after the LLM returns qualitative analysis
 - `strategic_signals[]`
 
 
@@ -228,7 +237,7 @@ Stored in `content_summaries.summary`:
 
 - Uses Apify sync actor endpoints (simple for v1; may need queue/worker at scale)
 
-- Transcriber sends reel URLs in `bulkUrls` batches of 25; output `url` + `text` fields are mapped back to `post_url`
+- Transcriber sends reel URLs in `bulkUrls` batches of `TRANSCRIBE_BATCH_SIZE` (default 5), retries failures one URL at a time, and stores `transcription_error` on failures
 
 - Transcription failures do not block summarization; posts and reels without transcripts use captions + metrics
 

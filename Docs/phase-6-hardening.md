@@ -41,7 +41,8 @@ Implementation: `Backend/app/api/deps.py`, `Backend/app/api/routes/projects.py`
 | --- | --- |
 | 30-day scrape window | `SCRAPE_LOOKBACK_DAYS=30` in backend config + Apify `onlyPostsNewerThan` |
 | Apify result cap | `resultsLimit: 50` per profile scrape |
-| Transcription batching | 25 reel URLs per transcriber run |
+| Transcription batching | 5 URLs per bulk run (`TRANSCRIBE_BATCH_SIZE`), then single-URL retries; optional `APIFY_INSTAGRAM_SESSION_ID` |
+| Transcription errors | Stored in `scraped_content.transcription_error` |
 | Max 10 competitors / project | Frontend validation + DB trigger (`competitors_enforce_cap`) + backend scrape guard |
 
 **Note:** v1 scrapes all Instagram post types (posts, carousels, reels) but only transcribes reels. Summarization uses captions + metrics for all types; transcripts when available.
@@ -107,6 +108,9 @@ pytest
 | Variable | Change |
 | --- | --- |
 | `SCRAPE_LOOKBACK_DAYS` | Default changed from `10` to `30` |
+| `APIFY_INSTAGRAM_SESSION_ID` | Optional Instagram cookie for transcription reliability |
+| `TRANSCRIBE_BATCH_SIZE` | Default `5` bulk URLs per transcriber run |
+| `TRANSCRIBE_RETRY_DELAY_SECS` | Default `1.5` between single-URL retries |
 
 Apply the competitor-cap migration to your Supabase project:
 
@@ -120,4 +124,4 @@ Or run the SQL in `supabase/migrations/20260708120000_phase6_competitor_cap.sql`
 
 - RLS integration tests require a live Supabase project with two users (not automated in CI yet).
 - Scrape endpoint auth relies on Supabase JWT validation; rotate compromised tokens promptly.
-- Instagram transcriber may require a `sessionid` for some reels (future env var if needed).
+- Instagram transcriber may require a `sessionid` for some reels — set `APIFY_INSTAGRAM_SESSION_ID` in backend `.env` (copy from browser devtools → Application → Cookies → `sessionid` on instagram.com).

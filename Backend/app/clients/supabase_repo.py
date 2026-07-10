@@ -236,7 +236,7 @@ class SupabaseRepository:
 
             .eq("competitor_id", str(competitor_id))
 
-            .eq("transcription_status", "pending")
+            .in_("transcription_status", ["pending", "failed"])
 
             .execute()
 
@@ -325,6 +325,8 @@ class SupabaseRepository:
                         "transcript_source": update.get("transcript_source"),
 
                         "transcription_status": update["transcription_status"],
+
+                        "transcription_error": update.get("transcription_error"),
 
                     },
 
