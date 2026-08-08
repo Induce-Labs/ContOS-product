@@ -22,6 +22,8 @@ class ApifyClient:
         self._token = settings.apify_api_token
         self._instagram_actor_id = settings.apify_instagram_actor_id
         self._transcriber_actor_id = settings.apify_transcriber_actor_id
+        self._linkedin_actor_id = settings.apify_linkedin_actor_id
+        self._linkedin_max_posts = max(10, settings.linkedin_max_posts)
         self._wait_secs = settings.apify_wait_secs
         self._lookback_days = settings.scrape_lookback_days
         self._instagram_session_id = settings.apify_instagram_session_id.strip()
@@ -29,6 +31,12 @@ class ApifyClient:
         self._transcribe_retry_delay_secs = max(0.0, settings.transcribe_retry_delay_secs)
 
     def scrape_instagram_profile(self, profile_url: str) -> list[dict[str, Any]]:
+        if "linkedin.com" in profile_url.lower():
+            raise ApifyServiceError(
+                "Refusing to scrape a LinkedIn URL with the Instagram actor. "
+                f"Use scrape_linkedin_profile instead. Got: {profile_url}",
+            )
+
         actor_input = {
             "username": [profile_url],
             "resultsLimit": 50,
@@ -59,6 +67,33 @@ class ApifyClient:
 
     def scrape_instagram_reels(self, profile_url: str) -> list[dict[str, Any]]:
         return self.scrape_instagram_profile(profile_url)
+
+    def scrape_linkedin_profile(self, profile_url: str) -> list[dict[str, Any]]:
+        actor_input = {
+            "profiles": [profile_url],
+            "max_posts": self._linkedin_max_posts,
+        }
+
+        logger.info(
+            "Starting LinkedIn profile scrape",
+            extra={
+                "profile_url": profile_url,
+                "actor_id": self._linkedin_actor_id,
+                "max_posts": self._linkedin_max_posts,
+            },
+        )
+
+        items = self._run_actor_sync_get_dataset_items(self._linkedin_actor_id, actor_input)
+
+        logger.info(
+            "LinkedIn profile scrape returned items",
+            extra={
+                "profile_url": profile_url,
+                "item_count": len(items),
+            },
+        )
+
+        return items
 
     def transcribe_reel_urls(self, reel_urls: list[str]) -> dict[str, ReelTranscriptionResult]:
         if not reel_urls:

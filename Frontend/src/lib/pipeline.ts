@@ -1,12 +1,22 @@
 import type { PipelineStep } from '../types/contos'
 
-export const PIPELINE_STEPS: PipelineStep[] = [
+export const INSTAGRAM_PIPELINE_STEPS: PipelineStep[] = [
   'queued',
   'scraping',
   'transcribing',
   'analyzing',
   'done',
 ]
+
+export const LINKEDIN_PIPELINE_STEPS: PipelineStep[] = [
+  'queued',
+  'scraping',
+  'analyzing',
+  'done',
+]
+
+/** @deprecated Prefer platform-aware helpers; kept for Instagram default. */
+export const PIPELINE_STEPS = INSTAGRAM_PIPELINE_STEPS
 
 export const PIPELINE_STEP_LABELS: Record<PipelineStep, string> = {
   queued: 'Queued',
@@ -26,18 +36,24 @@ export const PIPELINE_STEP_DESCRIPTIONS: Record<PipelineStep, string> = {
   failed: 'Something went wrong during research',
 }
 
-export function pipelineStepIndex(step: PipelineStep): number {
+export function getPipelineStepsForPlatform(platform?: string): PipelineStep[] {
+  return platform === 'linkedin' ? LINKEDIN_PIPELINE_STEPS : INSTAGRAM_PIPELINE_STEPS
+}
+
+export function pipelineStepIndex(step: PipelineStep, platform?: string): number {
   if (step === 'failed') {
     return -1
   }
 
-  const index = PIPELINE_STEPS.indexOf(step)
+  const steps = getPipelineStepsForPlatform(platform)
+  const index = steps.indexOf(step)
   return index === -1 ? 0 : index
 }
 
 export function isPipelineStepComplete(
   currentStep: PipelineStep,
   targetStep: PipelineStep,
+  platform?: string,
 ): boolean {
   if (currentStep === 'failed') {
     return false
@@ -47,14 +63,24 @@ export function isPipelineStepComplete(
     return true
   }
 
-  return pipelineStepIndex(currentStep) > pipelineStepIndex(targetStep)
+  // LinkedIn never uses transcribing; treat it as already passed when further along.
+  if (platform === 'linkedin' && targetStep === 'transcribing') {
+    return currentStep === 'analyzing' || currentStep === 'scraping'
+  }
+
+  return pipelineStepIndex(currentStep, platform) > pipelineStepIndex(targetStep, platform)
 }
 
 export function isPipelineStepActive(
   currentStep: PipelineStep,
   targetStep: PipelineStep,
+  platform?: string,
 ): boolean {
   if (currentStep === 'failed' || currentStep === 'done') {
+    return false
+  }
+
+  if (platform === 'linkedin' && targetStep === 'transcribing') {
     return false
   }
 

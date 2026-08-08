@@ -3,7 +3,7 @@ import type { PipelineStep } from '../../types/contos'
 import {
   PIPELINE_STEP_DESCRIPTIONS,
   PIPELINE_STEP_LABELS,
-  PIPELINE_STEPS,
+  getPipelineStepsForPlatform,
   isPipelineStepActive,
   isPipelineStepComplete,
 } from '../../lib/pipeline'
@@ -22,6 +22,11 @@ export function CompetitorProgressCard({
 }: CompetitorProgressCardProps) {
   const pipelineStep = competitor.pipeline_step as PipelineStep
   const isFailed = pipelineStep === 'failed'
+  const canStartOrRetry = isFailed || pipelineStep === 'queued'
+  const platform = competitor.platform
+  const steps = getPipelineStepsForPlatform(platform)
+  const gridClass =
+    platform === 'linkedin' ? 'sm:grid-cols-4' : 'sm:grid-cols-5'
 
   return (
     <section className="rounded-[2rem] border border-border-hairline bg-canvas-raised p-6 sm:p-8">
@@ -30,9 +35,12 @@ export function CompetitorProgressCard({
           <p className="text-xs font-medium uppercase tracking-wide text-accent-primary">
             Research in progress
           </p>
-          <h2 className="mt-1 text-xl font-semibold text-ink">
-            {displayCompetitorHandle(competitor.handle_or_url)}
-          </h2>
+          <div className="mt-1 flex flex-wrap items-center gap-2">
+            <h2 className="text-xl font-semibold text-ink">
+              {displayCompetitorHandle(competitor.handle_or_url, platform)}
+            </h2>
+            <PlatformBadge platform={platform} />
+          </div>
           <p className="mt-2 text-sm text-ink-muted">
             {PIPELINE_STEP_DESCRIPTIONS[pipelineStep]}
           </p>
@@ -41,27 +49,36 @@ export function CompetitorProgressCard({
       </div>
 
       {isFailed && competitor.error_message ? (
-        <div className="mt-6 space-y-3">
-          <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            {competitor.error_message}
-          </div>
-          {onRetry ? (
-            <button
-              type="button"
-              onClick={() => onRetry(competitor.id)}
-              disabled={isRetrying}
-              className="rounded-xl border border-red-200 bg-white px-4 py-2 text-sm font-medium text-red-700 transition hover:bg-red-50 disabled:opacity-60"
-            >
-              {isRetrying ? 'Retrying…' : 'Retry research'}
-            </button>
-          ) : null}
+        <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {competitor.error_message}
         </div>
       ) : null}
 
-      <ol className="mt-8 grid gap-3 sm:grid-cols-5">
-        {PIPELINE_STEPS.map((step) => {
-          const complete = isPipelineStepComplete(pipelineStep, step)
-          const active = isPipelineStepActive(pipelineStep, step)
+      {canStartOrRetry && onRetry ? (
+        <div className="mt-6">
+          <button
+            type="button"
+            onClick={() => onRetry(competitor.id)}
+            disabled={isRetrying}
+            className={`rounded-xl border px-4 py-2 text-sm font-medium transition disabled:opacity-60 ${
+              isFailed
+                ? 'border-red-200 bg-white text-red-700 hover:bg-red-50'
+                : 'border-border-hairline bg-white text-ink hover:bg-accent-primary-soft'
+            }`}
+          >
+            {isRetrying
+              ? 'Starting…'
+              : isFailed
+                ? 'Retry research'
+                : 'Start research'}
+          </button>
+        </div>
+      ) : null}
+
+      <ol className={`mt-8 grid gap-3 ${gridClass}`}>
+        {steps.map((step) => {
+          const complete = isPipelineStepComplete(pipelineStep, step, platform)
+          const active = isPipelineStepActive(pipelineStep, step, platform)
           const failed = isFailed && active
 
           return (
@@ -95,6 +112,15 @@ export function CompetitorProgressCard({
         })}
       </ol>
     </section>
+  )
+}
+
+function PlatformBadge({ platform }: { platform: string }) {
+  const label = platform === 'linkedin' ? 'LinkedIn' : 'Instagram'
+  return (
+    <span className="rounded-full border border-border-hairline px-2 py-0.5 text-xs capitalize text-ink-muted">
+      {label}
+    </span>
   )
 }
 

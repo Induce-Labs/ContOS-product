@@ -103,6 +103,107 @@ export type Database = {
           },
         ]
       }
+      linkedin_content_summaries: {
+        Row: {
+          competitor_id: string
+          embedding: string | null
+          generated_at: string
+          id: string
+          model_used: string
+          project_id: string
+          summary: Json
+        }
+        Insert: {
+          competitor_id: string
+          embedding?: string | null
+          generated_at?: string
+          id?: string
+          model_used: string
+          project_id: string
+          summary: Json
+        }
+        Update: {
+          competitor_id?: string
+          embedding?: string | null
+          generated_at?: string
+          id?: string
+          model_used?: string
+          project_id?: string
+          summary?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "linkedin_content_summaries_competitor_id_fkey"
+            columns: ["competitor_id"]
+            isOneToOne: false
+            referencedRelation: "competitors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "linkedin_content_summaries_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      linkedin_scraped_content: {
+        Row: {
+          author_headline: string | null
+          author_name: string | null
+          caption: string | null
+          comments_count: number | null
+          competitor_id: string
+          external_id: string
+          id: string
+          likes: number | null
+          post_url: string | null
+          posted_at: string | null
+          raw_payload: Json | null
+          scraped_at: string
+          shares: number | null
+        }
+        Insert: {
+          author_headline?: string | null
+          author_name?: string | null
+          caption?: string | null
+          comments_count?: number | null
+          competitor_id: string
+          external_id: string
+          id?: string
+          likes?: number | null
+          post_url?: string | null
+          posted_at?: string | null
+          raw_payload?: Json | null
+          scraped_at?: string
+          shares?: number | null
+        }
+        Update: {
+          author_headline?: string | null
+          author_name?: string | null
+          caption?: string | null
+          comments_count?: number | null
+          competitor_id?: string
+          external_id?: string
+          id?: string
+          likes?: number | null
+          post_url?: string | null
+          posted_at?: string | null
+          raw_payload?: Json | null
+          scraped_at?: string
+          shares?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "linkedin_scraped_content_competitor_id_fkey"
+            columns: ["competitor_id"]
+            isOneToOne: false
+            referencedRelation: "competitors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       projects: {
         Row: {
           created_at: string

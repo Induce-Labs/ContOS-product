@@ -1,11 +1,11 @@
 import type { ReactNode } from 'react'
-import { parseCompetitorSummary, type ContentSummary } from '../../lib/summaries'
+import { parseCompetitorSummary, type DashboardSummary } from '../../lib/summaries'
 import type { Competitor } from '../../lib/competitors'
 import { displayCompetitorHandle } from '../../lib/instagram-display'
 
 type CompetitorSummaryCardProps = {
   competitor: Competitor
-  summaryRecord: ContentSummary
+  summaryRecord: DashboardSummary
 }
 
 export function CompetitorSummaryCard({
@@ -23,6 +23,8 @@ export function CompetitorSummaryCard({
   }
 
   const metrics = summary.aggregated_engagement_metrics
+  const isLinkedIn = competitor.platform === 'linkedin' || summaryRecord.source === 'linkedin'
+  const platformLabel = isLinkedIn ? 'LinkedIn' : 'Instagram'
 
   return (
     <section className="space-y-6">
@@ -30,10 +32,10 @@ export function CompetitorSummaryCard({
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <p className="text-xs font-medium uppercase tracking-wide text-signal-positive">
-              Intelligence report
+              {platformLabel} intelligence report
             </p>
             <h2 className="mt-1 text-xl font-semibold text-ink">
-              {displayCompetitorHandle(competitor.handle_or_url)}
+              {displayCompetitorHandle(competitor.handle_or_url, competitor.platform)}
             </h2>
             <p className="mt-2 text-sm text-ink-muted">
               Generated {new Date(summaryRecord.generated_at).toLocaleString()} ·{' '}
@@ -47,12 +49,22 @@ export function CompetitorSummaryCard({
 
         <dl className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
           <MetricTile label="Total content" value={metrics.total_content_count} />
-          <MetricTile label="Reels" value={metrics.reel_count} />
-          <MetricTile label="Posts" value={metrics.post_count} />
-          <MetricTile label="Carousels" value={metrics.carousel_count} />
+          {isLinkedIn ? (
+            <MetricTile label="Posts" value={metrics.total_content_count} />
+          ) : (
+            <>
+              <MetricTile label="Reels" value={metrics.reel_count} />
+              <MetricTile label="Posts" value={metrics.post_count} />
+              <MetricTile label="Carousels" value={metrics.carousel_count} />
+            </>
+          )}
           <MetricTile label="Avg likes" value={formatMetric(metrics.avg_likes)} />
           <MetricTile label="Avg comments" value={formatMetric(metrics.avg_comments)} />
-          <MetricTile label="Avg views" value={formatMetric(metrics.avg_views)} />
+          {!isLinkedIn ? (
+            <MetricTile label="Avg views" value={formatMetric(metrics.avg_views)} />
+          ) : (
+            <MetricTile label="Avg shares" value={formatMetric(metrics.avg_shares)} />
+          )}
           <MetricTile
             label="Engagement rate"
             value={

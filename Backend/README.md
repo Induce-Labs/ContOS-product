@@ -29,7 +29,9 @@ Edit `.env` and set secrets from the Supabase dashboard and third-party provider
 | --- | --- |
 | `SUPABASE_URL` | Supabase → Project Settings → API |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase → Project Settings → API (server-side only) |
-| `APIFY_API_TOKEN` | Apify console (Phase 4) |
+| `APIFY_API_TOKEN` | Apify console (Instagram + LinkedIn scrapers) |
+| `APIFY_LINKEDIN_ACTOR_ID` | Default `datadoping/linkedin-profile-posts-scraper` |
+| `LINKEDIN_MAX_POSTS` | Default `50` (actor min 10; free tier often caps 100/profile, 4 profiles/run) |
 | `OPENROUTER_API_KEY` | OpenRouter (dev summarization, Phase 4) |
 | `OPENAI_API_KEY` | OpenAI (production summarization, Phase 4) |
 
@@ -67,12 +69,18 @@ Response: 202 Accepted
 
 Requires a valid Supabase user JWT. The backend verifies project ownership before enqueueing work.
 
-Queues a FastAPI background task that:
+Queues a FastAPI background task that branches on `competitors.platform`:
 
-1. Scrapes all Instagram posts via Apify (`apify/instagram-post-scraper`) into `scraped_content` (30-day lookback)
-2. Transcribes reel URLs from `scraped_content` via `apple_yang/instagram-transcripts-scraper`
-3. Summarizes all scraped content (posts, carousels, reels) via captions + metrics; reel transcripts included when available
-4. Writes to Supabase (`scraped_content`, `content_summaries`, competitor status)
+**Instagram**
+
+1. Scrapes posts via Apify (`apify/instagram-post-scraper`) into `scraped_content` (30-day lookback)
+2. Transcribes reel URLs via `apple_yang/instagram-transcripts-scraper`
+3. Summarizes into `content_summaries`
+
+**LinkedIn** (see [`Docs/phase-linkedin.md`](../Docs/phase-linkedin.md))
+
+1. Scrapes profile posts via `APIFY_LINKEDIN_ACTOR_ID` into `linkedin_scraped_content` (no transcription)
+2. Summarizes into `linkedin_content_summaries`
 
 Set `PIPELINE_VERBOSE=true` in `.env` to see `[PIPELINE] Step 1/3 SCRAPE`, `Step 2/3 TRANSCRIBE`, and `Step 3/3 ANALYZE` in the console.
 

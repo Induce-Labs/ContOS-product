@@ -3,19 +3,22 @@ import {
   fetchCompetitorsForProject,
   type Competitor,
 } from '../lib/competitors'
-import { fetchSummariesForProject, type ContentSummary } from '../lib/summaries'
+import {
+  fetchAllSummariesForProject,
+  type DashboardSummary,
+} from '../lib/summaries'
 
 const POLL_INTERVAL_MS = 5000
 
 type DashboardData = {
   competitors: Competitor[]
-  summaries: ContentSummary[]
+  summaries: DashboardSummary[]
 }
 
 type UseDashboardPollingResult = {
   competitors: Competitor[]
-  summaries: ContentSummary[]
-  summariesByCompetitorId: Map<string, ContentSummary>
+  summaries: DashboardSummary[]
+  summariesByCompetitorId: Map<string, DashboardSummary>
   isLoading: boolean
   errorMessage: string | null
   refresh: () => Promise<void>
@@ -41,7 +44,7 @@ export function useDashboardPolling(projectId: string | null): UseDashboardPolli
       try {
         const [competitors, summaries] = await Promise.all([
           fetchCompetitorsForProject(projectId),
-          fetchSummariesForProject(projectId),
+          fetchAllSummariesForProject(projectId),
         ])
 
         setData({ competitors, summaries })

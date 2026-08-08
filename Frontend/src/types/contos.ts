@@ -2,7 +2,7 @@ export type ProjectType = 'personal_branding' | 'business'
 
 export type ProjectStatus = 'onboarding' | 'scraping' | 'ready' | 'failed'
 
-export type CompetitorPlatform = 'instagram' | 'twitter' | 'reddit'
+export type CompetitorPlatform = 'instagram' | 'twitter' | 'reddit' | 'linkedin'
 
 export type ScrapeStatus = 'pending' | 'in_progress' | 'completed' | 'failed'
 

@@ -475,7 +475,80 @@ class SupabaseRepository:
 
             )
 
+    def upsert_linkedin_scraped_content(self, rows: list[dict[str, Any]]) -> None:
+        if not rows:
+            return
 
+        response = (
+            self._client.table("linkedin_scraped_content")
+            .upsert(rows, on_conflict="competitor_id,external_id")
+            .execute()
+        )
+
+        if response.data is None:
+            raise RepositoryError("Failed to upsert linkedin_scraped_content rows in Supabase.")
+
+        logger.info(
+            "Upserted linkedin_scraped_content rows",
+            extra={"row_count": len(rows)},
+        )
+
+    def get_linkedin_content_for_summary(self, competitor_id: UUID) -> list[dict[str, Any]]:
+        response = (
+            self._client.table("linkedin_scraped_content")
+            .select(
+                "external_id, post_url, caption, likes, shares, comments_count, "
+                "posted_at, author_name, author_headline",
+            )
+            .eq("competitor_id", str(competitor_id))
+            .order("posted_at", desc=True)
+            .execute()
+        )
+
+        if response.data is None:
+            raise RepositoryError(
+                f"Failed to load LinkedIn content for summary for competitor {competitor_id}.",
+            )
+
+        return response.data
+
+    def replace_linkedin_content_summary(
+        self,
+        *,
+        competitor_id: UUID,
+        project_id: UUID,
+        summary: dict[str, Any],
+        model_used: str,
+    ) -> None:
+        delete_response = (
+            self._client.table("linkedin_content_summaries")
+            .delete()
+            .eq("competitor_id", str(competitor_id))
+            .execute()
+        )
+
+        if delete_response.data is None:
+            raise RepositoryError(
+                f"Failed to clear existing LinkedIn summaries for competitor {competitor_id}.",
+            )
+
+        insert_response = (
+            self._client.table("linkedin_content_summaries")
+            .insert(
+                {
+                    "competitor_id": str(competitor_id),
+                    "project_id": str(project_id),
+                    "summary": summary,
+                    "model_used": model_used,
+                },
+            )
+            .execute()
+        )
+
+        if insert_response.data is None:
+            raise RepositoryError(
+                f"Failed to insert LinkedIn content summary for competitor {competitor_id}.",
+            )
 
     def refresh_project_status(self, project_id: UUID) -> None:
 

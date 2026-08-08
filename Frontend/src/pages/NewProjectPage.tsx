@@ -11,10 +11,16 @@ import {
   createCompetitors,
 } from '../lib/competitors'
 import { normalizeCompetitorInputs, validateInstagramInput } from '../lib/instagram'
+import { normalizeLinkedInInputs, validateLinkedInInput } from '../lib/linkedin'
 import { createProject, setLastUsedProjectId, updateProjectStatus } from '../lib/projects'
-import type { ProjectType } from '../types/contos'
+import type { CompetitorPlatform, ProjectType } from '../types/contos'
 
 type WizardStep = 'project' | 'competitors'
+
+type CompetitorDraft = {
+  value: string
+  platform: CompetitorPlatform
+}
 
 const PROJECT_TYPE_OPTIONS: Array<{ value: ProjectType; label: string; description: string }> = [
   {
@@ -34,7 +40,9 @@ export function NewProjectPage() {
   const [step, setStep] = useState<WizardStep>('project')
   const [projectName, setProjectName] = useState('')
   const [projectType, setProjectType] = useState<ProjectType | null>(null)
-  const [competitorInputs, setCompetitorInputs] = useState<string[]>([''])
+  const [competitorInputs, setCompetitorInputs] = useState<CompetitorDraft[]>([
+    { value: '', platform: 'instagram' },
+  ])
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -64,7 +72,17 @@ export function NewProjectPage() {
 
   function updateCompetitorInput(index: number, value: string) {
     setCompetitorInputs((current) =>
-      current.map((entry, entryIndex) => (entryIndex === index ? value : entry)),
+      current.map((entry, entryIndex) =>
+        entryIndex === index ? { ...entry, value } : entry,
+      ),
+    )
+  }
+
+  function updateCompetitorPlatform(index: number, platform: CompetitorPlatform) {
+    setCompetitorInputs((current) =>
+      current.map((entry, entryIndex) =>
+        entryIndex === index ? { ...entry, platform } : entry,
+      ),
     )
   }
 
@@ -73,7 +91,7 @@ export function NewProjectPage() {
       return
     }
 
-    setCompetitorInputs((current) => [...current, ''])
+    setCompetitorInputs((current) => [...current, { value: '', platform: 'instagram' }])
   }
 
   function removeCompetitorField(index: number) {
@@ -84,30 +102,40 @@ export function NewProjectPage() {
     setCompetitorInputs((current) => current.filter((_, entryIndex) => entryIndex !== index))
   }
 
-  function validateCompetitorFields(): string[] | null {
-    const filledInputs = competitorInputs.map((value) => value.trim()).filter(Boolean)
+  function validateCompetitorFields(): Array<{
+    platform: CompetitorPlatform
+    urls: string[]
+  }> | null {
+    const filled = competitorInputs.filter((entry) => entry.value.trim())
 
-    if (filledInputs.length < MIN_COMPETITORS_PER_PROJECT) {
-      setErrorMessage(`Add at least ${MIN_COMPETITORS_PER_PROJECT} Instagram competitor.`)
+    if (filled.length < MIN_COMPETITORS_PER_PROJECT) {
+      setErrorMessage(`Add at least ${MIN_COMPETITORS_PER_PROJECT} competitor.`)
       return null
     }
 
-    if (filledInputs.length > MAX_COMPETITORS_PER_PROJECT) {
+    if (filled.length > MAX_COMPETITORS_PER_PROJECT) {
       setErrorMessage(`You can add up to ${MAX_COMPETITORS_PER_PROJECT} competitors per project.`)
       return null
     }
 
     const errors: Record<string, string> = {}
 
-    competitorInputs.forEach((value, index) => {
-      const trimmed = value.trim()
+    competitorInputs.forEach((entry, index) => {
+      const trimmed = entry.value.trim()
       if (!trimmed) {
         return
       }
 
-      const result = validateInstagramInput(trimmed)
-      if (!result.valid) {
-        errors[`competitor-${index}`] = result.message
+      if (entry.platform === 'linkedin') {
+        const result = validateLinkedInInput(trimmed)
+        if (!result.valid) {
+          errors[`competitor-${index}`] = result.message
+        }
+      } else {
+        const result = validateInstagramInput(trimmed)
+        if (!result.valid) {
+          errors[`competitor-${index}`] = result.message
+        }
       }
     })
 
@@ -119,7 +147,26 @@ export function NewProjectPage() {
     }
 
     try {
-      return normalizeCompetitorInputs(filledInputs)
+      const byPlatform = new Map<CompetitorPlatform, string[]>()
+
+      for (const entry of filled) {
+        const platform = entry.platform === 'linkedin' ? 'linkedin' : 'instagram'
+        const existing = byPlatform.get(platform) ?? []
+        existing.push(entry.value.trim())
+        byPlatform.set(platform, existing)
+      }
+
+      const groups: Array<{ platform: CompetitorPlatform; urls: string[] }> = []
+
+      for (const [platform, values] of byPlatform) {
+        const normalized =
+          platform === 'linkedin'
+            ? normalizeLinkedInInputs(values)
+            : normalizeCompetitorInputs(values)
+        groups.push({ platform, urls: normalized })
+      }
+
+      return groups
     } catch (error) {
       setErrorMessage(
         error instanceof Error ? error.message : 'Competitor validation failed unexpectedly.',
@@ -137,9 +184,9 @@ export function NewProjectPage() {
       return
     }
 
-    const normalizedCompetitors = validateCompetitorFields()
+    const groups = validateCompetitorFields()
 
-    if (!normalizedCompetitors) {
+    if (!groups) {
       return
     }
 
@@ -147,13 +194,15 @@ export function NewProjectPage() {
 
     try {
       const project = await createProject(projectName, projectType)
-      const competitors = await createCompetitors(project.id, normalizedCompetitors)
-      await updateProjectStatus(project.id, 'scraping')
+      const createdIds: string[] = []
 
-      await enqueueCompetitorScrapeJobsOrThrow(
-        project.id,
-        competitors.map((competitor) => competitor.id),
-      )
+      for (const group of groups) {
+        const competitors = await createCompetitors(project.id, group.urls, group.platform)
+        createdIds.push(...competitors.map((competitor) => competitor.id))
+      }
+
+      await updateProjectStatus(project.id, 'scraping')
+      await enqueueCompetitorScrapeJobsOrThrow(project.id, createdIds)
 
       setLastUsedProjectId(project.id)
       navigate(`/dashboard/${project.id}`, { replace: true })
@@ -243,33 +292,51 @@ export function NewProjectPage() {
               <div className="space-y-2">
                 <h2 className="text-lg font-semibold text-ink">Add your competitors</h2>
                 <p className="text-sm text-ink-muted">
-                  Instagram only for v1. Add {MIN_COMPETITORS_PER_PROJECT}–{MAX_COMPETITORS_PER_PROJECT}{' '}
-                  competitors. We recommend {RECOMMENDED_COMPETITORS_PER_PROJECT} for stronger signals.
+                  Instagram and LinkedIn profiles. Add {MIN_COMPETITORS_PER_PROJECT}–
+                  {MAX_COMPETITORS_PER_PROJECT} competitors. We recommend{' '}
+                  {RECOMMENDED_COMPETITORS_PER_PROJECT} for stronger signals.
                 </p>
               </div>
 
               <div className="space-y-4">
-                {competitorInputs.map((value, index) => (
-                  <div key={`competitor-${index}`} className="flex gap-3">
-                    <div className="flex-1">
-                      <AuthFormField
-                        label={`Competitor ${index + 1}`}
-                        name={`competitor-${index}`}
-                        placeholder="@competitor or https://instagram.com/competitor"
-                        value={value}
-                        onChange={(event) => updateCompetitorInput(index, event.target.value)}
-                        error={fieldErrors[`competitor-${index}`]}
-                      />
-                    </div>
-                    {competitorInputs.length > MIN_COMPETITORS_PER_PROJECT ? (
-                      <button
-                        type="button"
-                        onClick={() => removeCompetitorField(index)}
-                        className="mt-7 rounded-xl border border-border-hairline px-3 py-2 text-sm text-ink-muted hover:bg-accent-primary-soft"
+                {competitorInputs.map((entry, index) => (
+                  <div key={`competitor-${index}`} className="space-y-2">
+                    <div className="flex flex-wrap gap-2">
+                      <select
+                        value={entry.platform}
+                        onChange={(event) =>
+                          updateCompetitorPlatform(
+                            index,
+                            event.target.value as CompetitorPlatform,
+                          )
+                        }
+                        className="rounded-xl border border-border-hairline bg-canvas px-3 py-2 text-sm text-ink"
                       >
-                        Remove
-                      </button>
-                    ) : null}
+                        <option value="instagram">Instagram</option>
+                        <option value="linkedin">LinkedIn</option>
+                      </select>
+                      {competitorInputs.length > MIN_COMPETITORS_PER_PROJECT ? (
+                        <button
+                          type="button"
+                          onClick={() => removeCompetitorField(index)}
+                          className="rounded-xl border border-border-hairline px-3 py-2 text-sm text-ink-muted hover:bg-accent-primary-soft"
+                        >
+                          Remove
+                        </button>
+                      ) : null}
+                    </div>
+                    <AuthFormField
+                      label={`Competitor ${index + 1}`}
+                      name={`competitor-${index}`}
+                      placeholder={
+                        entry.platform === 'linkedin'
+                          ? 'linkedin.com/in/competitor or slug'
+                          : '@competitor or https://instagram.com/competitor'
+                      }
+                      value={entry.value}
+                      onChange={(event) => updateCompetitorInput(index, event.target.value)}
+                      error={fieldErrors[`competitor-${index}`]}
+                    />
                   </div>
                 ))}
               </div>

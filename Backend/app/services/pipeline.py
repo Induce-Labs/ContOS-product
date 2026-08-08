@@ -22,6 +22,8 @@ from app.services.engagement_metrics import enrich_competitor_summary
 
 from app.services.instagram_parser import parse_instagram_posts
 
+from app.services.linkedin_parser import parse_linkedin_posts, select_linkedin_content_for_llm
+
 
 
 logger = logging.getLogger(__name__)
@@ -79,24 +81,45 @@ def run_pipeline_batch(project_id: UUID, competitor_ids: list[UUID]) -> None:
     for competitor in competitors:
 
         competitor_id = UUID(competitor["id"])
+        platform = resolve_competitor_platform(competitor)
 
         try:
-
-            run_competitor_pipeline(
-
-                project_id=project_id,
-
-                competitor=competitor,
-
-                settings=settings,
-
-                repository=repository,
-
-                apify_client=apify_client,
-
-                llm_client=llm_client,
-
-            )
+            if platform == "linkedin":
+                logger.info(
+                    "[PIPELINE] Dispatching LinkedIn pipeline (scrape→analyze)",
+                    extra={
+                        "project_id": str(project_id),
+                        "competitor_id": str(competitor_id),
+                        "platform": platform,
+                        "handle_or_url": competitor.get("handle_or_url"),
+                    },
+                )
+                run_linkedin_competitor_pipeline(
+                    project_id=project_id,
+                    competitor=competitor,
+                    settings=settings,
+                    repository=repository,
+                    apify_client=apify_client,
+                    llm_client=llm_client,
+                )
+            else:
+                logger.info(
+                    "[PIPELINE] Dispatching Instagram pipeline (scrape→transcribe→analyze)",
+                    extra={
+                        "project_id": str(project_id),
+                        "competitor_id": str(competitor_id),
+                        "platform": platform,
+                        "handle_or_url": competitor.get("handle_or_url"),
+                    },
+                )
+                run_instagram_competitor_pipeline(
+                    project_id=project_id,
+                    competitor=competitor,
+                    settings=settings,
+                    repository=repository,
+                    apify_client=apify_client,
+                    llm_client=llm_client,
+                )
 
         except Exception as error:
 
@@ -109,6 +132,8 @@ def run_pipeline_batch(project_id: UUID, competitor_ids: list[UUID]) -> None:
                     "project_id": str(project_id),
 
                     "competitor_id": str(competitor_id),
+
+                    "platform": platform,
 
                     "error": str(error),
 
@@ -148,7 +173,53 @@ def run_pipeline_batch(project_id: UUID, competitor_ids: list[UUID]) -> None:
 
 
 
+def resolve_competitor_platform(competitor: dict[str, Any]) -> str:
+    """Resolve scrape platform from DB field, with URL fallback for safety."""
+    profile_url = str(competitor.get("handle_or_url") or "").strip().lower()
+    platform = str(competitor.get("platform") or "").strip().lower()
+
+    if "linkedin.com" in profile_url or platform == "linkedin":
+        return "linkedin"
+    if "instagram.com" in profile_url or platform == "instagram":
+        return "instagram"
+    if platform in {"twitter", "reddit"}:
+        return platform
+    return platform or "instagram"
+
+
 def run_competitor_pipeline(
+    *,
+    project_id: UUID,
+    competitor: dict[str, Any],
+    settings: Settings,
+    repository: SupabaseRepository,
+    apify_client: ApifyClient,
+    llm_client: LlmClient,
+) -> None:
+    """Dispatch helper kept for tests/callers; prefer batch-level routing."""
+    platform = resolve_competitor_platform(competitor)
+    if platform == "linkedin":
+        run_linkedin_competitor_pipeline(
+            project_id=project_id,
+            competitor=competitor,
+            settings=settings,
+            repository=repository,
+            apify_client=apify_client,
+            llm_client=llm_client,
+        )
+        return
+
+    run_instagram_competitor_pipeline(
+        project_id=project_id,
+        competitor=competitor,
+        settings=settings,
+        repository=repository,
+        apify_client=apify_client,
+        llm_client=llm_client,
+    )
+
+
+def run_instagram_competitor_pipeline(
 
     *,
 
@@ -170,7 +241,12 @@ def run_competitor_pipeline(
 
     profile_url = competitor["handle_or_url"]
 
-
+    if resolve_competitor_platform(competitor) == "linkedin":
+        raise PipelineError(
+            "LinkedIn competitors must use the LinkedIn pipeline "
+            f"(datadoping/linkedin-profile-posts-scraper), not Instagram. "
+            f"Refusing profile: {profile_url}",
+        )
 
     logger.info(
 
@@ -631,3 +707,142 @@ def run_competitor_pipeline(
     )
 
 
+def run_linkedin_competitor_pipeline(
+    *,
+    project_id: UUID,
+    competitor: dict[str, Any],
+    settings: Settings,
+    repository: SupabaseRepository,
+    apify_client: ApifyClient,
+    llm_client: LlmClient,
+) -> None:
+    competitor_id = UUID(competitor["id"])
+    profile_url = competitor["handle_or_url"]
+
+    logger.info(
+        "[PIPELINE] LinkedIn Step 1/2 SCRAPE started for competitor %s (%s)",
+        competitor_id,
+        profile_url,
+    )
+
+    repository.update_competitor_status(
+        competitor_id,
+        scrape_status="in_progress",
+        pipeline_step="scraping",
+        error_message=None,
+    )
+
+    raw_items = apify_client.scrape_linkedin_profile(profile_url)
+    parsed_posts = parse_linkedin_posts(raw_items)
+
+    if not parsed_posts:
+        raise PipelineError(
+            f"No LinkedIn posts found for {profile_url}.",
+        )
+
+    scraped_rows = [
+        {
+            "competitor_id": str(competitor_id),
+            "external_id": post["external_id"],
+            "post_url": post["post_url"],
+            "posted_at": post["posted_at"],
+            "caption": post["caption"],
+            "likes": post["likes"],
+            "comments_count": post["comments_count"],
+            "shares": post["shares"],
+            "author_name": post["author_name"],
+            "author_headline": post["author_headline"],
+            "raw_payload": post["raw_payload"],
+        }
+        for post in parsed_posts
+    ]
+
+    repository.upsert_linkedin_scraped_content(scraped_rows)
+
+    logger.info(
+        "[PIPELINE] LinkedIn Step 1/2 SCRAPE complete — stored %s posts",
+        len(parsed_posts),
+        extra={
+            "competitor_id": str(competitor_id),
+            "total_posts": len(parsed_posts),
+        },
+    )
+
+    logger.info(
+        "[PIPELINE] LinkedIn Step 2/2 ANALYZE started for competitor %s",
+        competitor_id,
+    )
+
+    repository.update_competitor_status(
+        competitor_id,
+        scrape_status="in_progress",
+        pipeline_step="analyzing",
+        error_message=None,
+    )
+
+    content_for_summary = repository.get_linkedin_content_for_summary(competitor_id)
+    if not content_for_summary:
+        raise PipelineError(
+            f"No LinkedIn scraped content available for summarization for competitor {competitor_id}.",
+        )
+
+    summary_content = [
+        {
+            "external_id": item["external_id"],
+            "content_type": "post",
+            "caption": item.get("caption"),
+            "likes": item.get("likes"),
+            "views": None,
+            "shares": item.get("shares"),
+            "comments_count": item.get("comments_count"),
+            "posted_at": item.get("posted_at"),
+            "author_name": item.get("author_name"),
+            "author_headline": item.get("author_headline"),
+        }
+        for item in content_for_summary
+    ]
+
+    llm_content = select_linkedin_content_for_llm(summary_content)
+    logger.info(
+        "[PIPELINE] LinkedIn Step 2/2 ANALYZE — summarizing %s of %s posts for LLM",
+        len(llm_content),
+        len(summary_content),
+        extra={
+            "competitor_id": str(competitor_id),
+            "llm_item_count": len(llm_content),
+            "scraped_item_count": len(summary_content),
+        },
+    )
+
+    summary_payload, model_used = llm_client.summarize_competitor_content(
+        competitor_handle=profile_url,
+        content_items=llm_content,
+        platform="linkedin",
+    )
+    # Metrics from full scrape; qualitative fields from LLM on the capped subset.
+    summary_payload = enrich_competitor_summary(summary_payload, summary_content)
+
+    repository.replace_linkedin_content_summary(
+        competitor_id=competitor_id,
+        project_id=project_id,
+        summary=summary_payload.model_dump(),
+        model_used=model_used,
+    )
+
+    repository.update_competitor_status(
+        competitor_id,
+        scrape_status="completed",
+        pipeline_step="done",
+        error_message=None,
+        last_scraped_at=datetime.now(tz=UTC),
+    )
+
+    logger.info(
+        "[PIPELINE] LinkedIn Step 2/2 ANALYZE complete — competitor pipeline done",
+        extra={
+            "project_id": str(project_id),
+            "competitor_id": str(competitor_id),
+            "content_count": len(content_for_summary),
+            "model_used": model_used,
+        },
+    )

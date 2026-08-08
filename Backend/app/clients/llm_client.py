@@ -31,17 +31,44 @@ class LlmClient:
         self,
         competitor_handle: str,
         content_items: list[dict[str, Any]],
+        *,
+        platform: str = "instagram",
     ) -> tuple[CompetitorSummaryPayload, str]:
         if not content_items:
             raise LlmServiceError("Cannot summarize an empty content batch.")
 
-        prompt = self._build_prompt(competitor_handle, content_items)
+        prompt = self._build_prompt(competitor_handle, content_items, platform=platform)
         last_error: Exception | None = None
+
+        logger.info(
+            "Starting LLM summarization",
+            extra={
+                "provider": self._provider,
+                "platform": platform,
+                "competitor_handle": competitor_handle,
+                "content_item_count": len(content_items),
+                "prompt_chars": len(prompt),
+            },
+        )
 
         for attempt in range(1, self._settings.llm_max_retries + 2):
             try:
                 raw_content, model_used = self._call_provider(prompt)
+                if not isinstance(raw_content, str) or not raw_content.strip():
+                    raise LlmServiceError(
+                        "LLM returned empty message content; cannot parse summary JSON. "
+                        "openrouter/free often fails on large prompts — retry or set a paid OPENROUTER_MODEL.",
+                    )
                 summary = self._parse_summary(raw_content)
+                logger.info(
+                    "LLM summarization succeeded",
+                    extra={
+                        "provider": self._provider,
+                        "platform": platform,
+                        "model_used": model_used,
+                        "attempt": attempt,
+                    },
+                )
                 return summary, model_used
             except (httpx.HTTPError, LlmServiceError, json.JSONDecodeError, ValueError) as error:
                 last_error = error
@@ -68,7 +95,7 @@ class LlmClient:
     def _call_openrouter(self, prompt: str) -> tuple[str, str]:
         model = self._settings.openrouter_model
 
-        with httpx.Client(timeout=120) as client:
+        with httpx.Client(timeout=90) as client:
             response = client.post(
                 "https://openrouter.ai/api/v1/chat/completions",
                 headers={
@@ -108,7 +135,7 @@ class LlmClient:
     def _call_openai(self, prompt: str) -> tuple[str, str]:
         model = self._settings.openai_model
 
-        with httpx.Client(timeout=120) as client:
+        with httpx.Client(timeout=90) as client:
             response = client.post(
                 "https://api.openai.com/v1/chat/completions",
                 headers={
@@ -175,13 +202,19 @@ class LlmClient:
         return CompetitorSummaryPayload.model_validate(payload)
 
     @staticmethod
-    def _build_prompt(competitor_handle: str, content_items: list[dict[str, Any]]) -> str:
+    def _build_prompt(
+        competitor_handle: str,
+        content_items: list[dict[str, Any]],
+        *,
+        platform: str = "instagram",
+    ) -> str:
         content_lines = []
+        platform_label = "LinkedIn" if platform == "linkedin" else "Instagram"
 
         for item in content_items:
             lines = [
                 f"- external_id: {item.get('external_id')}",
-                f"  content_type: {item.get('content_type')}",
+                f"  content_type: {item.get('content_type') or ('post' if platform == 'linkedin' else 'unknown')}",
                 f"  caption: {item.get('caption') or ''}",
                 f"  likes: {item.get('likes')}",
                 f"  views: {item.get('views')}",
@@ -189,17 +222,33 @@ class LlmClient:
                 f"  comments_count: {item.get('comments_count')}",
                 f"  posted_at: {item.get('posted_at')}",
             ]
+            if platform == "linkedin":
+                if item.get("author_name"):
+                    lines.append(f"  author_name: {item.get('author_name')}")
+                if item.get("author_headline"):
+                    lines.append(f"  author_headline: {item.get('author_headline')}")
+
             transcript = item.get("transcript")
             if isinstance(transcript, str) and transcript.strip():
                 lines.append(f"  transcript: {transcript.strip()}")
 
             content_lines.append("\n".join(lines))
 
+        if platform == "linkedin":
+            dataset_guidance = (
+                "The dataset includes LinkedIn profile posts. "
+                "Use post text and engagement metrics (reactions/likes, comments, shares/reposts)."
+            )
+        else:
+            dataset_guidance = (
+                "The dataset includes static posts, carousels, and reels. "
+                "Use captions and engagement metrics for all content types. "
+                "For reels, use transcripts as supplemental context when provided."
+            )
+
         return (
-            f"Analyze Instagram content for competitor {competitor_handle}.\n"
-            "The dataset includes static posts, carousels, and reels. "
-            "Use captions and engagement metrics for all content types. "
-            "For reels, use transcripts as supplemental context when provided.\n"
+            f"Analyze {platform_label} content for competitor {competitor_handle}.\n"
+            f"{dataset_guidance}\n"
             "Return JSON with:\n"
             "- top_performing_content: ranked list with content_type and why each performed well\n"
             "- recurring_hooks_patterns\n"

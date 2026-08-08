@@ -2,6 +2,7 @@ import { supabase } from './supabase'
 import type { Tables, TablesInsert } from '../types/database'
 import type { CompetitorPlatform } from '../types/contos'
 import { getInstagramHandle } from './instagram'
+import { getLinkedInSlug } from './linkedin'
 
 export type Competitor = Tables<'competitors'>
 
@@ -17,6 +18,14 @@ export class CompetitorsServiceError extends Error {
       this.cause = cause
     }
   }
+}
+
+function competitorIdentityKey(platform: CompetitorPlatform, handleOrUrl: string): string {
+  if (platform === 'linkedin') {
+    return `linkedin:${getLinkedInSlug(handleOrUrl)}`
+  }
+
+  return `instagram:${getInstagramHandle(handleOrUrl)}`
 }
 
 export async function fetchCompetitorsForProject(projectId: string): Promise<Competitor[]> {
@@ -58,16 +67,25 @@ export async function createCompetitors(
     )
   }
 
-  const existingHandles = new Set(
-    existingCompetitors.map((competitor) => getInstagramHandle(competitor.handle_or_url)),
+  const existingKeys = new Set(
+    existingCompetitors.map((competitor) =>
+      competitorIdentityKey(
+        competitor.platform as CompetitorPlatform,
+        competitor.handle_or_url,
+      ),
+    ),
   )
 
   for (const handleOrUrl of handleOrUrls) {
-    const handle = getInstagramHandle(handleOrUrl)
-    if (existingHandles.has(handle)) {
-      throw new CompetitorsServiceError(`@${handle} is already tracked in this project.`)
+    const key = competitorIdentityKey(platform, handleOrUrl)
+    if (existingKeys.has(key)) {
+      throw new CompetitorsServiceError(
+        platform === 'linkedin'
+          ? `${getLinkedInSlug(handleOrUrl)} is already tracked in this project.`
+          : `@${getInstagramHandle(handleOrUrl)} is already tracked in this project.`,
+      )
     }
-    existingHandles.add(handle)
+    existingKeys.add(key)
   }
 
   if (handleOrUrls.length > MAX_COMPETITORS_PER_PROJECT) {

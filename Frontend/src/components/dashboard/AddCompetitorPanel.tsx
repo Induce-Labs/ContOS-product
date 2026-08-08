@@ -8,8 +8,15 @@ import {
   type Competitor,
 } from '../../lib/competitors'
 import { normalizeCompetitorInputs, validateInstagramInput } from '../../lib/instagram'
+import { normalizeLinkedInInputs, validateLinkedInInput } from '../../lib/linkedin'
 import { enqueueCompetitorScrapeJobsOrThrow } from '../../lib/api'
 import { updateProjectStatus } from '../../lib/projects'
+import type { CompetitorPlatform } from '../../types/contos'
+
+type CompetitorDraft = {
+  value: string
+  platform: CompetitorPlatform
+}
 
 type AddCompetitorPanelProps = {
   projectId: string
@@ -25,14 +32,26 @@ export function AddCompetitorPanel({
   onSuccess,
 }: AddCompetitorPanelProps) {
   const remainingSlots = MAX_COMPETITORS_PER_PROJECT - existingCompetitors.length
-  const [inputs, setInputs] = useState<string[]>([''])
+  const [inputs, setInputs] = useState<CompetitorDraft[]>([
+    { value: '', platform: 'instagram' },
+  ])
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   function updateInput(index: number, value: string) {
     setInputs((current) =>
-      current.map((entry, entryIndex) => (entryIndex === index ? value : entry)),
+      current.map((entry, entryIndex) =>
+        entryIndex === index ? { ...entry, value } : entry,
+      ),
+    )
+  }
+
+  function updatePlatform(index: number, platform: CompetitorPlatform) {
+    setInputs((current) =>
+      current.map((entry, entryIndex) =>
+        entryIndex === index ? { ...entry, platform } : entry,
+      ),
     )
   }
 
@@ -41,7 +60,7 @@ export function AddCompetitorPanel({
       return
     }
 
-    setInputs((current) => [...current, ''])
+    setInputs((current) => [...current, { value: '', platform: 'instagram' }])
   }
 
   function removeInputField(index: number) {
@@ -56,29 +75,36 @@ export function AddCompetitorPanel({
     event.preventDefault()
     setErrorMessage(null)
 
-    const filledInputs = inputs.map((value) => value.trim()).filter(Boolean)
+    const filled = inputs.filter((entry) => entry.value.trim())
 
-    if (filledInputs.length === 0) {
-      setErrorMessage('Enter at least one Instagram competitor.')
+    if (filled.length === 0) {
+      setErrorMessage('Enter at least one competitor.')
       return
     }
 
-    if (filledInputs.length > remainingSlots) {
+    if (filled.length > remainingSlots) {
       setErrorMessage(`You can add at most ${remainingSlots} more competitor(s).`)
       return
     }
 
     const errors: Record<string, string> = {}
 
-    inputs.forEach((value, index) => {
-      const trimmed = value.trim()
+    inputs.forEach((entry, index) => {
+      const trimmed = entry.value.trim()
       if (!trimmed) {
         return
       }
 
-      const result = validateInstagramInput(trimmed)
-      if (!result.valid) {
-        errors[`competitor-${index}`] = result.message
+      if (entry.platform === 'linkedin') {
+        const result = validateLinkedInInput(trimmed)
+        if (!result.valid) {
+          errors[`competitor-${index}`] = result.message
+        }
+      } else {
+        const result = validateInstagramInput(trimmed)
+        if (!result.valid) {
+          errors[`competitor-${index}`] = result.message
+        }
       }
     })
 
@@ -89,27 +115,30 @@ export function AddCompetitorPanel({
       return
     }
 
-    let normalizedCompetitors: string[]
-
-    try {
-      normalizedCompetitors = normalizeCompetitorInputs(filledInputs)
-    } catch (error) {
-      setErrorMessage(
-        error instanceof Error ? error.message : 'Competitor validation failed unexpectedly.',
-      )
-      return
-    }
-
     setIsSubmitting(true)
 
     try {
-      const competitors = await createCompetitors(projectId, normalizedCompetitors)
-      await updateProjectStatus(projectId, 'scraping')
+      const byPlatform = new Map<CompetitorPlatform, string[]>()
+      for (const entry of filled) {
+        const platform = entry.platform === 'linkedin' ? 'linkedin' : 'instagram'
+        const existing = byPlatform.get(platform) ?? []
+        existing.push(entry.value.trim())
+        byPlatform.set(platform, existing)
+      }
 
-      await enqueueCompetitorScrapeJobsOrThrow(
-        projectId,
-        competitors.map((competitor) => competitor.id),
-      )
+      const createdIds: string[] = []
+
+      for (const [platform, values] of byPlatform) {
+        const normalized =
+          platform === 'linkedin'
+            ? normalizeLinkedInInputs(values)
+            : normalizeCompetitorInputs(values)
+        const competitors = await createCompetitors(projectId, normalized, platform)
+        createdIds.push(...competitors.map((competitor) => competitor.id))
+      }
+
+      await updateProjectStatus(projectId, 'scraping')
+      await enqueueCompetitorScrapeJobsOrThrow(projectId, createdIds)
 
       onSuccess()
       onClose()
@@ -127,7 +156,7 @@ export function AddCompetitorPanel({
         <div>
           <h2 className="text-lg font-semibold text-ink">Add competitors</h2>
           <p className="mt-1 text-sm text-ink-muted">
-            Instagram only. Up to {remainingSlots} more competitor
+            Instagram or LinkedIn. Up to {remainingSlots} more competitor
             {remainingSlots === 1 ? '' : 's'} for this project.
           </p>
         </div>
@@ -147,27 +176,41 @@ export function AddCompetitorPanel({
       ) : null}
 
       <form className="mt-6 space-y-4" onSubmit={(event) => void handleSubmit(event)}>
-        {inputs.map((value, index) => (
-          <div key={`add-competitor-${index}`} className="flex gap-3">
-            <div className="flex-1">
-              <AuthFormField
-                label={`Competitor ${index + 1}`}
-                name={`add-competitor-${index}`}
-                placeholder="@competitor or https://instagram.com/competitor"
-                value={value}
-                onChange={(event) => updateInput(index, event.target.value)}
-                error={fieldErrors[`competitor-${index}`]}
-              />
-            </div>
-            {inputs.length > 1 ? (
-              <button
-                type="button"
-                onClick={() => removeInputField(index)}
-                className="mt-7 rounded-xl border border-border-hairline px-3 py-2 text-sm text-ink-muted hover:bg-accent-primary-soft"
+        {inputs.map((entry, index) => (
+          <div key={`add-competitor-${index}`} className="space-y-2">
+            <div className="flex flex-wrap gap-2">
+              <select
+                value={entry.platform}
+                onChange={(event) =>
+                  updatePlatform(index, event.target.value as CompetitorPlatform)
+                }
+                className="rounded-xl border border-border-hairline bg-canvas px-3 py-2 text-sm text-ink"
               >
-                Remove
-              </button>
-            ) : null}
+                <option value="instagram">Instagram</option>
+                <option value="linkedin">LinkedIn</option>
+              </select>
+              {inputs.length > 1 ? (
+                <button
+                  type="button"
+                  onClick={() => removeInputField(index)}
+                  className="rounded-xl border border-border-hairline px-3 py-2 text-sm text-ink-muted hover:bg-accent-primary-soft"
+                >
+                  Remove
+                </button>
+              ) : null}
+            </div>
+            <AuthFormField
+              label={`Competitor ${index + 1}`}
+              name={`add-competitor-${index}`}
+              placeholder={
+                entry.platform === 'linkedin'
+                  ? 'linkedin.com/in/competitor or slug'
+                  : '@competitor or https://instagram.com/competitor'
+              }
+              value={entry.value}
+              onChange={(event) => updateInput(index, event.target.value)}
+              error={fieldErrors[`competitor-${index}`]}
+            />
           </div>
         ))}
 

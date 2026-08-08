@@ -31,6 +31,11 @@ class Settings(BaseSettings):
         default="apple_yang/instagram-transcripts-scraper",
         validation_alias="APIFY_TRANSCRIBER_ACTOR_ID",
     )
+    apify_linkedin_actor_id: str = Field(
+        default="datadoping/linkedin-profile-posts-scraper",
+        validation_alias="APIFY_LINKEDIN_ACTOR_ID",
+    )
+    linkedin_max_posts: int = Field(default=50, validation_alias="LINKEDIN_MAX_POSTS")
     apify_wait_secs: int = Field(default=300, validation_alias="APIFY_WAIT_SECS")
     apify_instagram_session_id: str = Field(
         default="",

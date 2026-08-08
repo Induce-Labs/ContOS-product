@@ -15,7 +15,7 @@ import { CompetitorProgressCard } from '../components/dashboard/CompetitorProgre
 import { CompetitorSummaryCard } from '../components/dashboard/CompetitorSummaryCard'
 import { AddCompetitorPanel } from '../components/dashboard/AddCompetitorPanel'
 import type { Competitor } from '../lib/competitors'
-import type { ContentSummary } from '../lib/summaries'
+import type { DashboardSummary } from '../lib/summaries'
 
 export function DashboardPage() {
   const { projectId } = useParams()
@@ -300,7 +300,7 @@ function DashboardHeader({ userEmail, isSigningOut, onSignOut }: DashboardHeader
 
 type CompetitorDashboardSectionProps = {
   competitor: Competitor
-  summary: ContentSummary | null
+  summary: DashboardSummary | null
   onRetry?: (competitorId: string) => void
   isRetrying?: boolean
 }

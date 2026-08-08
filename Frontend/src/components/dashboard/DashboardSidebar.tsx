@@ -87,13 +87,14 @@ export function DashboardSidebar({
                     }`}
                   >
                     <span className="block truncate font-medium">
-                      {displayCompetitorHandle(competitor.handle_or_url)}
+                      {displayCompetitorHandle(competitor.handle_or_url, competitor.platform)}
                     </span>
                     <span
                       className={`mt-0.5 block text-xs capitalize ${
                         isSelected ? 'text-white/80' : 'text-ink-muted'
                       }`}
                     >
+                      {competitor.platform === 'linkedin' ? 'LinkedIn · ' : 'Instagram · '}
                       {competitor.pipeline_step === 'done'
                         ? 'Ready'
                         : competitor.pipeline_step === 'failed'
