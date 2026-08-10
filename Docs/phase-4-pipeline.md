@@ -20,23 +20,33 @@ Run the async competitor intelligence pipeline on the FastAPI backend in three e
 
 ## API
 
-
-
 ```
-
 POST /projects/{project_id}/competitors/scrape
-
 Content-Type: application/json
-
-
+Authorization: Bearer <supabase_access_token>
 
 {
-
   "competitor_ids": ["uuid", "..."]
-
 }
+```
 
 ```
+POST /projects/{project_id}/competitors/{competitor_id}/stop
+Authorization: Bearer <supabase_access_token>
+```
+
+**Stop research (cooperative cancel)**
+
+- Available while `pipeline_step` is `scraping`, `transcribing`, or `analyzing`
+- Sets `competitors.cancel_requested = true`
+- After the current Apify/LLM call finishes, ContOS skips remaining phases when possible
+- Any rows already written to `scraped_content` / `linkedin_scraped_content` are kept
+- Pipeline then runs Analyze on that stored data and marks the competitor `done`
+- If Stop happens before any posts are stored, competitor is marked `failed` with a clear message
+- Note: Apify uses blocking sync runs today, so Stop cannot abort mid-actor; it takes effect at the next phase boundary
+
+Migration: `supabase/migrations/20260810120000_competitor_cancel_requested.sql`
+
 
 
 

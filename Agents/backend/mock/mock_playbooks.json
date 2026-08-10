@@ -1,0 +1,90 @@
+[
+  {
+    "id": "yt_aryan_001",
+    "category": "Outbound",
+    "topic": "Cold Email Copywriting",
+    "rule_summary": "Keep body copy under 120 words. Lead with speed-to-value or friction removal. Use soft, low-friction CTAs asking for interest.",
+    "examples": {
+      "good": "Open to seeing a quick 2-min video on how this works?",
+      "bad": "Book 15 minutes on my calendar link below."
+    },
+    "tags": ["cold_email", "copywriting", "outbound"]
+  },
+  {
+    "id": "yt_aryan_002",
+    "category": "Brand Guardrails",
+    "topic": "Forbidden Jargon",
+    "rule_summary": "Never use hyperbole or buzzwords like 'revolutionary', 'synergy', or 'game-changer'.",
+    "examples": {
+      "good": "Reduce manual entry by 4 hours weekly.",
+      "bad": "Our game-changing platform creates synergies."
+    },
+    "tags": ["guardrails", "compliance"]
+  },
+  {
+    "id": "f500_003",
+    "category": "Brand Guardrails",
+    "topic": "Evidence Over Claims",
+    "rule_summary": "Every benefit claim must include a concrete metric, timeframe, or observable proof. Vague superiority claims fail audit.",
+    "examples": {
+      "good": "Cut reporting time from 6 hours to 45 minutes in Q1.",
+      "bad": "The best reporting experience in the market."
+    },
+    "tags": ["proof", "claims", "guardrails"]
+  },
+  {
+    "id": "f500_004",
+    "category": "Content Strategy",
+    "topic": "Platform-Native Formats",
+    "rule_summary": "Never cross-post identical creative. Adapt hooks, length, and CTA friction to each platform's native behavior.",
+    "examples": {
+      "good": "Instagram Reel hook → LinkedIn short-line story → X hot take thread.",
+      "bad": "Same 2,000-character LinkedIn essay pasted to Instagram caption."
+    },
+    "tags": ["multi_platform", "adaptation", "strategy"]
+  },
+  {
+    "id": "f500_005",
+    "category": "Instagram",
+    "topic": "Reel Hook Window",
+    "rule_summary": "First 1.5 seconds must contain a pattern interrupt or specific outcome. Delayed branding intros fail.",
+    "examples": {
+      "good": "Stop posting daily. Here's the system that booked 11 demos.",
+      "bad": "Hey guys, welcome back to another video about marketing..."
+    },
+    "tags": ["instagram", "reels", "hooks"]
+  },
+  {
+    "id": "f500_006",
+    "category": "LinkedIn",
+    "topic": "Line-Break Density",
+    "rule_summary": "Use 1–2 sentence paragraphs with white space. Dense blocks reduce dwell time and comments.",
+    "examples": {
+      "good": "We fired our content calendar.\n\nReplaced it with a weekly insight loop.\n\nPipeline up 37%.",
+      "bad": "We fired our content calendar and replaced it with a weekly insight loop which increased pipeline by 37% across the quarter."
+    },
+    "tags": ["linkedin", "formatting", "engagement"]
+  },
+  {
+    "id": "f500_007",
+    "category": "Twitter",
+    "topic": "Signal Density",
+    "rule_summary": "Single tweets must be high-signal and under 280 characters. Max one hashtag. No engagement bait.",
+    "examples": {
+      "good": "Content calendars are anxiety machines. Insight loops are growth machines.",
+      "bad": "What do you think? Drop a 🔥 if you agree!!! #marketing #growth #saas"
+    },
+    "tags": ["twitter", "hooks", "engagement"]
+  },
+  {
+    "id": "f500_008",
+    "category": "Content Strategy",
+    "topic": "Competitor Intelligence Use",
+    "rule_summary": "Use competitor hooks and themes as inspiration, never as copy. Always rewrite into brand voice and cite the strategic signal, not the caption.",
+    "examples": {
+      "good": "Competitor wins with myth-vs-reality → we apply myth-vs-reality to our ICP pain.",
+      "bad": "Paste competitor caption with brand name swapped."
+    },
+    "tags": ["competitors", "ethics", "strategy"]
+  }
+]

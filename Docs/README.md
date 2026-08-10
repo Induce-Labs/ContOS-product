@@ -9,3 +9,5 @@
 | 4 | [phase-4-pipeline.md](./phase-4-pipeline.md) |
 | 5 | [phase-5-dashboard.md](./phase-5-dashboard.md) |
 | 6 | [phase-6-hardening.md](./phase-6-hardening.md) |
+| LinkedIn | [phase-linkedin.md](./phase-linkedin.md) |
+| Agents | [phase-agents.md](./phase-agents.md) |

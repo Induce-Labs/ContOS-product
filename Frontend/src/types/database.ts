@@ -16,6 +16,7 @@ export type Database = {
     Tables: {
       competitors: {
         Row: {
+          cancel_requested: boolean
           created_at: string
           error_message: string | null
           handle_or_url: string
@@ -27,6 +28,7 @@ export type Database = {
           scrape_status: string
         }
         Insert: {
+          cancel_requested?: boolean
           created_at?: string
           error_message?: string | null
           handle_or_url: string
@@ -38,6 +40,7 @@ export type Database = {
           scrape_status?: string
         }
         Update: {
+          cancel_requested?: boolean
           created_at?: string
           error_message?: string | null
           handle_or_url?: string

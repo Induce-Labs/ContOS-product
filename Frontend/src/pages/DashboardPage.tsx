@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { useDashboardPolling } from '../hooks/useDashboardPolling'
@@ -9,13 +9,11 @@ import {
   updateProjectStatus,
   type Project,
 } from '../lib/projects'
-import { enqueueCompetitorScrapeJobsOrThrow } from '../lib/api'
+import { enqueueCompetitorScrapeJobsOrThrow, stopCompetitorPipeline } from '../lib/api'
 import { DashboardSidebar } from '../components/dashboard/DashboardSidebar'
 import { CompetitorProgressCard } from '../components/dashboard/CompetitorProgressCard'
-import { CompetitorSummaryCard } from '../components/dashboard/CompetitorSummaryCard'
 import { AddCompetitorPanel } from '../components/dashboard/AddCompetitorPanel'
 import type { Competitor } from '../lib/competitors'
-import type { DashboardSummary } from '../lib/summaries'
 
 export function DashboardPage() {
   const { projectId } = useParams()
@@ -29,11 +27,12 @@ export function DashboardPage() {
   const [isAddCompetitorOpen, setIsAddCompetitorOpen] = useState(false)
   const [isSigningOut, setIsSigningOut] = useState(false)
   const [retryingCompetitorId, setRetryingCompetitorId] = useState<string | null>(null)
+  const [stoppingCompetitorId, setStoppingCompetitorId] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
+  const redirectedToAgentsRef = useRef<string | null>(null)
 
   const {
     competitors,
-    summariesByCompetitorId,
     isLoading: dashboardLoading,
     errorMessage: dashboardError,
     refresh,
@@ -98,6 +97,34 @@ export function DashboardPage() {
     }
   }, [navigate, projectId])
 
+  // Chat-first: when research becomes ready, send user to Agents once.
+  useEffect(() => {
+    if (!activeProject || dashboardLoading) {
+      return
+    }
+
+    const hasInProgress = competitors.some(
+      (competitor) =>
+        competitor.pipeline_step !== 'done' && competitor.pipeline_step !== 'failed',
+    )
+    const hasCompleted = competitors.some(
+      (competitor) => competitor.pipeline_step === 'done',
+    )
+    const isReady =
+      activeProject.status === 'ready' || (hasCompleted && !hasInProgress)
+
+    if (!isReady || !hasCompleted) {
+      return
+    }
+
+    if (redirectedToAgentsRef.current === activeProject.id) {
+      return
+    }
+
+    redirectedToAgentsRef.current = activeProject.id
+    navigate(`/dashboard/${activeProject.id}/agents`, { replace: true })
+  }, [activeProject, competitors, dashboardLoading, navigate])
+
   async function handleRetryCompetitor(competitorId: string) {
     if (!activeProject) {
       return
@@ -105,6 +132,7 @@ export function DashboardPage() {
 
     setActionError(null)
     setRetryingCompetitorId(competitorId)
+    redirectedToAgentsRef.current = null
 
     try {
       await updateProjectStatus(activeProject.id, 'scraping')
@@ -116,6 +144,26 @@ export function DashboardPage() {
       )
     } finally {
       setRetryingCompetitorId(null)
+    }
+  }
+
+  async function handleStopCompetitor(competitorId: string) {
+    if (!activeProject) {
+      return
+    }
+
+    setActionError(null)
+    setStoppingCompetitorId(competitorId)
+
+    try {
+      await stopCompetitorPipeline(activeProject.id, competitorId)
+      await refresh()
+    } catch (error) {
+      setActionError(
+        error instanceof Error ? error.message : 'Failed to stop competitor research.',
+      )
+    } finally {
+      setStoppingCompetitorId(null)
     }
   }
 
@@ -175,14 +223,14 @@ export function DashboardPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-canvas">
+    <div className="flex h-screen flex-col overflow-hidden bg-canvas">
       <DashboardHeader
         userEmail={user?.email}
         isSigningOut={isSigningOut}
         onSignOut={() => void handleSignOut()}
       />
 
-      <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+      <div className="flex min-h-0 flex-1 flex-row">
         <DashboardSidebar
           projects={projects}
           activeProject={activeProject}
@@ -193,46 +241,51 @@ export function DashboardPage() {
           isAddCompetitorOpen={isAddCompetitorOpen}
         />
 
-        <main className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
+        <main className="min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-8">
           {projectsError || dashboardError || actionError ? (
-            <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-              <span>{projectsError ?? dashboardError ?? actionError}</span>
-              {dashboardError && !projectsError ? (
-                <button
-                  type="button"
-                  onClick={() => void refresh()}
-                  className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50"
-                >
-                  Retry
-                </button>
-              ) : null}
-            </div>
-          ) : null}
-
-          {hasPartialFailure ? (
-            <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-              {failedCompetitorCount} of {competitors.length} competitor
-              {competitors.length === 1 ? '' : 's'} failed research. Completed competitors still
-              have summaries below — use &quot;Retry research&quot; on failed cards.
+            <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {projectsError || dashboardError || actionError}
             </div>
           ) : null}
 
           {activeProject ? (
-            <div className="mx-auto max-w-4xl space-y-6">
-              <header>
-                <p className="text-sm text-ink-muted capitalize">{activeProject.type.replace('_', ' ')}</p>
-                <h1 className="text-2xl font-semibold text-ink">{activeProject.name}</h1>
-                <p className="mt-1 text-sm capitalize text-ink-muted">
-                  Project status: {activeProject.status}
-                </p>
-              </header>
+            <div className="space-y-6">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <p className="text-sm capitalize text-ink-muted">
+                    {activeProject.type.replace('_', ' ')}
+                  </p>
+                  <h2 className="text-2xl font-semibold text-ink">{activeProject.name}</h2>
+                  <p className="mt-1 text-sm text-ink-muted">
+                    Project status: <span className="capitalize">{activeProject.status}</span>
+                  </p>
+                </div>
+                {completedCompetitorCount > 0 ? (
+                  <Link
+                    to={`/dashboard/${activeProject.id}/agents`}
+                    className="rounded-xl bg-accent-primary px-4 py-2.5 text-sm font-medium text-white hover:bg-accent-primary-deep"
+                  >
+                    Open chat
+                  </Link>
+                ) : null}
+              </div>
+
+              {hasPartialFailure ? (
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                  Some competitors finished research, but {failedCompetitorCount} failed. Use Retry
+                  on failed cards, or open chat for completed competitors.
+                </div>
+              ) : null}
 
               {isAddCompetitorOpen ? (
                 <AddCompetitorPanel
                   projectId={activeProject.id}
                   existingCompetitors={competitors}
                   onClose={() => setIsAddCompetitorOpen(false)}
-                  onSuccess={() => void refresh()}
+                  onSuccess={() => {
+                    redirectedToAgentsRef.current = null
+                    void refresh()
+                  }}
                 />
               ) : null}
 
@@ -249,9 +302,11 @@ export function DashboardPage() {
                     <CompetitorDashboardSection
                       key={competitor.id}
                       competitor={competitor}
-                      summary={summariesByCompetitorId.get(competitor.id) ?? null}
+                      projectId={activeProject.id}
                       onRetry={(competitorId) => void handleRetryCompetitor(competitorId)}
+                      onStop={(competitorId) => void handleStopCompetitor(competitorId)}
                       isRetrying={retryingCompetitorId === competitor.id}
+                      isStopping={stoppingCompetitorId === competitor.id}
                     />
                   ))}
                 </div>
@@ -269,7 +324,7 @@ export function DashboardPage() {
 }
 
 type DashboardHeaderProps = {
-  userEmail: string | undefined
+  userEmail?: string | null
   isSigningOut: boolean
   onSignOut: () => void
 }
@@ -300,28 +355,50 @@ function DashboardHeader({ userEmail, isSigningOut, onSignOut }: DashboardHeader
 
 type CompetitorDashboardSectionProps = {
   competitor: Competitor
-  summary: DashboardSummary | null
+  projectId: string
   onRetry?: (competitorId: string) => void
+  onStop?: (competitorId: string) => void
   isRetrying?: boolean
+  isStopping?: boolean
 }
 
 function CompetitorDashboardSection({
   competitor,
-  summary,
+  projectId,
   onRetry,
+  onStop,
   isRetrying = false,
+  isStopping = false,
 }: CompetitorDashboardSectionProps) {
-  const isDone = competitor.pipeline_step === 'done' && summary !== null
-
-  if (isDone) {
-    return <CompetitorSummaryCard competitor={competitor} summaryRecord={summary} />
+  if (competitor.pipeline_step === 'done') {
+    return (
+      <section className="rounded-[2rem] border border-border-hairline bg-canvas-raised p-6 sm:p-8">
+        <p className="text-xs font-medium uppercase tracking-wide text-signal-positive">
+          Research ready
+        </p>
+        <h2 className="mt-2 text-xl font-semibold text-ink">Competitor research finished</h2>
+        <p className="mt-2 text-sm text-ink-muted">
+          {competitor.error_message?.includes('stopped early')
+            ? `${competitor.error_message} Open chat to use that partial research.`
+            : "Open chat to ask for strategies, content ideas, or comparisons grounded in this competitor's data."}
+        </p>
+        <Link
+          to={`/dashboard/${projectId}/agents`}
+          className="mt-6 inline-block rounded-xl bg-accent-primary px-4 py-2.5 text-sm font-medium text-white hover:bg-accent-primary-deep"
+        >
+          Open chat
+        </Link>
+      </section>
+    )
   }
 
   return (
     <CompetitorProgressCard
       competitor={competitor}
       onRetry={onRetry}
+      onStop={onStop}
       isRetrying={isRetrying}
+      isStopping={isStopping}
     />
   )
 }

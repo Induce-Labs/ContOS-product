@@ -3,6 +3,7 @@ import { AuthProvider } from './contexts/AuthProvider'
 import { GuestRoute } from './components/GuestRoute'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { AuthCallbackPage } from './pages/AuthCallbackPage'
+import { AgentsPage } from './pages/AgentsPage'
 import { DashboardPage, DashboardRedirectPage } from './pages/DashboardPage'
 import { LoginPage } from './pages/LoginPage'
 import { NewProjectPage } from './pages/NewProjectPage'
@@ -25,6 +26,7 @@ function App() {
           <Route element={<ProtectedRoute />}>
             <Route path="/dashboard" element={<DashboardRedirectPage />} />
             <Route path="/dashboard/:projectId" element={<DashboardPage />} />
+            <Route path="/dashboard/:projectId/agents" element={<AgentsPage />} />
             <Route path="/projects/new" element={<NewProjectPage />} />
           </Route>
 

@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import type { Project } from '../../lib/projects'
 import type { Competitor } from '../../lib/competitors'
 import { MAX_COMPETITORS_PER_PROJECT } from '../../lib/competitors'
@@ -23,10 +23,13 @@ export function DashboardSidebar({
   onAddCompetitor,
   isAddCompetitorOpen,
 }: DashboardSidebarProps) {
+  const location = useLocation()
   const atCompetitorCap = competitors.length >= MAX_COMPETITORS_PER_PROJECT
+  const onAgentsPage =
+    !!activeProject && location.pathname === `/dashboard/${activeProject.id}/agents`
 
   return (
-    <aside className="flex h-full w-full flex-col border-r border-border-hairline bg-canvas-raised lg:w-72 lg:shrink-0">
+    <aside className="flex h-full w-56 shrink-0 flex-col border-r border-border-hairline bg-canvas-raised sm:w-64 lg:w-72">
       <div className="border-b border-border-hairline p-4">
         <p className="text-xs font-medium uppercase tracking-wide text-accent-primary">Projects</p>
         <nav className="mt-3 space-y-1">
@@ -67,6 +70,17 @@ export function DashboardSidebar({
               {competitors.length}/{MAX_COMPETITORS_PER_PROJECT}
             </span>
           </div>
+
+          <Link
+            to={`/dashboard/${activeProject.id}/agents`}
+            className={`mb-3 block rounded-xl px-3 py-2 text-center text-xs font-medium transition ${
+              onAgentsPage
+                ? 'bg-accent-primary text-white'
+                : 'border border-border-hairline text-accent-primary hover:bg-accent-primary-soft'
+            }`}
+          >
+            Open chat
+          </Link>
 
           <div className="min-h-0 flex-1 space-y-1 overflow-y-auto">
             {competitors.length === 0 ? (

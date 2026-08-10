@@ -12,17 +12,27 @@ import { displayCompetitorHandle } from '../../lib/instagram-display'
 type CompetitorProgressCardProps = {
   competitor: Competitor
   onRetry?: (competitorId: string) => void
+  onStop?: (competitorId: string) => void
   isRetrying?: boolean
+  isStopping?: boolean
 }
 
 export function CompetitorProgressCard({
   competitor,
   onRetry,
+  onStop,
   isRetrying = false,
+  isStopping = false,
 }: CompetitorProgressCardProps) {
   const pipelineStep = competitor.pipeline_step as PipelineStep
   const isFailed = pipelineStep === 'failed'
   const canStartOrRetry = isFailed || pipelineStep === 'queued'
+  const isInProgress =
+    pipelineStep === 'scraping' ||
+    pipelineStep === 'transcribing' ||
+    pipelineStep === 'analyzing'
+  const stopRequested = Boolean(competitor.cancel_requested)
+  const canStop = isInProgress && !stopRequested && !!onStop
   const platform = competitor.platform
   const steps = getPipelineStepsForPlatform(platform)
   const gridClass =
@@ -42,10 +52,16 @@ export function CompetitorProgressCard({
             <PlatformBadge platform={platform} />
           </div>
           <p className="mt-2 text-sm text-ink-muted">
-            {PIPELINE_STEP_DESCRIPTIONS[pipelineStep]}
+            {stopRequested
+              ? 'Stopping… ContOS will keep scraped posts and summarize what it has so far.'
+              : PIPELINE_STEP_DESCRIPTIONS[pipelineStep]}
           </p>
         </div>
-        <StatusBadge step={pipelineStep} scrapeStatus={competitor.scrape_status} />
+        <StatusBadge
+          step={pipelineStep}
+          scrapeStatus={competitor.scrape_status}
+          stopRequested={stopRequested}
+        />
       </div>
 
       {isFailed && competitor.error_message ? (
@@ -71,6 +87,19 @@ export function CompetitorProgressCard({
               : isFailed
                 ? 'Retry research'
                 : 'Start research'}
+          </button>
+        </div>
+      ) : null}
+
+      {canStop || stopRequested ? (
+        <div className="mt-6">
+          <button
+            type="button"
+            onClick={() => onStop?.(competitor.id)}
+            disabled={stopRequested || isStopping || !canStop}
+            className="rounded-xl border border-red-200 bg-white px-4 py-2 text-sm font-medium text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {stopRequested || isStopping ? 'Stopping…' : 'Stop'}
           </button>
         </div>
       ) : null}
@@ -127,9 +156,18 @@ function PlatformBadge({ platform }: { platform: string }) {
 type StatusBadgeProps = {
   step: PipelineStep
   scrapeStatus: string
+  stopRequested: boolean
 }
 
-function StatusBadge({ step, scrapeStatus }: StatusBadgeProps) {
+function StatusBadge({ step, scrapeStatus, stopRequested }: StatusBadgeProps) {
+  if (stopRequested && step !== 'done' && step !== 'failed') {
+    return (
+      <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-900">
+        Stopping
+      </span>
+    )
+  }
+
   if (step === 'failed') {
     return (
       <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-medium text-red-700">

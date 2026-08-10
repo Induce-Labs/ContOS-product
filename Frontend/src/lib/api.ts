@@ -88,3 +88,39 @@ export async function enqueueCompetitorScrapeJobsOrThrow(
 ): Promise<void> {
   await enqueueCompetitorScrapeJobs(projectId, competitorIds)
 }
+
+export async function stopCompetitorPipeline(
+  projectId: string,
+  competitorId: string,
+): Promise<void> {
+  const {
+    data: { session },
+    error: sessionError,
+  } = await supabase.auth.getSession()
+
+  if (sessionError) {
+    throw new ApiServiceError(`Failed to read auth session: ${sessionError.message}`)
+  }
+
+  if (!session?.access_token) {
+    throw new ApiServiceError('You must be signed in to stop competitor research.')
+  }
+
+  const response = await fetch(
+    `${getApiBaseUrl()}/projects/${projectId}/competitors/${competitorId}/stop`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+      },
+    },
+  )
+
+  if (!response.ok) {
+    const responseBody = await response.text()
+    throw new ApiServiceError(
+      `Failed to stop research (status ${response.status}): ${responseBody || 'no response body'}`,
+      response.status,
+    )
+  }
+}

@@ -1,0 +1,200 @@
+{
+  "instagram": [
+    {
+      "competitor_handle": "@growthstackhq",
+      "platform": "instagram",
+      "strategic_signals": [
+        "Reels outperform static carousels 3.2x on saves",
+        "Founder-face talking-head hooks beat product demos",
+        "CTA to free audit in comments drives DMs"
+      ],
+      "top_performing_content": [
+        {
+          "rank": 1,
+          "likes": 3073,
+          "comments_count": 1077,
+          "caption_excerpt": "Stop posting daily. Start posting with intent. Here's the 3-reel system that booked 11 demos last month.",
+          "why_it_performed": "Contrarian hook + numbered system + concrete outcome"
+        },
+        {
+          "rank": 2,
+          "likes": 2411,
+          "comments_count": 402,
+          "caption_excerpt": "Your competitor's best Reel is not their product. It's their problem framing.",
+          "why_it_performed": "Pattern interrupt on competitor obsession"
+        },
+        {
+          "rank": 3,
+          "likes": 1988,
+          "comments_count": 256,
+          "caption_excerpt": "Carousel: 7 hooks that make CFOs stop scrolling",
+          "why_it_performed": "Saveable list format with executive persona"
+        }
+      ],
+      "recurring_hooks_patterns": [
+        "Stop doing X. Start doing Y.",
+        "Your [role] is wrong about [belief]",
+        "I audited 50 accounts. Here's what winners share."
+      ],
+      "content_strategies_themes": [
+        "Operator playbooks",
+        "Competitor teardown",
+        "Founder mindset"
+      ],
+      "aggregated_engagement_metrics": {
+        "avg_likes": 2169,
+        "avg_comments": 278.91,
+        "engagement_rate": 0.1286,
+        "reel_count": 11
+      }
+    },
+    {
+      "competitor_handle": "@cmofractional",
+      "platform": "instagram",
+      "strategic_signals": [
+        "Stories used for soft CTA to waitlist",
+        "Carousel frameworks get highest shares",
+        "Weekly 'what I shipped' Reel builds trust"
+      ],
+      "top_performing_content": [
+        {
+          "rank": 1,
+          "likes": 1842,
+          "comments_count": 311,
+          "caption_excerpt": "Fractional CMO myth: you need a full creative team. Reality: you need a content system.",
+          "why_it_performed": "Myth vs reality structure"
+        },
+        {
+          "rank": 2,
+          "likes": 1502,
+          "comments_count": 188,
+          "caption_excerpt": "The 90-day content flywheel for seed-stage SaaS",
+          "why_it_performed": "Time-bound promise + stage-specific framing"
+        },
+        {
+          "rank": 3,
+          "likes": 1204,
+          "comments_count": 97,
+          "caption_excerpt": "Before/after: same product, better hooks",
+          "why_it_performed": "Visual proof of messaging upgrade"
+        }
+      ],
+      "recurring_hooks_patterns": [
+        "Myth vs reality",
+        "90-day system",
+        "Before / after teardown"
+      ],
+      "content_strategies_themes": [
+        "Fractional CMO education",
+        "Content systems",
+        "Messaging upgrades"
+      ],
+      "aggregated_engagement_metrics": {
+        "avg_likes": 1516,
+        "avg_comments": 198.67,
+        "engagement_rate": 0.0942,
+        "reel_count": 8
+      }
+    }
+  ],
+  "linkedin": [
+    {
+      "competitor_handle": "growthstack-hq",
+      "platform": "linkedin",
+      "strategic_signals": [
+        "Short-line posts with line breaks outperform long essays",
+        "Personal founder stories convert better than product pitches",
+        "Comment-first distribution doubles reach"
+      ],
+      "top_performing_content": [
+        {
+          "rank": 1,
+          "likes": 4200,
+          "comments_count": 612,
+          "caption_excerpt": "We fired our content calendar. Replaced it with a weekly insight loop. Pipeline up 37%.",
+          "why_it_performed": "Bold claim + process rename + metric"
+        },
+        {
+          "rank": 2,
+          "likes": 3105,
+          "comments_count": 401,
+          "caption_excerpt": "Most B2B LinkedIn advice is written for influencers, not operators.",
+          "why_it_performed": "Audience identity validation"
+        },
+        {
+          "rank": 3,
+          "likes": 2788,
+          "comments_count": 290,
+          "caption_excerpt": "How we turn competitor Reels into LinkedIn posts without sounding like Instagram",
+          "why_it_performed": "Cross-platform adaptation angle"
+        }
+      ],
+      "recurring_hooks_patterns": [
+        "We fired X. Replaced it with Y.",
+        "Most [advice] is written for [wrong audience]",
+        "How we turn [A] into [B]"
+      ],
+      "content_strategies_themes": [
+        "Operator storytelling",
+        "Process transparency",
+        "Cross-platform adaptation"
+      ],
+      "aggregated_engagement_metrics": {
+        "avg_likes": 3364,
+        "avg_comments": 434.33,
+        "engagement_rate": 0.0612,
+        "reel_count": 0
+      }
+    }
+  ],
+  "twitter": [
+    {
+      "competitor_handle": "@growthstack",
+      "platform": "twitter",
+      "strategic_signals": [
+        "Opinionated single tweets outperform soft threads",
+        "Threads work when structured as problem → framework → CTA",
+        "Replying to larger accounts is a primary distribution channel"
+      ],
+      "top_performing_content": [
+        {
+          "rank": 1,
+          "likes": 5120,
+          "comments_count": 220,
+          "caption_excerpt": "Content calendars are anxiety machines. Insight loops are growth machines.",
+          "why_it_performed": "Sharp binary contrast under 100 chars"
+        },
+        {
+          "rank": 2,
+          "likes": 3890,
+          "comments_count": 145,
+          "caption_excerpt": "If your LinkedIn post needs a 'hope this helps', delete it.",
+          "why_it_performed": "Provocation + clear standard"
+        },
+        {
+          "rank": 3,
+          "likes": 2740,
+          "comments_count": 98,
+          "caption_excerpt": "Thread: 5 hooks that make SaaS founders stop scrolling",
+          "why_it_performed": "Saveable numbered value thread"
+        }
+      ],
+      "recurring_hooks_patterns": [
+        "X are anxiety machines. Y are growth machines.",
+        "If your [content] needs [weak phrase], delete it.",
+        "Thread: N hooks that..."
+      ],
+      "content_strategies_themes": [
+        "Hot takes",
+        "Framework threads",
+        "Reply-driven distribution"
+      ],
+      "aggregated_engagement_metrics": {
+        "avg_likes": 3916,
+        "avg_comments": 154.33,
+        "engagement_rate": 0.0411,
+        "reel_count": 0
+      }
+    }
+  ]
+}
