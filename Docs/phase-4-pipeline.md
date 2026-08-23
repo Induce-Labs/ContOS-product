@@ -10,9 +10,9 @@ Run the async competitor intelligence pipeline on the FastAPI backend in three e
 
 
 
-1. **Scrape** — `apify/instagram-post-scraper` stores all posts (links + metrics) in `scraped_content`
+1. **Scrape** — `apify/instagram-post-scraper` stores all posts (links + metrics) in `instagram_scraped_content`
 
-2. **Transcribe** — reel URLs read from `scraped_content` are sent to `apple_yang/instagram-transcripts-scraper` (`bulkUrls`); only transcript fields are updated
+2. **Transcribe** — reel URLs read from `instagram_scraped_content` are sent to `apple_yang/instagram-transcripts-scraper` (`bulkUrls`); only transcript fields are updated
 
 3. **Analyze** — all scraped content (posts, carousels, reels) summarized via LLM using captions + metrics; reel transcripts included when available
 
@@ -21,7 +21,7 @@ Run the async competitor intelligence pipeline on the FastAPI backend in three e
 ## API
 
 ```
-POST /projects/{project_id}/competitors/scrape
+POST /avatars/{avatar_id}/competitors/scrape
 Content-Type: application/json
 Authorization: Bearer <supabase_access_token>
 
@@ -31,7 +31,7 @@ Authorization: Bearer <supabase_access_token>
 ```
 
 ```
-POST /projects/{project_id}/competitors/{competitor_id}/stop
+POST /avatars/{avatar_id}/competitors/{competitor_id}/stop
 Authorization: Bearer <supabase_access_token>
 ```
 
@@ -40,7 +40,7 @@ Authorization: Bearer <supabase_access_token>
 - Available while `pipeline_step` is `scraping`, `transcribing`, or `analyzing`
 - Sets `competitors.cancel_requested = true`
 - After the current Apify/LLM call finishes, ContOS skips remaining phases when possible
-- Any rows already written to `scraped_content` / `linkedin_scraped_content` are kept
+- Any rows already written to `instagram_scraped_content` / `linkedin_scraped_content` are kept
 - Pipeline then runs Analyze on that stored data and marks the competitor `done`
 - If Stop happens before any posts are stored, competitor is marked `failed` with a clear message
 - Note: Apify uses blocking sync runs today, so Stop cannot abort mid-actor; it takes effect at the next phase boundary
@@ -62,17 +62,17 @@ Returns `202 Accepted` immediately. Work runs in a FastAPI `BackgroundTasks` job
 
 2. Run `apify/instagram-post-scraper` for profile URL (`username`, last **10 days** by default)
 
-3. Parse **all post types** and upsert `scraped_content` (metrics + `post_url`; reels get `transcription_status = pending`)
+3. Parse **all post types** and upsert `instagram_scraped_content` (metrics + `post_url`; reels get `transcription_status = pending`)
 
 4. `pipeline_step = transcribing`
 
-5. Load pending reel URLs from `scraped_content`, run transcriber, update `transcript` + `transcription_status`
+5. Load pending reel URLs from `instagram_scraped_content`, run transcriber, update `transcript` + `transcription_status`
 
 6. `pipeline_step = analyzing`
 
-7. Load **all** scraped rows from DB, summarize via OpenRouter (`openrouter/free`, dev) or OpenAI GPT-4o (prod). Reels without transcripts still use caption + metrics.
+7. Load top scraped rows (by engagement, capped at `LLM_MAX_CONTENT_ITEMS`), summarize via OpenRouter (`google/gemini-2.5-flash`) or OpenAI GPT-4o. Reels without transcripts still use caption + metrics.
 
-8. Replace `content_summaries` row for the competitor
+8. Replace `instagram_content_summaries` row for the competitor
 
 9. `pipeline_step = done`, `scrape_status = completed`, `last_scraped_at = now()`
 
@@ -134,17 +134,20 @@ Failures are isolated per competitor: one failure does not stop others in the ba
 
 | `TRANSCRIBE_RETRY_DELAY_SECS` | No | Default `1.5` seconds between single-URL retries |
 
-| `SCRAPE_LOOKBACK_DAYS` | No | Default `30` |
+| `SCRAPE_LOOKBACK_DAYS` | No | Default `7` (last week only) |
 
 | `PIPELINE_VERBOSE` | No | `true` enables DEBUG logs for pipeline/Apify/repo |
 
 | `LLM_PROVIDER` | No | `auto`, `openrouter`, or `openai` |
 
-| `OPENROUTER_MODEL` | No | Default `openrouter/free` |
+| `OPENROUTER_MODEL` | No | Default `google/gemini-2.5-flash` |
+| `LLM_TIMEOUT_SECS` | No | Default `120` |
+| `LLM_MAX_TOKENS` | No | Default `4096` |
+| `LLM_MAX_CONTENT_ITEMS` | No | Default `10` (top posts by engagement sent to LLM) |
 
 
 
-## scraped_content columns (phase tracking)
+## instagram_scraped_content columns (phase tracking)
 
 
 
@@ -174,7 +177,7 @@ After scrape (step 1):
 
 SELECT post_url, content_type, likes, comments_count, transcription_status, transcript
 
-FROM scraped_content
+FROM instagram_scraped_content
 
 WHERE competitor_id = '...'
 
@@ -196,15 +199,15 @@ Competitor status: `scraping` → `transcribing` → `analyzing` → `done`.
 
 
 
-Stored in `content_summaries.summary`:
+Stored in `instagram_content_summaries.summary`:
 
 
 
 - `top_performing_content[]` (includes `content_type` per item)
 - `recurring_hooks_patterns[]`
 - `content_strategies_themes[]`
-- `aggregated_engagement_metrics` (`total_content_count`, `reel_count`, `post_count`, `carousel_count`, averages) — **computed server-side from `scraped_content`**, not by the LLM
-- `top_performing_content` engagement numbers are **enriched from `scraped_content`** by `external_id` after the LLM returns qualitative analysis
+- `aggregated_engagement_metrics` (`total_content_count`, `reel_count`, `post_count`, `carousel_count`, averages) — **computed server-side from `instagram_scraped_content`**, not by the LLM
+- `top_performing_content` engagement numbers are **enriched from `instagram_scraped_content`** by `external_id` after the LLM returns qualitative analysis
 - `strategic_signals[]`
 
 
@@ -237,7 +240,7 @@ Stored in `content_summaries.summary`:
 
 5. Watch `[PIPELINE] Step 1/3 SCRAPE`, `Step 2/3 TRANSCRIBE`, `Step 3/3 ANALYZE` in backend logs
 
-6. Inspect `scraped_content` in Supabase between phases
+6. Inspect `instagram_scraped_content` in Supabase between phases
 
 
 

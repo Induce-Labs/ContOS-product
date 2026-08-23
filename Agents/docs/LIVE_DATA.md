@@ -6,15 +6,16 @@ Agents and MCP tools read production Supabase rows — especially LinkedIn compe
 ## Security contract
 - Invoke/ingest require `Authorization: Bearer <supabase_access_token>`
 - `user_id` comes from the JWT; `project_id` must be owned by that user
-- Summary RAG always filters by `project_id` (no cross-project reads)
-- `fetch_profile` only returns that user’s profile or an owned `projects` stub (no default/other-user fallbacks)
+- Optional `tagged_avatar_ids` must all belong to that user (403 otherwise)
+- Summary RAG always filters by `project_id` / resolved avatar ids (no cross-project reads)
+- `fetch_profile` reads `avatars.profiling_data` for the avatar
 
 ## LinkedIn + Instagram agentic RAG
 1. Embed summary JSON → row `embedding` (1536-dim)
 2. On platform agent / context-ON chat: embed the user query
 3. MCP `similarity_search` returns top-k matches for **this project**:
    - LinkedIn → `linkedin_content_summaries`
-   - Instagram → `content_summaries` (platform=instagram)
+   - Instagram → `instagram_content_summaries` (platform=instagram)
 4. Those summaries + brand profile + playbooks are assembled into CONTEXT
 5. The LLM reasons only over retrieved chunks
 

@@ -13,12 +13,13 @@ export class AgentsApiError extends Error {
 export type AgentType = 'chatbot' | 'linkedin' | 'instagram' | 'playbook' | 'twitter'
 
 export type AgentsInvokeRequest = {
-  project_id: string
+  avatar_id: string
   agent_type: AgentType
   user_input: string
   live_mode?: boolean
   chatbot_context_on?: boolean
   competitor_url?: string | null
+  tagged_avatar_ids?: string[]
 }
 
 export type AgentsSseHandlers = {
@@ -146,12 +147,15 @@ export async function invokeAgentStream(
       Accept: 'text/event-stream',
     },
     body: JSON.stringify({
-      project_id: body.project_id,
+      avatar_id: body.avatar_id,
       agent_type: body.agent_type,
       user_input: body.user_input,
       live_mode: body.live_mode ?? false,
       chatbot_context_on: body.chatbot_context_on ?? true,
       competitor_url: body.competitor_url ?? null,
+      tagged_avatar_ids: body.tagged_avatar_ids?.length
+        ? body.tagged_avatar_ids
+        : undefined,
     }),
     signal,
   })
@@ -187,4 +191,4 @@ export async function invokeAgentStream(
 }
 
 export const AGENTS_WELCOME_MESSAGE =
-  'Research for this project is ready. I can turn competitor data into strategies, content ideas, or comparisons. What do you want to focus on — LinkedIn, Instagram, or a growth playbook?'
+  'Research for this avatar is ready. I can turn competitor data into strategies, content ideas, or comparisons. What do you want to focus on — LinkedIn, Instagram, or a growth playbook?'

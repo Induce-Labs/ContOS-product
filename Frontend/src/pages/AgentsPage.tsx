@@ -17,6 +17,8 @@ type ChatMessage = {
   role: ChatRole
   content: string
   agentType?: AgentType
+  taggedAvatarIds?: string[]
+  taggedAvatarNames?: string[]
 }
 
 const AGENT_OPTIONS: Array<{ value: AgentType; label: string }> = [
@@ -64,9 +66,13 @@ export function AgentsPage() {
   const [streaming, setStreaming] = useState(false)
   const [statusText, setStatusText] = useState('')
   const [sendError, setSendError] = useState<string | null>(null)
+  const [taggedAvatarIds, setTaggedAvatarIds] = useState<string[]>([])
+  const [mentionOpen, setMentionOpen] = useState(false)
+  const [mentionQuery, setMentionQuery] = useState('')
   const bottomRef = useRef<HTMLDivElement | null>(null)
   const abortRef = useRef<AbortController | null>(null)
   const welcomeSeededForProject = useRef<string | null>(null)
+  const inputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
     let mounted = true
@@ -134,6 +140,50 @@ export function AgentsPage() {
     project?.status === 'ready' ||
     competitors.some((competitor) => competitor.pipeline_step === 'done')
 
+  const mentionCandidates = projects.filter((avatar) => {
+    if (taggedAvatarIds.includes(avatar.id)) {
+      return false
+    }
+    if (!mentionQuery) {
+      return true
+    }
+    return avatar.name.toLowerCase().includes(mentionQuery.toLowerCase())
+  })
+
+  function toggleTaggedAvatar(avatarId: string) {
+    setTaggedAvatarIds((current) =>
+      current.includes(avatarId)
+        ? current.filter((id) => id !== avatarId)
+        : [...current, avatarId],
+    )
+  }
+
+  function handleInputChange(value: string) {
+    setInput(value)
+    const atIndex = value.lastIndexOf('@')
+    if (atIndex >= 0) {
+      const after = value.slice(atIndex + 1)
+      if (!after.includes(' ') && !after.includes('\n')) {
+        setMentionOpen(true)
+        setMentionQuery(after)
+        return
+      }
+    }
+    setMentionOpen(false)
+    setMentionQuery('')
+  }
+
+  function selectMention(avatar: Project) {
+    toggleTaggedAvatar(avatar.id)
+    const atIndex = input.lastIndexOf('@')
+    if (atIndex >= 0) {
+      setInput(input.slice(0, atIndex).trimEnd())
+    }
+    setMentionOpen(false)
+    setMentionQuery('')
+    inputRef.current?.focus()
+  }
+
   async function handleSignOut() {
     setIsSigningOut(true)
     try {
@@ -157,7 +207,16 @@ export function AgentsPage() {
 
     setSendError(null)
     setInput('')
-    const userMessage: ChatMessage = { id: newId(), role: 'user', content: text }
+    const taggedNames = taggedAvatarIds
+      .map((id) => projects.find((avatar) => avatar.id === id)?.name)
+      .filter((name): name is string => !!name)
+    const userMessage: ChatMessage = {
+      id: newId(),
+      role: 'user',
+      content: text,
+      taggedAvatarIds: [...taggedAvatarIds],
+      taggedAvatarNames: taggedNames,
+    }
     const assistantId = newId()
     setMessages((current) => [
       ...current,
@@ -174,10 +233,11 @@ export function AgentsPage() {
     try {
       await invokeAgentStream(
         {
-          project_id: projectId,
+          avatar_id: projectId,
           agent_type: agentType,
           user_input: text,
           chatbot_context_on: true,
+          tagged_avatar_ids: taggedAvatarIds.length > 0 ? taggedAvatarIds : undefined,
         },
         {
           onStatus: (data) => {
@@ -295,6 +355,7 @@ export function AgentsPage() {
           }}
           onAddCompetitor={() => navigate(`/dashboard/${projectId}`)}
           isAddCompetitorOpen={false}
+          onAvatarsChanged={setProjects}
         />
 
         <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-4 py-6 sm:px-8">
@@ -355,6 +416,22 @@ export function AgentsPage() {
                       : 'bg-canvas text-ink'
                   }`}
                 >
+                  {message.taggedAvatarNames && message.taggedAvatarNames.length > 0 ? (
+                    <div className="mb-2 flex flex-wrap gap-1">
+                      {message.taggedAvatarNames.map((name) => (
+                        <span
+                          key={name}
+                          className={`rounded-full px-2 py-0.5 text-[11px] ${
+                            message.role === 'user'
+                              ? 'bg-white/20 text-white'
+                              : 'bg-accent-primary-soft text-accent-primary-deep'
+                          }`}
+                        >
+                          {name}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
                   {message.content || (streaming ? '…' : '')}
                 </div>
               ))}
@@ -371,23 +448,64 @@ export function AgentsPage() {
             ) : null}
 
             <form
-              className="flex gap-2 border-t border-border-hairline p-4"
+              className="border-t border-border-hairline p-4"
               onSubmit={(event) => void handleSend(event)}
             >
-              <input
-                value={input}
-                onChange={(event) => setInput(event.target.value)}
-                disabled={streaming}
-                placeholder="Ask for strategies, content ideas, or comparisons…"
-                className="min-w-0 flex-1 rounded-xl border border-border-hairline bg-canvas px-4 py-3 text-sm text-ink outline-none focus:border-accent-primary"
-              />
-              <button
-                type="submit"
-                disabled={streaming || !input.trim()}
-                className="rounded-xl bg-accent-primary px-4 py-3 text-sm font-medium text-white transition hover:bg-accent-primary-deep disabled:opacity-60"
-              >
-                {streaming ? 'Sending…' : 'Send'}
-              </button>
+              {taggedAvatarIds.length > 0 ? (
+                <div className="mb-2 flex flex-wrap gap-2">
+                  {taggedAvatarIds.map((id) => {
+                    const avatar = projects.find((entry) => entry.id === id)
+                    if (!avatar) {
+                      return null
+                    }
+                    return (
+                      <button
+                        key={id}
+                        type="button"
+                        onClick={() => toggleTaggedAvatar(id)}
+                        className="rounded-full bg-accent-primary-soft px-3 py-1 text-xs font-medium text-accent-primary-deep"
+                      >
+                        {avatar.name} ×
+                      </button>
+                    )
+                  })}
+                </div>
+              ) : null}
+
+              <div className="relative flex gap-2">
+                {mentionOpen && mentionCandidates.length > 0 ? (
+                  <div className="absolute bottom-full left-0 z-10 mb-2 max-h-48 w-64 overflow-y-auto rounded-xl border border-border-hairline bg-canvas-raised shadow-lg">
+                    {mentionCandidates.map((avatar) => (
+                      <button
+                        key={avatar.id}
+                        type="button"
+                        onClick={() => selectMention(avatar)}
+                        className="block w-full px-3 py-2 text-left text-sm text-ink hover:bg-accent-primary-soft"
+                      >
+                        <span className="font-medium">@{avatar.name}</span>
+                        <span className="mt-0.5 block text-xs text-ink-muted capitalize">
+                          {avatar.type === 'business' ? 'Business' : 'Personal Brand'}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+                <input
+                  ref={inputRef}
+                  value={input}
+                  onChange={(event) => handleInputChange(event.target.value)}
+                  disabled={streaming}
+                  placeholder="Ask for strategies… Type @ to tag avatars"
+                  className="min-w-0 flex-1 rounded-xl border border-border-hairline bg-canvas px-4 py-3 text-sm text-ink outline-none focus:border-accent-primary"
+                />
+                <button
+                  type="submit"
+                  disabled={streaming || !input.trim()}
+                  className="rounded-xl bg-accent-primary px-4 py-3 text-sm font-medium text-white transition hover:bg-accent-primary-deep disabled:opacity-60"
+                >
+                  {streaming ? 'Sending…' : 'Send'}
+                </button>
+              </div>
             </form>
           </section>
         </main>

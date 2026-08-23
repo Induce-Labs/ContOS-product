@@ -1,4 +1,4 @@
-"""Tool: fetch_summaries — competitor intelligence for one owned project."""
+"""Tool: fetch_summaries — competitor intelligence for one owned avatar."""
 
 from __future__ import annotations
 
@@ -11,18 +11,18 @@ VALID_PLATFORMS = {"instagram", "linkedin", "twitter"}
 
 
 def fetch_summaries(
-    project_id: str | None = None,
+    avatar_id: str | None = None,
     platform: str | None = None,
     user_id: str | None = None,
 ) -> list[dict[str, Any]]:
-    """Query content_summaries / linkedin_content_summaries for a single project."""
+    """Query instagram_content_summaries / linkedin_content_summaries for one avatar."""
     from db import supabase_client as db
 
-    if not project_id:
-        raise ValueError("project_id is required for fetch_summaries")
+    if not avatar_id:
+        raise ValueError("avatar_id is required for fetch_summaries")
 
     if user_id:
-        db.assert_project_owned(project_id, user_id)
+        db.assert_avatar_owned(avatar_id, user_id)
 
     resolved_platform: str | None = None
     if platform:
@@ -34,10 +34,10 @@ def fetch_summaries(
                 f"Invalid platform '{platform}'. Expected one of: {sorted(VALID_PLATFORMS)}"
             )
 
-    rows = db.fetch_summaries_rows(project_id, resolved_platform)
+    rows = db.fetch_summaries_rows(avatar_id, resolved_platform)
     logger.info(
-        "fetch_summaries project_id=%s platform=%s count=%s",
-        project_id,
+        "fetch_summaries avatar_id=%s platform=%s count=%s",
+        avatar_id,
         resolved_platform or "all",
         len(rows),
     )

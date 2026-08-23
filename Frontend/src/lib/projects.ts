@@ -2,9 +2,11 @@ import { supabase } from './supabase'
 import type { Tables, TablesInsert } from '../types/database'
 import type { ProjectType } from '../types/contos'
 
-export type Project = Tables<'projects'>
+/** @deprecated Use Avatar from avatars.ts — avatars table replaces projects */
+export type Project = Tables<'avatars'>
 
-const LAST_PROJECT_STORAGE_KEY = 'contos_last_project_id'
+const LAST_AVATAR_STORAGE_KEY = 'contos_last_avatar_id'
+const LEGACY_LAST_PROJECT_STORAGE_KEY = 'contos_last_project_id'
 
 export class ProjectsServiceError extends Error {
   constructor(message: string, cause?: unknown) {
@@ -18,13 +20,13 @@ export class ProjectsServiceError extends Error {
 
 export async function fetchUserProjects(): Promise<Project[]> {
   const { data, error } = await supabase
-    .from('projects')
+    .from('avatars')
     .select('*')
     .order('created_at', { ascending: true })
 
   if (error) {
     throw new ProjectsServiceError(
-      `Failed to load projects: ${error.message}`,
+      `Failed to load avatars: ${error.message}`,
       error,
     )
   }
@@ -39,7 +41,7 @@ export async function createProject(
   const trimmedName = name.trim()
 
   if (!trimmedName) {
-    throw new ProjectsServiceError('Project name is required.')
+    throw new ProjectsServiceError('Avatar name is required.')
   }
 
   const {
@@ -55,39 +57,45 @@ export async function createProject(
   }
 
   if (!user) {
-    throw new ProjectsServiceError('You must be signed in to create a project.')
+    throw new ProjectsServiceError('You must be signed in to create an avatar.')
   }
 
-  const row: TablesInsert<'projects'> = {
+  const row: TablesInsert<'avatars'> = {
     name: trimmedName,
     type,
     user_id: user.id,
     status: 'onboarding',
   }
 
-  const { data, error } = await supabase.from('projects').insert(row).select().single()
+  const { data, error } = await supabase.from('avatars').insert(row).select().single()
 
   if (error) {
-    throw new ProjectsServiceError(`Failed to create project: ${error.message}`, error)
+    if (error.message.includes('AVATAR_LIMIT_REACHED')) {
+      throw new ProjectsServiceError(
+        "You've reached the maximum number of avatars on your current plan.",
+        error,
+      )
+    }
+    throw new ProjectsServiceError(`Failed to create avatar: ${error.message}`, error)
   }
 
   return data
 }
 
 export async function updateProjectStatus(
-  projectId: string,
+  avatarId: string,
   status: Project['status'],
 ): Promise<Project> {
   const { data, error } = await supabase
-    .from('projects')
+    .from('avatars')
     .update({ status })
-    .eq('id', projectId)
+    .eq('id', avatarId)
     .select()
     .single()
 
   if (error) {
     throw new ProjectsServiceError(
-      `Failed to update project status: ${error.message}`,
+      `Failed to update avatar status: ${error.message}`,
       error,
     )
   }
@@ -96,11 +104,15 @@ export async function updateProjectStatus(
 }
 
 export function getLastUsedProjectId(): string | null {
-  return localStorage.getItem(LAST_PROJECT_STORAGE_KEY)
+  return (
+    localStorage.getItem(LAST_AVATAR_STORAGE_KEY) ??
+    localStorage.getItem(LEGACY_LAST_PROJECT_STORAGE_KEY)
+  )
 }
 
-export function setLastUsedProjectId(projectId: string): void {
-  localStorage.setItem(LAST_PROJECT_STORAGE_KEY, projectId)
+export function setLastUsedProjectId(avatarId: string): void {
+  localStorage.setItem(LAST_AVATAR_STORAGE_KEY, avatarId)
+  localStorage.removeItem(LEGACY_LAST_PROJECT_STORAGE_KEY)
 }
 
 export function resolveActiveProject(projects: Project[]): Project | null {
@@ -108,16 +120,16 @@ export function resolveActiveProject(projects: Project[]): Project | null {
     return null
   }
 
-  const lastUsedProjectId = getLastUsedProjectId()
+  const lastUsedId = getLastUsedProjectId()
 
-  if (lastUsedProjectId) {
-    const lastUsedProject = projects.find((project) => project.id === lastUsedProjectId)
-    if (lastUsedProject) {
-      return lastUsedProject
+  if (lastUsedId) {
+    const lastUsed = projects.find((project) => project.id === lastUsedId)
+    if (lastUsed) {
+      return lastUsed
     }
   }
 
-  return projects[0]
+  return projects.find((project) => project.is_default) ?? projects[0]
 }
 
 export async function resolvePostAuthPath(): Promise<string> {

@@ -3,6 +3,8 @@ from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import urlparse
 
+from app.services.text_sanitize import sanitize_json_value, sanitize_optional_str
+
 logger = logging.getLogger(__name__)
 
 
@@ -102,9 +104,11 @@ def parse_linkedin_posts(raw_items: list[dict[str, Any]]) -> list[dict[str, Any]
         if external_id in seen_external_ids:
             continue
 
-        caption = _first_non_empty(
-            item,
-            ["text", "commentary", "content", "postText", "caption", "description"],
+        caption = sanitize_optional_str(
+            _first_non_empty(
+                item,
+                ["text", "commentary", "content", "postText", "caption", "description"],
+            ),
         )
         posted_at = _parse_posted_at(
             _first_non_empty(
@@ -114,13 +118,17 @@ def parse_linkedin_posts(raw_items: list[dict[str, Any]]) -> list[dict[str, Any]
         )
 
         author = item.get("author") if isinstance(item.get("author"), dict) else {}
-        author_name = _first_non_empty(
-            item if not author else author,
-            ["authorName", "name", "fullName"],
+        author_name = sanitize_optional_str(
+            _first_non_empty(
+                item if not author else author,
+                ["authorName", "name", "fullName"],
+            ),
         )
-        author_headline = _first_non_empty(
-            item if not author else author,
-            ["authorHeadline", "headline", "title"],
+        author_headline = sanitize_optional_str(
+            _first_non_empty(
+                item if not author else author,
+                ["authorHeadline", "headline", "title"],
+            ),
         )
 
         parsed_posts.append(
@@ -128,7 +136,7 @@ def parse_linkedin_posts(raw_items: list[dict[str, Any]]) -> list[dict[str, Any]
                 "external_id": external_id,
                 "post_url": str(post_url) if isinstance(post_url, str) else None,
                 "posted_at": posted_at.isoformat() if posted_at else None,
-                "caption": str(caption) if caption is not None else None,
+                "caption": caption,
                 "likes": _resolve_likes(item),
                 "comments_count": _as_non_negative_int(
                     _first_non_empty(
@@ -142,11 +150,9 @@ def parse_linkedin_posts(raw_items: list[dict[str, Any]]) -> list[dict[str, Any]
                         ["numShares", "shareCount", "reposts", "repostCount", "shares"],
                     ),
                 ),
-                "author_name": str(author_name) if author_name is not None else None,
-                "author_headline": (
-                    str(author_headline) if author_headline is not None else None
-                ),
-                "raw_payload": item,
+                "author_name": author_name,
+                "author_headline": author_headline,
+                "raw_payload": sanitize_json_value(item),
             },
         )
         seen_external_ids.add(external_id)
@@ -162,13 +168,7 @@ def parse_linkedin_posts(raw_items: list[dict[str, Any]]) -> list[dict[str, Any]
     return parsed_posts
 
 
-def _engagement_score(item: dict[str, Any]) -> int:
-    likes = item.get("likes") if isinstance(item.get("likes"), int) else 0
-    comments = (
-        item.get("comments_count") if isinstance(item.get("comments_count"), int) else 0
-    )
-    shares = item.get("shares") if isinstance(item.get("shares"), int) else 0
-    return max(0, likes) + max(0, comments) + max(0, shares)
+from app.services.llm_content_selection import select_content_for_llm
 
 
 def select_linkedin_content_for_llm(
@@ -177,16 +177,9 @@ def select_linkedin_content_for_llm(
     max_items: int = 20,
     caption_max_chars: int = 600,
 ) -> list[dict[str, Any]]:
-    """Shrink LinkedIn payloads for LLM prompts (free models stall on huge captions)."""
-    ranked = sorted(content_items, key=_engagement_score, reverse=True)
-    selected = ranked[: max(1, max_items)]
-
-    prepared: list[dict[str, Any]] = []
-    for item in selected:
-        row = dict(item)
-        caption = row.get("caption")
-        if isinstance(caption, str) and len(caption) > caption_max_chars:
-            row["caption"] = caption[: caption_max_chars].rstrip() + "…"
-        prepared.append(row)
-
-    return prepared
+    """Shrink LinkedIn payloads for LLM prompts."""
+    return select_content_for_llm(
+        content_items,
+        max_items=max_items,
+        caption_max_chars=caption_max_chars,
+    )

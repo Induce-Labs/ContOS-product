@@ -60,39 +60,39 @@ def get_current_user_id(
     return UUID(user_response.user.id)
 
 
-def verify_project_owner(project_id: str, user_id: UUID) -> None:
-    """Raise 403 if project_id is missing or not owned by user_id."""
-    from db.supabase_client import fetch_project_row
+def verify_avatar_owner(avatar_id: str, user_id: UUID) -> None:
+    """Raise 403 if avatar_id is missing or not owned by user_id."""
+    from db.supabase_client import fetch_avatar_row
 
-    if not project_id or not str(project_id).strip():
+    if not avatar_id or not str(avatar_id).strip():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="project_id is required.",
+            detail="avatar_id is required.",
         )
 
     try:
-        row = fetch_project_row(project_id=str(project_id).strip(), user_id=None)
+        row = fetch_avatar_row(avatar_id=str(avatar_id).strip(), user_id=None)
     except Exception as error:
         logger.error(
-            "Project ownership lookup failed",
-            extra={"project_id": project_id, "error": str(error)},
+            "Avatar ownership lookup failed",
+            extra={"avatar_id": avatar_id, "error": str(error)},
         )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to verify project ownership.",
+            detail="Failed to verify avatar ownership.",
         ) from error
 
     if row is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Project not found.",
+            detail="Avatar not found.",
         )
 
     owner = str(row.get("user_id") or "")
     if owner != str(user_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="You do not have access to this project.",
+            detail="You do not have access to this avatar.",
         )
 
 

@@ -9,12 +9,14 @@ from app.config import Settings, get_settings
 from app.errors import ConfigurationError, PipelineError
 from app.services.engagement_metrics import enrich_competitor_summary
 from app.services.instagram_parser import parse_instagram_posts
-from app.services.linkedin_parser import parse_linkedin_posts, select_linkedin_content_for_llm
+from app.services.linkedin_parser import parse_linkedin_posts
+from app.services.llm_content_selection import select_content_for_llm
+from app.services.text_sanitize import sanitize_text
 
 logger = logging.getLogger(__name__)
 
 
-def run_pipeline_batch(project_id: UUID, competitor_ids: list[UUID]) -> None:
+def run_pipeline_batch(avatar_id: UUID, competitor_ids: list[UUID]) -> None:
     settings = get_settings()
     try:
         repository = SupabaseRepository(settings)
@@ -23,15 +25,15 @@ def run_pipeline_batch(project_id: UUID, competitor_ids: list[UUID]) -> None:
     except ConfigurationError as error:
         logger.error(
             "Pipeline batch aborted due to configuration error",
-            extra={"project_id": str(project_id), "error": str(error)},
+            extra={"avatar_id": str(avatar_id), "error": str(error)},
         )
         return
     try:
-        competitors = repository.get_competitors_for_project(project_id, competitor_ids)
+        competitors = repository.get_competitors_for_avatar(avatar_id, competitor_ids)
     except Exception as error:
         logger.error(
             "Failed to load competitors for pipeline batch",
-            extra={"project_id": str(project_id), "error": str(error)},
+            extra={"avatar_id": str(avatar_id), "error": str(error)},
         )
         return
     for competitor in competitors:
@@ -42,14 +44,14 @@ def run_pipeline_batch(project_id: UUID, competitor_ids: list[UUID]) -> None:
                 logger.info(
                     "[PIPELINE] Dispatching LinkedIn pipeline (scrape→analyze)",
                     extra={
-                        "project_id": str(project_id),
+                        "avatar_id": str(avatar_id),
                         "competitor_id": str(competitor_id),
                         "platform": platform,
                         "handle_or_url": competitor.get("handle_or_url"),
                     },
                 )
                 run_linkedin_competitor_pipeline(
-                    project_id=project_id,
+                    avatar_id=avatar_id,
                     competitor=competitor,
                     settings=settings,
                     repository=repository,
@@ -60,14 +62,14 @@ def run_pipeline_batch(project_id: UUID, competitor_ids: list[UUID]) -> None:
                 logger.info(
                     "[PIPELINE] Dispatching Instagram pipeline (scrape→transcribe→analyze)",
                     extra={
-                        "project_id": str(project_id),
+                        "avatar_id": str(avatar_id),
                         "competitor_id": str(competitor_id),
                         "platform": platform,
                         "handle_or_url": competitor.get("handle_or_url"),
                     },
                 )
                 run_instagram_competitor_pipeline(
-                    project_id=project_id,
+                    avatar_id=avatar_id,
                     competitor=competitor,
                     settings=settings,
                     repository=repository,
@@ -78,7 +80,7 @@ def run_pipeline_batch(project_id: UUID, competitor_ids: list[UUID]) -> None:
             logger.exception(
                 "Competitor pipeline failed",
                 extra={
-                    "project_id": str(project_id),
+                    "avatar_id": str(avatar_id),
                     "competitor_id": str(competitor_id),
                     "platform": platform,
                     "error": str(error),
@@ -92,11 +94,11 @@ def run_pipeline_batch(project_id: UUID, competitor_ids: list[UUID]) -> None:
                 error_message=str(error),
             )
     try:
-        repository.refresh_project_status(project_id)
+        repository.refresh_avatar_status(avatar_id)
     except Exception as error:
         logger.error(
-            "Failed to refresh project status after pipeline batch",
-            extra={"project_id": str(project_id), "error": str(error)},
+            "Failed to refresh avatar status after pipeline batch",
+            extra={"avatar_id": str(avatar_id), "error": str(error)},
         )
 
 
@@ -115,7 +117,7 @@ def resolve_competitor_platform(competitor: dict[str, Any]) -> str:
 
 def run_competitor_pipeline(
     *,
-    project_id: UUID,
+    avatar_id: UUID,
     competitor: dict[str, Any],
     settings: Settings,
     repository: SupabaseRepository,
@@ -126,7 +128,7 @@ def run_competitor_pipeline(
     platform = resolve_competitor_platform(competitor)
     if platform == "linkedin":
         run_linkedin_competitor_pipeline(
-            project_id=project_id,
+            avatar_id=avatar_id,
             competitor=competitor,
             settings=settings,
             repository=repository,
@@ -135,7 +137,7 @@ def run_competitor_pipeline(
         )
         return
     run_instagram_competitor_pipeline(
-        project_id=project_id,
+        avatar_id=avatar_id,
         competitor=competitor,
         settings=settings,
         repository=repository,
@@ -146,7 +148,7 @@ def run_competitor_pipeline(
 
 def run_instagram_competitor_pipeline(
     *,
-    project_id: UUID,
+    avatar_id: UUID,
     competitor: dict[str, Any],
     settings: Settings,
     repository: SupabaseRepository,
@@ -233,7 +235,7 @@ def run_instagram_competitor_pipeline(
             extra={"competitor_id": str(competitor_id), "stored_posts": len(parsed_posts)},
         )
         _analyze_instagram_competitor(
-            project_id=project_id,
+            avatar_id=avatar_id,
             competitor_id=competitor_id,
             profile_url=profile_url,
             repository=repository,
@@ -259,7 +261,7 @@ def run_instagram_competitor_pipeline(
             extra={"competitor_id": str(competitor_id)},
         )
         _analyze_instagram_competitor(
-            project_id=project_id,
+            avatar_id=avatar_id,
             competitor_id=competitor_id,
             profile_url=profile_url,
             repository=repository,
@@ -271,7 +273,7 @@ def run_instagram_competitor_pipeline(
     pending_rows = repository.get_posts_pending_transcription(competitor_id)
     pending_urls = [str(row["post_url"]) for row in pending_rows if row.get("post_url")]
     logger.info(
-        "[PIPELINE] Step 2/3 TRANSCRIBE — %s reel URLs pending from scraped_content",
+        "[PIPELINE] Step 2/3 TRANSCRIBE — %s reel URLs pending from instagram_scraped_content",
         len(pending_urls),
         extra={
             "competitor_id": str(competitor_id),
@@ -301,7 +303,7 @@ def run_instagram_competitor_pipeline(
                 transcript_updates.append(
                     {
                         "post_url": post_url,
-                        "transcript": transcription_result.transcript,
+                        "transcript": sanitize_text(transcription_result.transcript),
                         "transcript_source": settings.apify_transcriber_actor_id,
                         "transcription_status": "completed",
                         "transcription_error": None,
@@ -336,7 +338,7 @@ def run_instagram_competitor_pipeline(
             transcript_updates,
         )
         logger.info(
-            "[PIPELINE] Step 2/3 TRANSCRIBE complete — updated %s rows in scraped_content",
+            "[PIPELINE] Step 2/3 TRANSCRIBE complete — updated %s rows in instagram_scraped_content",
             updated_count,
             extra={
                 "competitor_id": str(competitor_id),
@@ -357,7 +359,7 @@ def run_instagram_competitor_pipeline(
         )
 
     _analyze_instagram_competitor(
-        project_id=project_id,
+        avatar_id=avatar_id,
         competitor_id=competitor_id,
         profile_url=profile_url,
         repository=repository,
@@ -368,7 +370,7 @@ def run_instagram_competitor_pipeline(
 
 def _analyze_instagram_competitor(
     *,
-    project_id: UUID,
+    avatar_id: UUID,
     competitor_id: UUID,
     profile_url: str,
     repository: SupabaseRepository,
@@ -445,14 +447,30 @@ def _analyze_instagram_competitor(
         }
         for item in content_for_summary
     ]
+    settings = get_settings()
+    llm_content = select_content_for_llm(
+        summary_content,
+        max_items=settings.llm_max_content_items,
+    )
+    logger.info(
+        "[PIPELINE] Step 3/3 ANALYZE — sending %s of %s content items to LLM",
+        len(llm_content),
+        len(summary_content),
+        extra={
+            "competitor_id": str(competitor_id),
+            "llm_item_count": len(llm_content),
+            "scraped_item_count": len(summary_content),
+            "stopped_early": stopped_early,
+        },
+    )
     summary_payload, model_used = llm_client.summarize_competitor_content(
         competitor_handle=profile_url,
-        content_items=summary_content,
+        content_items=llm_content,
     )
     summary_payload = enrich_competitor_summary(summary_payload, summary_content)
     repository.replace_content_summary(
         competitor_id=competitor_id,
-        project_id=project_id,
+        avatar_id=avatar_id,
         summary=summary_payload.model_dump(),
         model_used=model_used,
     )
@@ -471,7 +489,7 @@ def _analyze_instagram_competitor(
     logger.info(
         "[PIPELINE] Step 3/3 ANALYZE complete — competitor pipeline done",
         extra={
-            "project_id": str(project_id),
+            "avatar_id": str(avatar_id),
             "competitor_id": str(competitor_id),
             "content_count": len(content_for_summary),
             "model_used": model_used,
@@ -482,7 +500,7 @@ def _analyze_instagram_competitor(
 
 def run_linkedin_competitor_pipeline(
     *,
-    project_id: UUID,
+    avatar_id: UUID,
     competitor: dict[str, Any],
     settings: Settings,
     repository: SupabaseRepository,
@@ -548,7 +566,7 @@ def run_linkedin_competitor_pipeline(
         )
 
     _analyze_linkedin_competitor(
-        project_id=project_id,
+        avatar_id=avatar_id,
         competitor_id=competitor_id,
         profile_url=profile_url,
         repository=repository,
@@ -559,7 +577,7 @@ def run_linkedin_competitor_pipeline(
 
 def _analyze_linkedin_competitor(
     *,
-    project_id: UUID,
+    avatar_id: UUID,
     competitor_id: UUID,
     profile_url: str,
     repository: SupabaseRepository,
@@ -602,7 +620,10 @@ def _analyze_linkedin_competitor(
         }
         for item in content_for_summary
     ]
-    llm_content = select_linkedin_content_for_llm(summary_content)
+    llm_content = select_content_for_llm(
+        summary_content,
+        max_items=get_settings().llm_max_content_items,
+    )
     logger.info(
         "[PIPELINE] LinkedIn Step 2/2 ANALYZE — summarizing %s of %s posts for LLM",
         len(llm_content),
@@ -622,7 +643,7 @@ def _analyze_linkedin_competitor(
     summary_payload = enrich_competitor_summary(summary_payload, summary_content)
     repository.replace_linkedin_content_summary(
         competitor_id=competitor_id,
-        project_id=project_id,
+        avatar_id=avatar_id,
         summary=summary_payload.model_dump(),
         model_used=model_used,
     )
@@ -641,7 +662,7 @@ def _analyze_linkedin_competitor(
     logger.info(
         "[PIPELINE] LinkedIn Step 2/2 ANALYZE complete — competitor pipeline done",
         extra={
-            "project_id": str(project_id),
+            "avatar_id": str(avatar_id),
             "competitor_id": str(competitor_id),
             "content_count": len(content_for_summary),
             "model_used": model_used,

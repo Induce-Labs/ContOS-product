@@ -27,7 +27,7 @@ from agents import get_agent  # noqa: E402
 from auth import (  # noqa: E402
     get_current_user_id,
     require_admin_user,
-    verify_project_owner,
+    verify_avatar_owner,
 )
 from embeddings.embed import (  # noqa: E402
     backfill_content_summary_embeddings,
@@ -68,13 +68,17 @@ AgentType = Literal["playbook", "instagram", "linkedin", "twitter", "chatbot"]
 
 
 class InvokeRequest(BaseModel):
-    project_id: str = Field(..., description="Project UUID owned by the authenticated user")
+    avatar_id: str = Field(..., description="Avatar UUID owned by the authenticated user")
     agent_type: AgentType
     user_input: str = Field(..., min_length=1)
     live_mode: bool = False
     chatbot_context_on: bool = False
     competitor_url: str | None = None
     competitor_summaries: list[dict[str, Any]] | None = None
+    tagged_avatar_ids: list[str] | None = Field(
+        default=None,
+        description="Optional Avatar IDs to include in strategy context",
+    )
 
 
 class CompetitorIngestItem(BaseModel):
@@ -84,7 +88,7 @@ class CompetitorIngestItem(BaseModel):
 
 class CompetitorIngestRequest(BaseModel):
     competitors: list[CompetitorIngestItem] = Field(..., min_length=1)
-    project_id: str = Field(..., min_length=1)
+    avatar_id: str = Field(..., min_length=1)
 
 
 def _sse(event: str, data: dict[str, Any]) -> str:
@@ -115,7 +119,7 @@ def ingest_competitors(
     user_id: UUID = Depends(get_current_user_id),
 ) -> dict[str, Any]:
     """Resolve competitor URLs against Supabase summaries for an owned project."""
-    verify_project_owner(body.project_id, user_id)
+    verify_avatar_owner(body.avatar_id, user_id)
 
     from mcp.tools.scrape_competitor import scrape_competitor
 
@@ -129,7 +133,7 @@ def ingest_competitors(
             result = scrape_competitor(
                 item.url.strip(),
                 platform,
-                project_id=body.project_id,
+                avatar_id=body.avatar_id,
                 user_id=str(user_id),
             )
             summary = result.get("summary") or {}
@@ -181,7 +185,19 @@ def invoke_agent(
     user_id: UUID = Depends(get_current_user_id),
 ) -> StreamingResponse:
     """Invoke an agent and stream SSE events (status, token, complete, error)."""
-    verify_project_owner(body.project_id, user_id)
+    verify_avatar_owner(body.avatar_id, user_id)
+
+    # Validate tagged avatars early (ownership) before streaming
+    from context.avatar_resolve import AvatarResolutionError, resolve_avatar_ids
+
+    try:
+        resolve_avatar_ids(
+            user_id=str(user_id),
+            avatar_id=body.avatar_id,
+            tagged_avatar_ids=body.tagged_avatar_ids,
+        )
+    except AvatarResolutionError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
 
     try:
         agent = get_agent(body.agent_type)
@@ -189,19 +205,20 @@ def invoke_agent(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     auth_user_id = str(user_id)
-    project_id = body.project_id
+    auth_avatar_id = body.avatar_id
 
     def event_stream():
         try:
             for evt in agent.run(
                 user_id=auth_user_id,
-                project_id=project_id,
+                avatar_id=auth_avatar_id,
                 agent_type=body.agent_type,
                 user_input=body.user_input,
                 live_mode=body.live_mode,
                 chatbot_context_on=body.chatbot_context_on,
                 competitor_url=body.competitor_url,
                 competitor_summaries=body.competitor_summaries,
+                tagged_avatar_ids=body.tagged_avatar_ids,
                 stream=True,
             ):
                 yield _sse(evt["event"], evt["data"])
@@ -251,7 +268,7 @@ def backfill_summaries(
     limit: int = 200,
     user_id: UUID = Depends(get_current_user_id),
 ) -> dict[str, Any]:
-    """Embed content_summaries.summary JSON into the row embedding column."""
+    """Embed instagram_content_summaries.summary JSON into the row embedding column."""
     require_admin_user(user_id)
     try:
         return backfill_content_summary_embeddings(
@@ -260,7 +277,7 @@ def backfill_summaries(
     except Exception as exc:
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to backfill content_summaries embeddings: {exc}",
+            detail=f"Failed to backfill instagram_content_summaries embeddings: {exc}",
         ) from exc
 
 

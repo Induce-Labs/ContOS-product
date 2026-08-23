@@ -2,6 +2,8 @@ import logging
 from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 
+from app.services.text_sanitize import sanitize_json_value, sanitize_optional_str, sanitize_text
+
 logger = logging.getLogger(__name__)
 
 TranscriptionStatus = Literal[
@@ -117,9 +119,11 @@ def parse_instagram_posts(
         if is_reel:
             reel_count += 1
 
-        caption = _first_non_empty(item, ["caption", "text", "description"])
+        caption = sanitize_optional_str(
+            _first_non_empty(item, ["caption", "text", "description"]),
+        )
         transcript = _first_non_empty(item, ["transcript", "transcription", "videoTranscript"])
-        transcript_text = str(transcript).strip() if isinstance(transcript, str) else None
+        transcript_text = sanitize_text(transcript.strip()) if isinstance(transcript, str) else None
         transcription_status = _resolve_transcription_status(
             is_reel=is_reel,
             transcript=transcript_text,
@@ -148,7 +152,7 @@ def parse_instagram_posts(
                     "apify_instagram_post_scraper" if transcription_status == "completed" else None
                 ),
                 "transcription_status": transcription_status,
-                "raw_payload": item,
+                "raw_payload": sanitize_json_value(item),
             },
         )
         seen_external_ids.add(external_id)

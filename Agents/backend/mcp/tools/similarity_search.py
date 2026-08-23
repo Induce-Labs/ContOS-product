@@ -7,7 +7,11 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-SUPPORTED_TABLES = {"playbooks", "linkedin_content_summaries", "content_summaries"}
+SUPPORTED_TABLES = {
+    "playbooks",
+    "linkedin_content_summaries",
+    "instagram_content_summaries",
+}
 
 
 def _lexical_rank(
@@ -46,7 +50,7 @@ def _lexical_search(
     query_text: str,
     table: str,
     top_k: int,
-    project_id: str | None = None,
+    avatar_id: str | None = None,
     platform: str | None = None,
 ) -> list[dict[str, Any]]:
     """Lexical ranking over real Supabase rows when embeddings/RPC unavailable."""
@@ -68,17 +72,17 @@ def _lexical_search(
             top_k,
         )
 
-    if table in {"linkedin_content_summaries", "content_summaries"}:
+    if table in {"linkedin_content_summaries", "instagram_content_summaries"}:
         from mcp.tools.fetch_summaries import fetch_summaries
 
-        if not project_id:
+        if not avatar_id:
             logger.warning(
-                "lexical %s search without project_id; returning empty", table
+                "lexical %s search without avatar_id; returning empty", table
             )
             return []
         if table == "linkedin_content_summaries":
             platform = "linkedin"
-        summaries = fetch_summaries(project_id=project_id, platform=platform)
+        summaries = fetch_summaries(avatar_id=avatar_id, platform=platform)
         if table == "linkedin_content_summaries":
             summaries = [
                 s
@@ -107,7 +111,7 @@ def _format_summary_hits(
             **summary,
             "summary_id": r.get("id"),
             "competitor_id": r.get("competitor_id"),
-            "project_id": r.get("project_id"),
+            "avatar_id": r.get("avatar_id"),
             "model_used": r.get("model_used"),
             "generated_at": r.get("generated_at"),
             "platform": summary.get("platform"),
@@ -128,39 +132,40 @@ def similarity_search(
     table: str = "playbooks",
     top_k: int = 5,
     fast: bool = False,
-    project_id: str | None = None,
+    avatar_id: str | None = None,
     platform: str | None = None,
     user_id: str | None = None,
 ) -> list[dict[str, Any]]:
     """Embed query_text and run pgvector similarity search (agentic RAG retrieve).
 
-    - linkedin_content_summaries → LinkedIn competitor RAG (requires project_id)
-    - content_summaries → Instagram summaries (requires project_id)
+    - linkedin_content_summaries → LinkedIn competitor RAG (requires avatar_id)
+    - instagram_content_summaries → Instagram summaries (requires avatar_id)
     """
     table = (table or "playbooks").strip()
     if table not in SUPPORTED_TABLES:
         raise ValueError(
-            "table must be one of: playbooks, linkedin_content_summaries, content_summaries"
+            "table must be one of: playbooks, linkedin_content_summaries, "
+            "instagram_content_summaries"
         )
     if not (query_text or "").strip():
         raise ValueError("query_text is required for similarity_search")
 
-    if table in {"linkedin_content_summaries", "content_summaries"}:
-        if not project_id:
+    if table in {"linkedin_content_summaries", "instagram_content_summaries"}:
+        if not avatar_id:
             raise ValueError(
-                f"project_id is required for similarity_search on table={table}"
+                f"avatar_id is required for similarity_search on table={table}"
             )
         if user_id:
             from db import supabase_client as db
 
-            db.assert_project_owned(project_id, user_id)
+            db.assert_avatar_owned(avatar_id, user_id)
 
     if fast:
         logger.info(
             "similarity_search fast=True; lexical rank over DB rows table=%s", table
         )
         return _lexical_search(
-            query_text, table, top_k, project_id=project_id, platform=platform
+            query_text, table, top_k, avatar_id=avatar_id, platform=platform
         )
 
     from embeddings.embed import generate_embedding
@@ -188,57 +193,57 @@ def similarity_search(
             ]
         logger.info("match_playbooks returned 0 rows; falling back to lexical DB rank")
         return _lexical_search(
-            query_text, table, top_k, project_id=project_id, platform=platform
+            query_text, table, top_k, avatar_id=avatar_id, platform=platform
         )
 
     if table == "linkedin_content_summaries":
         rows = db.similarity_search_linkedin_summaries(
-            embedding, top_k=top_k, project_id=project_id
+            embedding, top_k=top_k, avatar_id=avatar_id
         )
         if rows:
             return _format_summary_hits(
                 rows, "supabase.linkedin_content_summaries"
             )
         logger.info(
-            "linkedin vector search returned 0 rows; lexical fallback project_id=%s",
-            project_id,
+            "linkedin vector search returned 0 rows; lexical fallback avatar_id=%s",
+            avatar_id,
         )
         return _lexical_search(
-            query_text, table, top_k, project_id=project_id, platform="linkedin"
+            query_text, table, top_k, avatar_id=avatar_id, platform="linkedin"
         )
 
-    # content_summaries (Instagram RAG)
     platform_filter = (platform or "instagram").lower().strip()
     try:
         rows = db.similarity_search_content_summaries(
             embedding,
             top_k=top_k,
-            project_id=project_id,
+            avatar_id=avatar_id,
             platform=platform_filter,
         )
     except Exception as exc:
         logger.warning(
-            "content_summaries vector search unavailable (%s); lexical fallback", exc
+            "instagram_content_summaries vector search unavailable (%s); lexical fallback",
+            exc,
         )
         return _lexical_search(
             query_text,
             table,
             top_k,
-            project_id=project_id,
+            avatar_id=avatar_id,
             platform=platform_filter,
         )
 
     if rows:
-        return _format_summary_hits(rows, "supabase.content_summaries")
+        return _format_summary_hits(rows, "supabase.instagram_content_summaries")
 
     logger.info(
-        "content_summaries vector search returned 0 rows; lexical fallback platform=%s",
+        "instagram_content_summaries vector search returned 0 rows; lexical fallback platform=%s",
         platform_filter,
     )
     return _lexical_search(
         query_text,
         table,
         top_k,
-        project_id=project_id,
+        avatar_id=avatar_id,
         platform=platform_filter,
     )

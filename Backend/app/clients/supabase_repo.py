@@ -21,12 +21,12 @@ class SupabaseRepository:
             settings.supabase_service_role_key,
         )
 
-    def get_competitors_for_project(
+    def get_competitors_for_avatar(
         self,
-        project_id: UUID,
+        avatar_id: UUID,
         competitor_ids: list[UUID],
     ) -> list[dict[str, Any]]:
-        query = self._client.table("competitors").select("*").eq("project_id", str(project_id))
+        query = self._client.table("competitors").select("*").eq("avatar_id", str(avatar_id))
         if competitor_ids:
             query = query.in_("id", [str(competitor_id) for competitor_id in competitor_ids])
         response = query.execute()
@@ -34,34 +34,34 @@ class SupabaseRepository:
             raise RepositoryError("Supabase returned no competitor data.")
         if len(response.data) != len(competitor_ids):
             raise RepositoryError(
-                "One or more competitor IDs do not belong to the specified project.",
+                "One or more competitor IDs do not belong to the specified avatar.",
             )
         return response.data
 
-    def verify_project_owner(self, project_id: UUID, user_id: UUID) -> None:
+    def verify_avatar_owner(self, avatar_id: UUID, user_id: UUID) -> None:
         response = (
-            self._client.table("projects")
+            self._client.table("avatars")
             .select("id")
-            .eq("id", str(project_id))
+            .eq("id", str(avatar_id))
             .eq("user_id", str(user_id))
             .maybe_single()
             .execute()
         )
         if response.data is None:
             raise RepositoryError(
-                "Project not found or you do not have permission to access it.",
+                "Avatar not found or you do not have permission to access it.",
             )
 
-    def count_competitors_for_project(self, project_id: UUID) -> int:
+    def count_competitors_for_avatar(self, avatar_id: UUID) -> int:
         response = (
             self._client.table("competitors")
             .select("id", count="exact")
-            .eq("project_id", str(project_id))
+            .eq("avatar_id", str(avatar_id))
             .execute()
         )
         if response.count is None:
             raise RepositoryError(
-                f"Failed to count competitors for project {project_id}.",
+                f"Failed to count competitors for avatar {avatar_id}.",
             )
         return response.count
 
@@ -91,21 +91,21 @@ class SupabaseRepository:
 
     def request_competitor_cancel(
         self,
-        project_id: UUID,
+        avatar_id: UUID,
         competitor_id: UUID,
     ) -> dict[str, Any]:
         """Mark an in-flight competitor pipeline for cooperative stop."""
         response = (
             self._client.table("competitors")
-            .select("id, project_id, pipeline_step, scrape_status, cancel_requested")
+            .select("id, avatar_id, pipeline_step, scrape_status, cancel_requested")
             .eq("id", str(competitor_id))
-            .eq("project_id", str(project_id))
+            .eq("avatar_id", str(avatar_id))
             .maybe_single()
             .execute()
         )
         if response.data is None:
             raise RepositoryError(
-                "Competitor not found or does not belong to the specified project.",
+                "Competitor not found or does not belong to the specified avatar.",
             )
 
         pipeline_step = str(response.data.get("pipeline_step") or "")
@@ -122,7 +122,7 @@ class SupabaseRepository:
             self._client.table("competitors")
             .update({"cancel_requested": True})
             .eq("id", str(competitor_id))
-            .eq("project_id", str(project_id))
+            .eq("avatar_id", str(avatar_id))
             .execute()
         )
         if update_response.data is None:
@@ -160,20 +160,20 @@ class SupabaseRepository:
         if not rows:
             return
         response = (
-            self._client.table("scraped_content")
+            self._client.table("instagram_scraped_content")
             .upsert(rows, on_conflict="competitor_id,external_id")
             .execute()
         )
         if response.data is None:
-            raise RepositoryError("Failed to upsert scraped_content rows in Supabase.")
+            raise RepositoryError("Failed to upsert instagram_scraped_content rows in Supabase.")
         logger.info(
-            "Upserted scraped_content rows",
+            "Upserted instagram_scraped_content rows",
             extra={"row_count": len(rows)},
         )
 
     def get_posts_pending_transcription(self, competitor_id: UUID) -> list[dict[str, Any]]:
         response = (
-            self._client.table("scraped_content")
+            self._client.table("instagram_scraped_content")
             .select("id, post_url, external_id")
             .eq("competitor_id", str(competitor_id))
             .in_("transcription_status", ["pending", "failed"])
@@ -189,7 +189,7 @@ class SupabaseRepository:
         if not row_ids:
             return
         response = (
-            self._client.table("scraped_content")
+            self._client.table("instagram_scraped_content")
             .update({"transcription_status": "in_progress"})
             .in_("id", row_ids)
             .execute()
@@ -209,7 +209,7 @@ class SupabaseRepository:
         updated_count = 0
         for update in updates:
             response = (
-                self._client.table("scraped_content")
+                self._client.table("instagram_scraped_content")
                 .update(
                     {
                         "transcript": update["transcript"],
@@ -229,7 +229,7 @@ class SupabaseRepository:
             if response.data:
                 updated_count += len(response.data)
         logger.info(
-            "Updated scraped_content transcripts",
+            "Updated instagram_scraped_content transcripts",
             extra={
                 "competitor_id": str(competitor_id),
                 "update_count": len(updates),
@@ -240,7 +240,7 @@ class SupabaseRepository:
 
     def get_content_for_summary(self, competitor_id: UUID) -> list[dict[str, Any]]:
         response = (
-            self._client.table("scraped_content")
+            self._client.table("instagram_scraped_content")
             .select(
                 "external_id, post_url, caption, transcript, likes, views, shares, "
                 "comments_count, posted_at, content_type, transcription_status",
@@ -259,12 +259,12 @@ class SupabaseRepository:
         self,
         *,
         competitor_id: UUID,
-        project_id: UUID,
+        avatar_id: UUID,
         summary: dict[str, Any],
         model_used: str,
     ) -> None:
         delete_response = (
-            self._client.table("content_summaries")
+            self._client.table("instagram_content_summaries")
             .delete()
             .eq("competitor_id", str(competitor_id))
             .execute()
@@ -274,11 +274,11 @@ class SupabaseRepository:
                 f"Failed to clear existing summaries for competitor {competitor_id}.",
             )
         insert_response = (
-            self._client.table("content_summaries")
+            self._client.table("instagram_content_summaries")
             .insert(
                 {
                     "competitor_id": str(competitor_id),
-                    "project_id": str(project_id),
+                    "avatar_id": str(avatar_id),
                     "summary": summary,
                     "model_used": model_used,
                 },
@@ -326,7 +326,7 @@ class SupabaseRepository:
         self,
         *,
         competitor_id: UUID,
-        project_id: UUID,
+        avatar_id: UUID,
         summary: dict[str, Any],
         model_used: str,
     ) -> None:
@@ -345,7 +345,7 @@ class SupabaseRepository:
             .insert(
                 {
                     "competitor_id": str(competitor_id),
-                    "project_id": str(project_id),
+                    "avatar_id": str(avatar_id),
                     "summary": summary,
                     "model_used": model_used,
                 },
@@ -357,23 +357,23 @@ class SupabaseRepository:
                 f"Failed to insert LinkedIn content summary for competitor {competitor_id}.",
             )
 
-    def refresh_project_status(self, project_id: UUID) -> None:
+    def refresh_avatar_status(self, avatar_id: UUID) -> None:
         response = (
             self._client.table("competitors")
             .select("scrape_status")
-            .eq("project_id", str(project_id))
+            .eq("avatar_id", str(avatar_id))
             .execute()
         )
         if not response.data:
             return
-        project_status = resolve_project_status(
+        avatar_status = resolve_project_status(
             [row["scrape_status"] for row in response.data],
         )
         update_response = (
-            self._client.table("projects")
-            .update({"status": project_status})
-            .eq("id", str(project_id))
+            self._client.table("avatars")
+            .update({"status": avatar_status})
+            .eq("id", str(avatar_id))
             .execute()
         )
         if update_response.data is None:
-            raise RepositoryError(f"Failed to update project {project_id} status in Supabase.")
+            raise RepositoryError(f"Failed to update avatar {avatar_id} status in Supabase.")

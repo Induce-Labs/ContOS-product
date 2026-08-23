@@ -3,7 +3,7 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes.projects import router as projects_router
+from app.api.routes.avatars import router as avatars_router
 from app.config import get_settings
 
 settings = get_settings()
@@ -36,7 +36,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(projects_router)
+app.include_router(avatars_router)
 
 
 @app.get("/health")

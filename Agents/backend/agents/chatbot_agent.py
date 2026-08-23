@@ -40,13 +40,14 @@ class ChatbotAgent(BaseAgent):
     def run(
         self,
         user_id: str,
-        project_id: str,
+        avatar_id: str,
         agent_type: str | None = None,
         user_input: str = "",
         live_mode: bool = False,
         chatbot_context_on: bool = False,
         competitor_url: str | None = None,
         competitor_summaries: list[dict[str, Any]] | None = None,
+        tagged_avatar_ids: list[str] | None = None,
         stream: bool = True,
     ) -> Generator[dict[str, Any], None, None]:
         # Instant path for greetings — skip OpenRouter entirely
@@ -76,7 +77,7 @@ class ChatbotAgent(BaseAgent):
                 args=(
                     {
                         "user_id": user_id,
-                        "project_id": project_id,
+                        "avatar_id": avatar_id,
                         "agent_type": "chatbot",
                         "user_input": user_input,
                         "context_snapshot": {"instant_greeting": True},
@@ -103,12 +104,13 @@ class ChatbotAgent(BaseAgent):
 
         yield from super().run(
             user_id=user_id,
-            project_id=project_id,
+            avatar_id=avatar_id,
             agent_type=agent_type or "chatbot",
             user_input=user_input,
             live_mode=live_mode,
             chatbot_context_on=chatbot_context_on,
             competitor_url=competitor_url,
             competitor_summaries=competitor_summaries,
+            tagged_avatar_ids=tagged_avatar_ids,
             stream=stream,
         )

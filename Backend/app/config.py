@@ -46,15 +46,18 @@ class Settings(BaseSettings):
         default=1.5,
         validation_alias="TRANSCRIBE_RETRY_DELAY_SECS",
     )
-    scrape_lookback_days: int = Field(default=30, validation_alias="SCRAPE_LOOKBACK_DAYS")
+    scrape_lookback_days: int = Field(default=7, validation_alias="SCRAPE_LOOKBACK_DAYS")
     pipeline_verbose: bool = Field(default=False, validation_alias="PIPELINE_VERBOSE")
     llm_provider: str = Field(default="auto", validation_alias="LLM_PROVIDER")
     openrouter_model: str = Field(
-        default="openrouter/free",
+        default="google/gemini-2.5-flash",
         validation_alias="OPENROUTER_MODEL",
     )
     openai_model: str = Field(default="gpt-4o", validation_alias="OPENAI_MODEL")
     llm_max_retries: int = Field(default=2, validation_alias="LLM_MAX_RETRIES")
+    llm_timeout_secs: int = Field(default=120, validation_alias="LLM_TIMEOUT_SECS")
+    llm_max_tokens: int = Field(default=4096, validation_alias="LLM_MAX_TOKENS")
+    llm_max_content_items: int = Field(default=10, validation_alias="LLM_MAX_CONTENT_ITEMS")
 
     @property
     def cors_origin_list(self) -> list[str]:

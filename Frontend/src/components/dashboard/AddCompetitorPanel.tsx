@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { AuthAlert, PrimaryButton } from '../auth/AuthButtons'
 import { AuthFormField } from '../auth/AuthFormField'
 import {
-  MAX_COMPETITORS_PER_PROJECT,
+  MAX_COMPETITORS_PER_AVATAR,
   createCompetitors,
   type Competitor,
 } from '../../lib/competitors'
@@ -31,7 +31,7 @@ export function AddCompetitorPanel({
   onClose,
   onSuccess,
 }: AddCompetitorPanelProps) {
-  const remainingSlots = MAX_COMPETITORS_PER_PROJECT - existingCompetitors.length
+  const remainingSlots = MAX_COMPETITORS_PER_AVATAR - existingCompetitors.length
   const [inputs, setInputs] = useState<CompetitorDraft[]>([
     { value: '', platform: 'instagram' },
   ])

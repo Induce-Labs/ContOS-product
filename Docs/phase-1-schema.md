@@ -1,48 +1,68 @@
 # Phase 1 — Database Schema
 
+## Schema rename (Aug 2026)
+
+For clarity, core tables were renamed:
+
+| Old name | New name |
+| --- | --- |
+| `projects` | `avatars` |
+| `project_id` (FK columns) | `avatar_id` |
+| `scraped_content` | `instagram_scraped_content` |
+| `content_summaries` | `instagram_content_summaries` |
+| `profiles` | **removed** (legacy; merged into `avatars.profiling_data`) |
+
+Migration: `supabase/migrations/20260823120000_rename_tables_for_clarity.sql`
+
 ## Purpose
 
-Define the ContOS v1 Postgres schema in Supabase with Row Level Security (RLS) so each authenticated user can only access their own projects, competitors, scraped content, and summaries.
+Define the ContOS v1 Postgres schema in Supabase with Row Level Security (RLS) so each authenticated user can only access their own avatars, competitors, scraped content, and summaries.
 
 ## Tables
 
 | Table | Description |
 | --- | --- |
-| `projects` | User-owned workspace (name, type, status) |
-| `competitors` | Social profiles tracked per project |
-| `scraped_content` | Raw reel data per competitor (idempotent on `competitor_id` + `external_id`) |
-| `content_summaries` | Structured LLM output per competitor |
+| `avatars` | User-owned Avatar/workspace (name, type, status, profiling_data, is_default) |
+| `profiling_questions` | DB-driven Avatar profiling questions (Phase 2) |
+| `avatar_profiling_responses` | **removed** — answers live in `avatars.profiling_data` |
+| `competitors` | Social profiles tracked per avatar |
+| `instagram_scraped_content` | Raw Instagram reel/post data per competitor |
+| `instagram_content_summaries` | Structured LLM output for Instagram per competitor |
+| `linkedin_scraped_content` | Raw LinkedIn posts per competitor |
+| `linkedin_content_summaries` | Structured LLM output for LinkedIn per competitor |
 
 ## Entity relationships
 
 ```text
 auth.users
-    └── projects (user_id)
-            ├── competitors (project_id)
-            │       └── scraped_content (competitor_id)
-            └── content_summaries (project_id, competitor_id)
+    └── avatars (user_id)
+            ├── competitors (avatar_id)
+            │       ├── instagram_scraped_content (competitor_id)
+            │       └── linkedin_scraped_content (competitor_id)
+            ├── instagram_content_summaries (avatar_id, competitor_id)
+            └── linkedin_content_summaries (avatar_id, competitor_id)
 ```
 
 ## Key constraints
 
-- `projects.type`: `personal_branding` | `business`
-- `projects.status`: `onboarding` | `scraping` | `ready` | `failed`
-- `competitors.platform`: `instagram` | `twitter` | `reddit`
+- `avatars.type`: `personal_branding` | `business`
+- `avatars.status`: `onboarding` | `scraping` | `ready` | `failed`
+- `competitors.platform`: `instagram` | `twitter` | `reddit` | `linkedin`
 - `competitors.scrape_status`: `pending` | `in_progress` | `completed` | `failed`
 - `competitors.pipeline_step`: `queued` | `scraping` | `transcribing` | `analyzing` | `done` | `failed`
-- `scraped_content`: unique (`competitor_id`, `external_id`) for idempotent re-scrapes
-- `scraped_content.post_url`: canonical Instagram link (transcriber input)
-- `scraped_content.transcription_status`: `pending` | `in_progress` | `completed` | `failed` | `not_applicable`
-- `content_summaries.embedding`: nullable `extensions.vector(1536)` for future MLOps
+- `instagram_scraped_content`: unique (`competitor_id`, `external_id`) for idempotent re-scrapes
+- `instagram_scraped_content.post_url`: canonical Instagram link (transcriber input)
+- `instagram_scraped_content.transcription_status`: `pending` | `in_progress` | `completed` | `failed` | `not_applicable`
+- Summary tables: nullable `extensions.vector(1536)` embeddings for agent RAG
 
 ## Row Level Security
 
-RLS is enabled on all four tables. Policies enforce:
+RLS is enabled on all tables. Policies enforce:
 
-- **`projects`**: `user_id = auth.uid()`
-- **`competitors`**: project belongs to `auth.uid()`
-- **`scraped_content`**: competitor's project belongs to `auth.uid()`
-- **`content_summaries`**: `project_id` belongs to `auth.uid()`
+- **`avatars`**: `user_id = auth.uid()`
+- **`competitors`**: avatar belongs to `auth.uid()`
+- **`instagram_scraped_content` / `linkedin_scraped_content`**: competitor's avatar belongs to `auth.uid()`
+- **Summary tables**: `avatar_id` belongs to `auth.uid()`
 
 The FastAPI backend uses the **service-role key**, which bypasses RLS for pipeline writes. The frontend uses the **anon key** with the user's JWT and is subject to RLS.
 

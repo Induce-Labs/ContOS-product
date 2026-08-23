@@ -120,7 +120,7 @@ class TestLinkedInPipelineBranch:
 
         with pytest.raises(PipelineError, match="LinkedIn competitors must use the LinkedIn pipeline"):
             run_instagram_competitor_pipeline(
-                project_id=uuid4(),
+                avatar_id=uuid4(),
                 competitor={
                     "id": str(uuid4()),
                     "handle_or_url": "https://www.linkedin.com/in/jane-doe/",
@@ -150,7 +150,7 @@ class TestLinkedInPipelineBranch:
         }
 
         run_competitor_pipeline(
-            project_id=uuid4(),
+            avatar_id=uuid4(),
             competitor=competitor,
             settings=MagicMock(),
             repository=MagicMock(),
@@ -162,14 +162,14 @@ class TestLinkedInPipelineBranch:
 
     def test_empty_scrape_raises_pipeline_error(self) -> None:
         competitor_id = uuid4()
-        project_id = uuid4()
+        avatar_id = uuid4()
         repository = MagicMock()
         apify_client = MagicMock()
         apify_client.scrape_linkedin_profile.return_value = []
 
         with pytest.raises(PipelineError, match="No LinkedIn posts found"):
             run_linkedin_competitor_pipeline(
-                project_id=project_id,
+                avatar_id=avatar_id,
                 competitor={
                     "id": str(competitor_id),
                     "handle_or_url": "https://www.linkedin.com/in/jane-doe/",
@@ -186,7 +186,7 @@ class TestLinkedInPipelineBranch:
 
     def test_summary_writes_only_to_linkedin_table(self) -> None:
         competitor_id = uuid4()
-        project_id = uuid4()
+        avatar_id = uuid4()
         repository = MagicMock()
         apify_client = MagicMock()
         llm_client = MagicMock()
@@ -219,7 +219,7 @@ class TestLinkedInPipelineBranch:
         repository.replace_content_summary = MagicMock()
 
         run_linkedin_competitor_pipeline(
-            project_id=project_id,
+            avatar_id=avatar_id,
             competitor={
                 "id": str(competitor_id),
                 "handle_or_url": "https://www.linkedin.com/in/jane-doe/",

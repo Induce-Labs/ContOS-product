@@ -181,7 +181,7 @@ class BaseAgent:
     def select_tools(
         self,
         user_id: str,
-        project_id: str,
+        avatar_id: str,
         user_input: str,
         live_mode: bool = False,
         chatbot_context_on: bool = False,
@@ -191,7 +191,7 @@ class BaseAgent:
         return self.mcp.gather_for_agent(
             agent_type=self.agent_type,
             user_id=user_id,
-            project_id=project_id,
+            avatar_id=avatar_id,
             user_input=user_input,
             live_mode=live_mode,
             chatbot_context_on=chatbot_context_on,
@@ -475,13 +475,14 @@ class BaseAgent:
     def run(
         self,
         user_id: str,
-        project_id: str,
+        avatar_id: str,
         agent_type: str | None = None,
         user_input: str = "",
         live_mode: bool = False,
         chatbot_context_on: bool = False,
         competitor_url: str | None = None,
         competitor_summaries: list[dict[str, Any]] | None = None,
+        tagged_avatar_ids: list[str] | None = None,
         stream: bool = True,
     ) -> Generator[dict[str, Any], None, None]:
         """Execute the agent pipeline, yielding SSE-ready event dicts."""
@@ -501,26 +502,79 @@ class BaseAgent:
         try:
             yield {"event": "status", "data": {"stage": "fetching_context", "agent": agent_type}}
 
+            from context.avatar_context import build_avatar_context
+            from context.avatar_resolve import resolve_avatar_ids
+
+            avatar_ids = resolve_avatar_ids(
+                user_id=user_id,
+                avatar_id=avatar_id,
+                tagged_avatar_ids=tagged_avatar_ids,
+            )
+
+            avatar_bundle: dict[str, Any] | None = None
+            if avatar_ids and (
+                chatbot_context_on
+                or agent_type in {"linkedin", "instagram", "twitter"}
+                or competitor_summaries
+            ):
+                avatar_bundle = build_avatar_context(
+                    user_id=user_id,
+                    avatar_ids=avatar_ids,
+                    user_input=user_input,
+                    agent_type=agent_type,
+                )
+                tools_used = list(avatar_bundle.get("tools_used") or [])
+
+            # Keep legacy gather for playbooks / live scrape / ingest merge
             gathered = self.select_tools(
                 user_id=user_id,
-                project_id=project_id,
+                avatar_id=avatar_ids[0] if avatar_ids else avatar_id,
                 user_input=user_input,
                 live_mode=live_mode,
-                chatbot_context_on=chatbot_context_on,
+                chatbot_context_on=chatbot_context_on and not avatar_bundle,
                 competitor_url=competitor_url,
                 competitor_summaries=competitor_summaries,
             )
-            tools_used = list(gathered.get("tools_used") or [])
+            for tool_name in gathered.get("tools_used") or []:
+                if tool_name not in tools_used:
+                    tools_used.append(tool_name)
+
+            profile = (
+                (avatar_bundle or {}).get("profile")
+                or (
+                    (avatar_bundle or {}).get("profiles") or [None]
+                )[0]
+                or gathered.get("profile")
+            )
+            summaries = (
+                (avatar_bundle or {}).get("summaries")
+                or gathered.get("summaries")
+                or []
+            )
+            if competitor_summaries:
+                # Merge ingested summaries into competitor intel
+                for item in competitor_summaries:
+                    if isinstance(item, dict) and item.get("summary"):
+                        s = dict(item["summary"])
+                        s.setdefault("competitor_url", item.get("url"))
+                        s.setdefault("competitor_handle", item.get("handle"))
+                        s.setdefault("platform", item.get("platform"))
+                        summaries.append(s)
 
             context = assemble_context(
-                profile=gathered.get("profile"),
-                summaries=gathered.get("summaries"),
+                profile=profile,
+                summaries=summaries,
                 playbooks=gathered.get("playbooks"),
                 user_input=user_input,
                 agent_type=agent_type,
+                avatar_bundle=avatar_bundle,
             )
 
-            system_prompt = get_system_prompt(agent_type, chatbot_context_on)
+            system_prompt = get_system_prompt(
+                agent_type,
+                chatbot_context_on,
+                multi_avatar=bool(avatar_bundle and avatar_bundle.get("multi_avatar")),
+            )
             messages = self.build_messages(
                 system_prompt, context, user_input, chatbot_context_on
             )
@@ -614,7 +668,7 @@ class BaseAgent:
         finally:
             payload = {
                 "user_id": user_id,
-                "project_id": project_id,
+                "avatar_id": avatar_id,
                 "agent_type": agent_type,
                 "user_input": user_input,
                 "context_snapshot": {

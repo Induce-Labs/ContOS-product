@@ -2,13 +2,13 @@ import { supabase } from './supabase'
 import type { Tables } from '../types/database'
 import type { CompetitorSummary } from '../types/contos'
 
-export type ContentSummary = Tables<'content_summaries'>
+export type ContentSummary = Tables<'instagram_content_summaries'>
 export type LinkedInContentSummary = Tables<'linkedin_content_summaries'>
 
 /** Unified shape used by the dashboard for either platform. */
 export type DashboardSummary = {
   competitor_id: string
-  project_id: string
+  avatar_id: string
   summary: unknown
   model_used: string
   generated_at: string
@@ -25,18 +25,18 @@ export class SummariesServiceError extends Error {
   }
 }
 
-export async function fetchSummariesForProject(
-  projectId: string,
+export async function fetchSummariesForAvatar(
+  avatarId: string,
 ): Promise<ContentSummary[]> {
   const { data, error } = await supabase
-    .from('content_summaries')
+    .from('instagram_content_summaries')
     .select('*')
-    .eq('project_id', projectId)
+    .eq('avatar_id', avatarId)
     .order('generated_at', { ascending: false })
 
   if (error) {
     throw new SummariesServiceError(
-      `Failed to load content summaries: ${error.message}`,
+      `Failed to load Instagram content summaries: ${error.message}`,
       error,
     )
   }
@@ -44,13 +44,16 @@ export async function fetchSummariesForProject(
   return data
 }
 
-export async function fetchLinkedInSummariesForProject(
-  projectId: string,
+/** @deprecated Use fetchSummariesForAvatar */
+export const fetchSummariesForProject = fetchSummariesForAvatar
+
+export async function fetchLinkedInSummariesForAvatar(
+  avatarId: string,
 ): Promise<LinkedInContentSummary[]> {
   const { data, error } = await supabase
     .from('linkedin_content_summaries')
     .select('*')
-    .eq('project_id', projectId)
+    .eq('avatar_id', avatarId)
     .order('generated_at', { ascending: false })
 
   if (error) {
@@ -63,18 +66,21 @@ export async function fetchLinkedInSummariesForProject(
   return data
 }
 
-export async function fetchAllSummariesForProject(
-  projectId: string,
+/** @deprecated Use fetchLinkedInSummariesForAvatar */
+export const fetchLinkedInSummariesForProject = fetchLinkedInSummariesForAvatar
+
+export async function fetchAllSummariesForAvatar(
+  avatarId: string,
 ): Promise<DashboardSummary[]> {
   const [instagram, linkedin] = await Promise.all([
-    fetchSummariesForProject(projectId),
-    fetchLinkedInSummariesForProject(projectId),
+    fetchSummariesForAvatar(avatarId),
+    fetchLinkedInSummariesForAvatar(avatarId),
   ])
 
   return [
     ...instagram.map((row) => ({
       competitor_id: row.competitor_id,
-      project_id: row.project_id,
+      avatar_id: row.avatar_id,
       summary: row.summary,
       model_used: row.model_used,
       generated_at: row.generated_at,
@@ -82,7 +88,7 @@ export async function fetchAllSummariesForProject(
     })),
     ...linkedin.map((row) => ({
       competitor_id: row.competitor_id,
-      project_id: row.project_id,
+      avatar_id: row.avatar_id,
       summary: row.summary,
       model_used: row.model_used,
       generated_at: row.generated_at,
@@ -90,6 +96,9 @@ export async function fetchAllSummariesForProject(
     })),
   ]
 }
+
+/** @deprecated Use fetchAllSummariesForAvatar */
+export const fetchAllSummariesForProject = fetchAllSummariesForAvatar
 
 export function parseCompetitorSummary(summary: unknown): CompetitorSummary | null {
   if (typeof summary !== 'object' || summary === null) {

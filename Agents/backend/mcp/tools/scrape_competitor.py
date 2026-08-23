@@ -27,16 +27,16 @@ def _handle_from_url(competitor_url: str, platform: str) -> str:
 def scrape_competitor(
     competitor_url: str,
     platform: str,
-    project_id: str | None = None,
+    avatar_id: str | None = None,
     user_id: str | None = None,
 ) -> dict[str, Any]:
-    """Load existing competitor summary from Supabase for an owned project only."""
+    """Load existing competitor summary from Supabase for an owned avatar only."""
     from db import supabase_client as db
 
-    if not project_id:
-        raise ValueError("project_id is required for scrape_competitor")
+    if not avatar_id:
+        raise ValueError("avatar_id is required for scrape_competitor")
     if user_id:
-        db.assert_project_owned(project_id, user_id)
+        db.assert_avatar_owned(avatar_id, user_id)
 
     platform = (platform or "").lower().strip()
     if platform == "x":
@@ -48,22 +48,22 @@ def scrape_competitor(
 
     handle = _handle_from_url(competitor_url, platform)
     logger.info(
-        "scrape_competitor resolve url=%s platform=%s project_id=%s",
+        "scrape_competitor resolve url=%s platform=%s avatar_id=%s",
         competitor_url,
         platform,
-        project_id,
+        avatar_id,
     )
 
     found = db.fetch_summary_by_competitor_url(
         competitor_url=competitor_url,
         platform=platform if platform != "reddit" else None,
-        project_id=project_id,
+        avatar_id=avatar_id,
     )
     if not found or not found.get("summary"):
         raise LookupError(
             "No content summary found in Supabase for "
-            f"url={competitor_url!r} platform={platform} project_id={project_id}. "
-            "Run the scrape/summarize pipeline first for a competitor in this project."
+            f"url={competitor_url!r} platform={platform} avatar_id={avatar_id}. "
+            "Run the scrape/summarize pipeline first for a competitor on this avatar."
         )
 
     summary = dict(found["summary"])

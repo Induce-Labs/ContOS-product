@@ -48,12 +48,12 @@ class MCPServer:
     def _register_defaults(self) -> None:
         self.register(
             name="fetch_profile",
-            description="Fetch the user's brand profile from Supabase profiles/projects.",
+            description="Fetch the user's brand profile from Supabase avatars.profiling_data.",
             parameters={
                 "type": "object",
                 "properties": {
                     "user_id": {"type": "string", "description": "User UUID"},
-                    "project_id": {
+                    "avatar_id": {
                         "type": "string",
                         "description": "Optional project UUID to resolve brand name/type",
                     },
@@ -68,7 +68,7 @@ class MCPServer:
             parameters={
                 "type": "object",
                 "properties": {
-                    "project_id": {"type": "string"},
+                    "avatar_id": {"type": "string"},
                     "platform": {
                         "type": "string",
                         "enum": ["instagram", "linkedin", "twitter"],
@@ -78,7 +78,7 @@ class MCPServer:
                         "description": "Authenticated user UUID for ownership checks",
                     },
                 },
-                "required": ["project_id"],
+                "required": ["avatar_id"],
             },
             handler=fetch_summaries,
         )
@@ -87,7 +87,7 @@ class MCPServer:
             description=(
                 "Agentic RAG retrieve: embed a query and return top-k similar playbooks, "
                 "LinkedIn summaries (linkedin_content_summaries), or Instagram summaries "
-                "(content_summaries)."
+                "(instagram_content_summaries)."
             ),
             parameters={
                 "type": "object",
@@ -98,12 +98,12 @@ class MCPServer:
                         "enum": [
                             "playbooks",
                             "linkedin_content_summaries",
-                            "content_summaries",
+                            "instagram_content_summaries",
                         ],
                         "default": "playbooks",
                     },
                     "top_k": {"type": "integer", "default": 5},
-                    "project_id": {
+                    "avatar_id": {
                         "type": "string",
                         "description": "Required project filter for summary RAG",
                     },
@@ -114,7 +114,7 @@ class MCPServer:
                     "platform": {
                         "type": "string",
                         "enum": ["instagram", "linkedin"],
-                        "description": "Platform filter for content_summaries (default instagram)",
+                        "description": "Platform filter for instagram_content_summaries (default instagram)",
                     },
                     "fast": {
                         "type": "boolean",
@@ -137,10 +137,10 @@ class MCPServer:
                         "type": "string",
                         "enum": ["instagram", "linkedin", "twitter"],
                     },
-                    "project_id": {"type": "string"},
+                    "avatar_id": {"type": "string"},
                     "user_id": {"type": "string"},
                 },
-                "required": ["competitor_url", "platform", "project_id"],
+                "required": ["competitor_url", "platform", "avatar_id"],
             },
             handler=scrape_competitor,
         )
@@ -222,7 +222,7 @@ class MCPServer:
         self,
         agent_type: str,
         user_id: str,
-        project_id: str,
+        avatar_id: str,
         user_input: str,
         live_mode: bool = False,
         chatbot_context_on: bool = False,
@@ -265,7 +265,7 @@ class MCPServer:
 
         if agent_type == "linkedin":
             profile = self.call_tool(
-                "fetch_profile", {"user_id": user_id, "project_id": project_id}
+                "fetch_profile", {"user_id": user_id, "avatar_id": avatar_id}
             )
             tools_used.append("fetch_profile")
             # Agentic RAG: retrieve top LinkedIn summaries by query embedding
@@ -275,7 +275,7 @@ class MCPServer:
                     "query_text": user_input[:500],
                     "table": "linkedin_content_summaries",
                     "top_k": 3,
-                    "project_id": project_id,
+                    "avatar_id": avatar_id,
                     "user_id": user_id,
                 },
             )
@@ -290,7 +290,7 @@ class MCPServer:
                 summaries = self.call_tool(
                     "fetch_summaries",
                     {
-                        "project_id": project_id,
+                        "avatar_id": avatar_id,
                         "platform": "linkedin",
                         "user_id": user_id,
                     },
@@ -309,7 +309,7 @@ class MCPServer:
                     "query_text": user_input[:500],
                     "table": "playbooks",
                     "top_k": 3,
-                    "project_id": project_id,
+                    "avatar_id": avatar_id,
                 },
             )
             tools_used.append("similarity_search:playbooks")
@@ -320,7 +320,7 @@ class MCPServer:
                     {
                         "competitor_url": competitor_url,
                         "platform": "linkedin",
-                        "project_id": project_id,
+                        "avatar_id": avatar_id,
                         "user_id": user_id,
                     },
                 )
@@ -330,7 +330,7 @@ class MCPServer:
 
         elif agent_type == "instagram":
             profile = self.call_tool(
-                "fetch_profile", {"user_id": user_id, "project_id": project_id}
+                "fetch_profile", {"user_id": user_id, "avatar_id": avatar_id}
             )
             tools_used.append("fetch_profile")
             analysis_mode = _is_analysis_intent(user_input)
@@ -339,7 +339,7 @@ class MCPServer:
                 summaries = self.call_tool(
                     "fetch_summaries",
                     {
-                        "project_id": project_id,
+                        "avatar_id": avatar_id,
                         "platform": "instagram",
                         "user_id": user_id,
                     },
@@ -350,14 +350,14 @@ class MCPServer:
                     "similarity_search",
                     {
                         "query_text": user_input[:500],
-                        "table": "content_summaries",
+                        "table": "instagram_content_summaries",
                         "platform": "instagram",
                         "top_k": 3,
-                        "project_id": project_id,
+                        "avatar_id": avatar_id,
                         "user_id": user_id,
                     },
                 )
-                tools_used.append("similarity_search:content_summaries")
+                tools_used.append("similarity_search:instagram_content_summaries")
                 summaries = [
                     s.get("content")
                     for s in similar_ig
@@ -367,7 +367,7 @@ class MCPServer:
                     summaries = self.call_tool(
                         "fetch_summaries",
                         {
-                            "project_id": project_id,
+                            "avatar_id": avatar_id,
                             "platform": "instagram",
                             "user_id": user_id,
                         },
@@ -386,7 +386,7 @@ class MCPServer:
                     "query_text": user_input[:500],
                     "table": "playbooks",
                     "top_k": 3,
-                    "project_id": project_id,
+                    "avatar_id": avatar_id,
                 },
             )
             tools_used.append("similarity_search:playbooks")
@@ -397,7 +397,7 @@ class MCPServer:
                     {
                         "competitor_url": competitor_url,
                         "platform": "instagram",
-                        "project_id": project_id,
+                        "avatar_id": avatar_id,
                         "user_id": user_id,
                     },
                 )
@@ -407,7 +407,7 @@ class MCPServer:
 
         elif agent_type == "chatbot" and (chatbot_context_on or ingested):
             profile = self.call_tool(
-                "fetch_profile", {"user_id": user_id, "project_id": project_id}
+                "fetch_profile", {"user_id": user_id, "avatar_id": avatar_id}
             )
             tools_used.append("fetch_profile")
             if ingested:
@@ -421,7 +421,7 @@ class MCPServer:
                         "query_text": user_input[:500],
                         "table": "linkedin_content_summaries",
                         "top_k": 2,
-                        "project_id": project_id,
+                        "avatar_id": avatar_id,
                         "user_id": user_id,
                     },
                 )
@@ -430,14 +430,14 @@ class MCPServer:
                     "similarity_search",
                     {
                         "query_text": user_input[:500],
-                        "table": "content_summaries",
+                        "table": "instagram_content_summaries",
                         "platform": "instagram",
                         "top_k": 2,
-                        "project_id": project_id,
+                        "avatar_id": avatar_id,
                         "user_id": user_id,
                     },
                 )
-                tools_used.append("similarity_search:content_summaries")
+                tools_used.append("similarity_search:instagram_content_summaries")
                 summaries = [
                     s.get("content")
                     for s in (similar_li + similar_ig)
@@ -446,7 +446,7 @@ class MCPServer:
                 if not summaries:
                     summaries = self.call_tool(
                         "fetch_summaries",
-                        {"project_id": project_id, "user_id": user_id},
+                        {"avatar_id": avatar_id, "user_id": user_id},
                     )
                     tools_used.append("fetch_summaries")
 

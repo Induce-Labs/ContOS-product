@@ -78,7 +78,7 @@ def _flatten_summary_row(row: dict[str, Any], platform: str | None = None) -> di
         **summary,
         "summary_id": row.get("id"),
         "competitor_id": row.get("competitor_id"),
-        "project_id": row.get("project_id"),
+        "avatar_id": row.get("avatar_id"),
         "competitor_handle": competitor.get("handle_or_url"),
         "platform": resolved_platform,
         "model_used": row.get("model_used"),
@@ -87,70 +87,35 @@ def _flatten_summary_row(row: dict[str, Any], platform: str | None = None) -> di
     }
 
 
-def assert_project_owned(project_id: str, user_id: str) -> dict[str, Any]:
-    """Ensure project exists and belongs to user_id. Returns the project row."""
-    if not project_id or not str(project_id).strip():
-        raise ValueError("project_id is required")
+def assert_avatar_owned(avatar_id: str, user_id: str) -> dict[str, Any]:
+    """Ensure avatar exists and belongs to user_id. Returns the avatar row."""
+    if not avatar_id or not str(avatar_id).strip():
+        raise ValueError("avatar_id is required")
     if not user_id or not str(user_id).strip():
         raise ValueError("user_id is required")
 
-    row = fetch_project_row(project_id=str(project_id).strip(), user_id=None)
+    row = fetch_avatar_row(avatar_id=str(avatar_id).strip(), user_id=None)
     if row is None:
-        raise LookupError(f"Project not found: {project_id}")
+        raise LookupError(f"Avatar not found: {avatar_id}")
     owner = str(row.get("user_id") or "")
     if owner != str(user_id):
         raise PermissionError(
-            f"Project {project_id} is not owned by user {user_id}",
+            f"Avatar {avatar_id} is not owned by user {user_id}",
         )
     return row
 
 
-def fetch_profile_row(user_id: str) -> dict[str, Any] | None:
-    client = _require_client()
-    try:
-        result = (
-            client.table("profiles")
-            .select("*")
-            .eq("user_id", user_id)
-            .limit(1)
-            .execute()
-        )
-        rows = result.data or []
-        return rows[0] if rows else None
-    except Exception as exc:
-        logger.warning("profiles query failed for user_id=%s: %s", user_id, exc)
-        raise
-
-
-def fetch_any_profile_row() -> dict[str, Any] | None:
-    """Return one profiles row for local testing when user_id has no match."""
-    client = _require_client()
-    try:
-        result = (
-            client.table("profiles")
-            .select("*")
-            .order("created_at", desc=True)
-            .limit(1)
-            .execute()
-        )
-        rows = result.data or []
-        return rows[0] if rows else None
-    except Exception as exc:
-        logger.warning("profiles any-row query failed: %s", exc)
-        raise
-
-
-def fetch_project_row(
-    project_id: str | None = None, user_id: str | None = None
+def fetch_avatar_row(
+    avatar_id: str | None = None, user_id: str | None = None
 ) -> dict[str, Any] | None:
-    """Load a project row by id, or the newest project for a user."""
+    """Load an avatar row by id, or the newest avatar for a user."""
     client = _require_client()
     try:
-        if project_id:
+        if avatar_id:
             result = (
-                client.table("projects")
+                client.table("avatars")
                 .select("*")
-                .eq("id", project_id)
+                .eq("id", avatar_id)
                 .limit(1)
                 .execute()
             )
@@ -158,7 +123,7 @@ def fetch_project_row(
             return rows[0] if rows else None
         if user_id:
             result = (
-                client.table("projects")
+                client.table("avatars")
                 .select("*")
                 .eq("user_id", user_id)
                 .order("updated_at", desc=True)
@@ -170,30 +135,53 @@ def fetch_project_row(
         return None
     except Exception as exc:
         logger.warning(
-            "projects query failed project_id=%s user_id=%s: %s",
-            project_id,
+            "avatars query failed avatar_id=%s user_id=%s: %s",
+            avatar_id,
             user_id,
             exc,
         )
         raise
 
 
+def fetch_default_avatar_row(user_id: str) -> dict[str, Any] | None:
+    """Load the user's default avatar (avatars.is_default), else newest avatar."""
+    if not user_id:
+        return None
+    client = _require_client()
+    try:
+        result = (
+            client.table("avatars")
+            .select("*")
+            .eq("user_id", user_id)
+            .eq("is_default", True)
+            .limit(1)
+            .execute()
+        )
+        rows = result.data or []
+        if rows:
+            return rows[0]
+        return fetch_avatar_row(avatar_id=None, user_id=user_id)
+    except Exception as exc:
+        logger.warning("default avatar query failed user_id=%s: %s", user_id, exc)
+        raise
+
+
 def fetch_summaries_rows(
-    project_id: str | None = None,
+    avatar_id: str | None = None,
     platform: str | None = None,
 ) -> list[dict[str, Any]]:
-    """Return summary payloads from content_summaries (+ LinkedIn table) for one project."""
-    if not project_id:
-        raise ValueError("project_id is required for fetch_summaries_rows")
+    """Return summary payloads from instagram_content_summaries (+ LinkedIn) for one avatar."""
+    if not avatar_id:
+        raise ValueError("avatar_id is required for fetch_summaries_rows")
 
     client = _require_client()
     try:
         query = (
-            client.table("content_summaries")
+            client.table("instagram_content_summaries")
             .select(
-                "id, competitor_id, project_id, summary, model_used, generated_at, competitors(platform, handle_or_url)"
+                "id, competitor_id, avatar_id, summary, model_used, generated_at, competitors(platform, handle_or_url)"
             )
-            .eq("project_id", project_id)
+            .eq("avatar_id", avatar_id)
         )
         summaries = query.execute()
         rows = summaries.data or []
@@ -213,9 +201,9 @@ def fetch_summaries_rows(
                 li_query = (
                     client.table("linkedin_content_summaries")
                     .select(
-                        "id, competitor_id, project_id, summary, model_used, generated_at, competitors(platform, handle_or_url)"
+                        "id, competitor_id, avatar_id, summary, model_used, generated_at, competitors(platform, handle_or_url)"
                     )
-                    .eq("project_id", project_id)
+                    .eq("avatar_id", avatar_id)
                 )
                 li = li_query.execute()
                 for row in li.data or []:
@@ -229,16 +217,16 @@ def fetch_summaries_rows(
                     filtered.append(flat)
             except Exception as li_exc:
                 logger.info(
-                    "linkedin_content_summaries skip project_id=%s: %s",
-                    project_id,
+                    "linkedin_content_summaries skip avatar_id=%s: %s",
+                    avatar_id,
                     li_exc,
                 )
 
         return filtered
     except Exception as exc:
         logger.warning(
-            "content_summaries query failed project_id=%s platform=%s: %s",
-            project_id,
+            "instagram_content_summaries query failed avatar_id=%s platform=%s: %s",
+            avatar_id,
             platform,
             exc,
         )
@@ -248,19 +236,19 @@ def fetch_summaries_rows(
 def fetch_summary_by_competitor_url(
     competitor_url: str,
     platform: str | None = None,
-    project_id: str | None = None,
+    avatar_id: str | None = None,
 ) -> dict[str, Any] | None:
-    """Resolve competitor URL → content_summaries.summary from Supabase."""
+    """Resolve competitor URL → instagram_content_summaries.summary from Supabase."""
     client = _require_client()
     url = (competitor_url or "").strip()
     if not url:
         return None
     try:
         query = client.table("competitors").select(
-            "id, project_id, platform, handle_or_url, scrape_status"
+            "id, avatar_id, platform, handle_or_url, scrape_status"
         )
-        if project_id:
-            query = query.eq("project_id", project_id)
+        if avatar_id:
+            query = query.eq("avatar_id", avatar_id)
         if platform:
             query = query.eq("platform", platform.lower())
         competitors = query.execute().data or []
@@ -275,20 +263,20 @@ def fetch_summary_by_competitor_url(
             # Fallback: ilike substring search when exact scan missed
             like_query = (
                 client.table("competitors")
-                .select("id, project_id, platform, handle_or_url, scrape_status")
+                .select("id, avatar_id, platform, handle_or_url, scrape_status")
                 .ilike("handle_or_url", f"%{url.split('/')[-1]}%")
             )
-            if project_id:
-                like_query = like_query.eq("project_id", project_id)
+            if avatar_id:
+                like_query = like_query.eq("avatar_id", avatar_id)
             like_rows = like_query.limit(5).execute().data or []
             match = like_rows[0] if like_rows else None
         if match is None:
             return None
 
         summary_rows = (
-            client.table("content_summaries")
+            client.table("instagram_content_summaries")
             .select(
-                "id, competitor_id, project_id, summary, model_used, generated_at, competitors(platform, handle_or_url)"
+                "id, competitor_id, avatar_id, summary, model_used, generated_at, competitors(platform, handle_or_url)"
             )
             .eq("competitor_id", match["id"])
             .order("generated_at", desc=True)
@@ -304,7 +292,7 @@ def fetch_summary_by_competitor_url(
                 li_rows = (
                     client.table("linkedin_content_summaries")
                     .select(
-                        "id, competitor_id, project_id, summary, model_used, generated_at, competitors(platform, handle_or_url)"
+                        "id, competitor_id, avatar_id, summary, model_used, generated_at, competitors(platform, handle_or_url)"
                     )
                     .eq("competitor_id", match["id"])
                     .order("generated_at", desc=True)
@@ -316,7 +304,7 @@ def fetch_summary_by_competitor_url(
             return {
                 "competitor": match,
                 "summary": None,
-                "note": "Competitor found but no content_summaries / linkedin_content_summaries row yet",
+                "note": "Competitor found but no instagram_content_summaries / linkedin_content_summaries row yet",
             }
         flat = _flatten_summary_row(rows[0], platform=match.get("platform"))
         if (match.get("platform") or "").lower() == "linkedin":
@@ -396,13 +384,10 @@ def _parse_embedding(raw: Any) -> list[float] | None:
 def similarity_search_content_summaries(
     query_embedding: list[float],
     top_k: int = 5,
-    project_id: str | None = None,
+    avatar_id: str | None = None,
     platform: str | None = None,
 ) -> list[dict[str, Any]]:
-    """Rank content_summaries by embedding cosine similarity (RPC or local).
-
-    Optional platform filter (e.g. instagram) applied via competitors join.
-    """
+    """Rank instagram_content_summaries by embedding cosine similarity (RPC or local)."""
     client = _require_client()
     platform_norm = (platform or "").lower().strip() or None
 
@@ -413,21 +398,21 @@ def similarity_search_content_summaries(
                 "query_embedding": query_embedding,
                 "match_count": top_k,
             }
-            if project_id:
-                params["filter_project_id"] = project_id
-            result = client.rpc("match_content_summaries", params).execute()
+            if avatar_id:
+                params["filter_avatar_id"] = avatar_id
+            result = client.rpc("match_instagram_content_summaries", params).execute()
             if result.data:
                 return result.data
     except Exception as exc:
         logger.info(
-            "match_content_summaries RPC unavailable; using local cosine: %s", exc
+            "match_instagram_content_summaries RPC unavailable; using local cosine: %s", exc
         )
 
-    query = client.table("content_summaries").select(
-        "id, competitor_id, project_id, summary, model_used, generated_at, embedding, competitors(platform, handle_or_url)"
+    query = client.table("instagram_content_summaries").select(
+        "id, competitor_id, avatar_id, summary, model_used, generated_at, embedding, competitors(platform, handle_or_url)"
     )
-    if project_id:
-        query = query.eq("project_id", project_id)
+    if avatar_id:
+        query = query.eq("avatar_id", avatar_id)
     rows = query.limit(max(top_k * 20, 50)).execute().data or []
 
     scored: list[dict[str, Any]] = []
@@ -447,13 +432,13 @@ def similarity_search_content_summaries(
             **summary,
             "competitor_handle": competitor.get("handle_or_url"),
             "platform": row_platform or platform_norm or competitor.get("platform"),
-            "source": "supabase.content_summaries",
+            "source": "supabase.instagram_content_summaries",
         }
         scored.append(
             {
                 "id": row.get("id"),
                 "competitor_id": row.get("competitor_id"),
-                "project_id": row.get("project_id"),
+                "avatar_id": row.get("avatar_id"),
                 "summary": enriched,
                 "model_used": row.get("model_used"),
                 "generated_at": row.get("generated_at"),
@@ -468,8 +453,8 @@ def list_content_summaries_for_embed(
     only_missing: bool = True, limit: int = 200
 ) -> list[dict[str, Any]]:
     client = _require_client()
-    query = client.table("content_summaries").select(
-        "id, competitor_id, project_id, summary, embedding"
+    query = client.table("instagram_content_summaries").select(
+        "id, competitor_id, avatar_id, summary, embedding"
     )
     result = query.limit(limit).execute()
     rows = result.data or []
@@ -483,7 +468,7 @@ def update_content_summary_embedding(
 ) -> dict[str, Any] | None:
     client = _require_client()
     result = (
-        client.table("content_summaries")
+        client.table("instagram_content_summaries")
         .update({"embedding": embedding})
         .eq("id", summary_id)
         .execute()
@@ -498,7 +483,7 @@ def list_linkedin_summaries_for_embed(
     client = _require_client()
     result = (
         client.table("linkedin_content_summaries")
-        .select("id, competitor_id, project_id, summary, embedding")
+        .select("id, competitor_id, avatar_id, summary, embedding")
         .limit(limit)
         .execute()
     )
@@ -525,7 +510,7 @@ def update_linkedin_summary_embedding(
 def similarity_search_linkedin_summaries(
     query_embedding: list[float],
     top_k: int = 5,
-    project_id: str | None = None,
+    avatar_id: str | None = None,
 ) -> list[dict[str, Any]]:
     """Rank linkedin_content_summaries by embedding cosine (RPC or local)."""
     client = _require_client()
@@ -535,8 +520,8 @@ def similarity_search_linkedin_summaries(
             "query_embedding": query_embedding,
             "match_count": top_k,
         }
-        if project_id:
-            params["filter_project_id"] = project_id
+        if avatar_id:
+            params["filter_avatar_id"] = avatar_id
         result = client.rpc("match_linkedin_content_summaries", params).execute()
         if result.data:
             return result.data
@@ -547,10 +532,10 @@ def similarity_search_linkedin_summaries(
         )
 
     query = client.table("linkedin_content_summaries").select(
-        "id, competitor_id, project_id, summary, model_used, generated_at, embedding, competitors(platform, handle_or_url)"
+        "id, competitor_id, avatar_id, summary, model_used, generated_at, embedding, competitors(platform, handle_or_url)"
     )
-    if project_id:
-        query = query.eq("project_id", project_id)
+    if avatar_id:
+        query = query.eq("avatar_id", avatar_id)
     rows = query.limit(max(top_k * 20, 100)).execute().data or []
 
     scored: list[dict[str, Any]] = []
@@ -573,7 +558,7 @@ def similarity_search_linkedin_summaries(
             {
                 "id": row.get("id"),
                 "competitor_id": row.get("competitor_id"),
-                "project_id": row.get("project_id"),
+                "avatar_id": row.get("avatar_id"),
                 "summary": enriched,
                 "model_used": row.get("model_used"),
                 "generated_at": row.get("generated_at"),

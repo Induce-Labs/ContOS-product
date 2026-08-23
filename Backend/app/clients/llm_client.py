@@ -1,15 +1,20 @@
 import json
 import logging
+import re
 import time
 from typing import Any
 
 import httpx
+from pydantic import ValidationError
 
 from app.config import Settings
 from app.errors import ConfigurationError, LlmServiceError
 from app.models.summary import SUMMARY_JSON_SCHEMA, CompetitorSummaryPayload
+from app.services.text_sanitize import sanitize_text
 
 logger = logging.getLogger(__name__)
+
+_JSON_FENCE_PATTERN = re.compile(r"^```(?:json)?\s*|\s*```$", re.IGNORECASE | re.MULTILINE)
 
 
 class LlmClient:
@@ -48,6 +53,11 @@ class LlmClient:
                 "competitor_handle": competitor_handle,
                 "content_item_count": len(content_items),
                 "prompt_chars": len(prompt),
+                "model": (
+                    self._settings.openrouter_model
+                    if self._provider == "openrouter"
+                    else self._settings.openai_model
+                ),
             },
         )
 
@@ -56,8 +66,7 @@ class LlmClient:
                 raw_content, model_used = self._call_provider(prompt)
                 if not isinstance(raw_content, str) or not raw_content.strip():
                     raise LlmServiceError(
-                        "LLM returned empty message content; cannot parse summary JSON. "
-                        "openrouter/free often fails on large prompts — retry or set a paid OPENROUTER_MODEL.",
+                        "LLM returned empty message content; cannot parse summary JSON.",
                     )
                 summary = self._parse_summary(raw_content)
                 logger.info(
@@ -70,14 +79,21 @@ class LlmClient:
                     },
                 )
                 return summary, model_used
-            except (httpx.HTTPError, LlmServiceError, json.JSONDecodeError, ValueError) as error:
+            except (
+                httpx.HTTPError,
+                LlmServiceError,
+                json.JSONDecodeError,
+                ValidationError,
+                ValueError,
+            ) as error:
                 last_error = error
                 logger.warning(
-                    "LLM summarization attempt failed",
+                    "LLM summarization attempt failed: %s",
+                    error,
                     extra={
                         "provider": self._provider,
                         "attempt": attempt,
-                        "error": str(error),
+                        "error_type": type(error).__name__,
                     },
                 )
                 if attempt <= self._settings.llm_max_retries:
@@ -92,37 +108,49 @@ class LlmClient:
             return self._call_openrouter(prompt)
         return self._call_openai(prompt)
 
+    def _request_timeout(self) -> httpx.Timeout:
+        return httpx.Timeout(
+            connect=10.0,
+            read=float(self._settings.llm_timeout_secs),
+            write=30.0,
+            pool=10.0,
+        )
+
+    def _chat_completion_body(self, *, model: str, prompt: str) -> dict[str, Any]:
+        return {
+            "model": model,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a fractional CMO analyst. Return only valid JSON "
+                        "matching the requested schema."
+                    ),
+                },
+                {"role": "user", "content": prompt},
+            ],
+            "max_tokens": self._settings.llm_max_tokens,
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "competitor_summary",
+                    "schema": SUMMARY_JSON_SCHEMA,
+                    "strict": True,
+                },
+            },
+        }
+
     def _call_openrouter(self, prompt: str) -> tuple[str, str]:
         model = self._settings.openrouter_model
 
-        with httpx.Client(timeout=90) as client:
+        with httpx.Client(timeout=self._request_timeout()) as client:
             response = client.post(
                 "https://openrouter.ai/api/v1/chat/completions",
                 headers={
                     "Authorization": f"Bearer {self._settings.openrouter_api_key}",
                     "Content-Type": "application/json",
                 },
-                json={
-                    "model": model,
-                    "messages": [
-                        {
-                            "role": "system",
-                            "content": (
-                                "You are a fractional CMO analyst. Return only valid JSON "
-                                "matching the requested schema."
-                            ),
-                        },
-                        {"role": "user", "content": prompt},
-                    ],
-                    "response_format": {
-                        "type": "json_schema",
-                        "json_schema": {
-                            "name": "competitor_summary",
-                            "schema": SUMMARY_JSON_SCHEMA,
-                            "strict": True,
-                        },
-                    },
-                },
+                json=self._chat_completion_body(model=model, prompt=prompt),
             )
 
         if response.status_code >= 400:
@@ -135,34 +163,14 @@ class LlmClient:
     def _call_openai(self, prompt: str) -> tuple[str, str]:
         model = self._settings.openai_model
 
-        with httpx.Client(timeout=90) as client:
+        with httpx.Client(timeout=self._request_timeout()) as client:
             response = client.post(
                 "https://api.openai.com/v1/chat/completions",
                 headers={
                     "Authorization": f"Bearer {self._settings.openai_api_key}",
                     "Content-Type": "application/json",
                 },
-                json={
-                    "model": model,
-                    "messages": [
-                        {
-                            "role": "system",
-                            "content": (
-                                "You are a fractional CMO analyst. Return only valid JSON "
-                                "matching the requested schema."
-                            ),
-                        },
-                        {"role": "user", "content": prompt},
-                    ],
-                    "response_format": {
-                        "type": "json_schema",
-                        "json_schema": {
-                            "name": "competitor_summary",
-                            "schema": SUMMARY_JSON_SCHEMA,
-                            "strict": True,
-                        },
-                    },
-                },
+                json=self._chat_completion_body(model=model, prompt=prompt),
             )
 
         if response.status_code >= 400:
@@ -171,6 +179,13 @@ class LlmClient:
             )
 
         return self._extract_message_content(response.json()), model
+
+    @staticmethod
+    def _normalize_json_content(raw_content: str) -> str:
+        text = raw_content.strip()
+        if text.startswith("```"):
+            text = _JSON_FENCE_PATTERN.sub("", text).strip()
+        return text
 
     @staticmethod
     def _extract_message_content(payload: dict[str, Any]) -> str:
@@ -183,7 +198,7 @@ class LlmClient:
         content = message.get("content")
 
         if isinstance(content, str):
-            return content
+            return LlmClient._normalize_json_content(content)
 
         if isinstance(content, list):
             text_parts = [
@@ -192,13 +207,12 @@ class LlmClient:
                 if isinstance(part, dict) and isinstance(part.get("text"), str)
             ]
             if text_parts:
-                return "".join(text_parts)
+                return LlmClient._normalize_json_content("".join(text_parts))
 
         raise LlmServiceError("LLM response content was missing or unreadable.")
 
-    @staticmethod
-    def _parse_summary(raw_content: str) -> CompetitorSummaryPayload:
-        payload = json.loads(raw_content)
+    def _parse_summary(self, raw_content: str) -> CompetitorSummaryPayload:
+        payload = json.loads(self._normalize_json_content(raw_content))
         return CompetitorSummaryPayload.model_validate(payload)
 
     @staticmethod
@@ -212,10 +226,17 @@ class LlmClient:
         platform_label = "LinkedIn" if platform == "linkedin" else "Instagram"
 
         for item in content_items:
+            caption = sanitize_text(str(item.get("caption") or "")) or ""
+            transcript_raw = item.get("transcript")
+            transcript = (
+                sanitize_text(transcript_raw.strip())
+                if isinstance(transcript_raw, str) and transcript_raw.strip()
+                else None
+            )
             lines = [
                 f"- external_id: {item.get('external_id')}",
                 f"  content_type: {item.get('content_type') or ('post' if platform == 'linkedin' else 'unknown')}",
-                f"  caption: {item.get('caption') or ''}",
+                f"  caption: {caption}",
                 f"  likes: {item.get('likes')}",
                 f"  views: {item.get('views')}",
                 f"  shares: {item.get('shares')}",
@@ -224,13 +245,16 @@ class LlmClient:
             ]
             if platform == "linkedin":
                 if item.get("author_name"):
-                    lines.append(f"  author_name: {item.get('author_name')}")
+                    lines.append(
+                        f"  author_name: {sanitize_text(str(item.get('author_name'))) or ''}",
+                    )
                 if item.get("author_headline"):
-                    lines.append(f"  author_headline: {item.get('author_headline')}")
+                    lines.append(
+                        f"  author_headline: {sanitize_text(str(item.get('author_headline'))) or ''}",
+                    )
 
-            transcript = item.get("transcript")
-            if isinstance(transcript, str) and transcript.strip():
-                lines.append(f"  transcript: {transcript.strip()}")
+            if transcript:
+                lines.append(f"  transcript: {transcript}")
 
             content_lines.append("\n".join(lines))
 

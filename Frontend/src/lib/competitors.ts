@@ -6,9 +6,9 @@ import { getLinkedInSlug } from './linkedin'
 
 export type Competitor = Tables<'competitors'>
 
-export const MAX_COMPETITORS_PER_PROJECT = 10
-export const MIN_COMPETITORS_PER_PROJECT = 1
-export const RECOMMENDED_COMPETITORS_PER_PROJECT = 5
+export const MAX_COMPETITORS_PER_AVATAR = 10
+export const MIN_COMPETITORS_PER_AVATAR = 1
+export const RECOMMENDED_COMPETITORS_PER_AVATAR = 5
 
 export class CompetitorsServiceError extends Error {
   constructor(message: string, cause?: unknown) {
@@ -28,11 +28,11 @@ function competitorIdentityKey(platform: CompetitorPlatform, handleOrUrl: string
   return `instagram:${getInstagramHandle(handleOrUrl)}`
 }
 
-export async function fetchCompetitorsForProject(projectId: string): Promise<Competitor[]> {
+export async function fetchCompetitorsForAvatar(avatarId: string): Promise<Competitor[]> {
   const { data, error } = await supabase
     .from('competitors')
     .select('*')
-    .eq('project_id', projectId)
+    .eq('avatar_id', avatarId)
     .order('created_at', { ascending: true })
 
   if (error) {
@@ -45,25 +45,28 @@ export async function fetchCompetitorsForProject(projectId: string): Promise<Com
   return data
 }
 
+/** @deprecated Use fetchCompetitorsForAvatar */
+export const fetchCompetitorsForProject = fetchCompetitorsForAvatar
+
 export async function createCompetitors(
-  projectId: string,
+  avatarId: string,
   handleOrUrls: string[],
   platform: CompetitorPlatform = 'instagram',
 ): Promise<Competitor[]> {
-  if (handleOrUrls.length < MIN_COMPETITORS_PER_PROJECT) {
+  if (handleOrUrls.length < MIN_COMPETITORS_PER_AVATAR) {
     throw new CompetitorsServiceError(
-      `At least ${MIN_COMPETITORS_PER_PROJECT} competitor is required.`,
+      `At least ${MIN_COMPETITORS_PER_AVATAR} competitor is required.`,
     )
   }
 
-  const existingCompetitors = await fetchCompetitorsForProject(projectId)
+  const existingCompetitors = await fetchCompetitorsForAvatar(avatarId)
 
-  if (existingCompetitors.length + handleOrUrls.length > MAX_COMPETITORS_PER_PROJECT) {
-    const remainingSlots = MAX_COMPETITORS_PER_PROJECT - existingCompetitors.length
+  if (existingCompetitors.length + handleOrUrls.length > MAX_COMPETITORS_PER_AVATAR) {
+    const remainingSlots = MAX_COMPETITORS_PER_AVATAR - existingCompetitors.length
     throw new CompetitorsServiceError(
       remainingSlots <= 0
-        ? `This project already has the maximum of ${MAX_COMPETITORS_PER_PROJECT} competitors.`
-        : `You can add at most ${remainingSlots} more competitor(s) to this project.`,
+        ? `This avatar already has the maximum of ${MAX_COMPETITORS_PER_AVATAR} competitors.`
+        : `You can add at most ${remainingSlots} more competitor(s) to this avatar.`,
     )
   }
 
@@ -81,21 +84,21 @@ export async function createCompetitors(
     if (existingKeys.has(key)) {
       throw new CompetitorsServiceError(
         platform === 'linkedin'
-          ? `${getLinkedInSlug(handleOrUrl)} is already tracked in this project.`
-          : `@${getInstagramHandle(handleOrUrl)} is already tracked in this project.`,
+          ? `${getLinkedInSlug(handleOrUrl)} is already tracked on this avatar.`
+          : `@${getInstagramHandle(handleOrUrl)} is already tracked on this avatar.`,
       )
     }
     existingKeys.add(key)
   }
 
-  if (handleOrUrls.length > MAX_COMPETITORS_PER_PROJECT) {
+  if (handleOrUrls.length > MAX_COMPETITORS_PER_AVATAR) {
     throw new CompetitorsServiceError(
-      `A project can have at most ${MAX_COMPETITORS_PER_PROJECT} competitors.`,
+      `An avatar can have at most ${MAX_COMPETITORS_PER_AVATAR} competitors.`,
     )
   }
 
   const rows: TablesInsert<'competitors'>[] = handleOrUrls.map((handleOrUrl) => ({
-    project_id: projectId,
+    avatar_id: avatarId,
     platform,
     handle_or_url: handleOrUrl,
     scrape_status: 'pending',
@@ -113,7 +116,7 @@ export async function createCompetitors(
 
 function mapCompetitorCapError(message: string): string {
   if (message.includes('competitor_cap_exceeded')) {
-    return 'This project already has the maximum of 10 competitors.'
+    return 'This avatar already has the maximum of 10 competitors.'
   }
 
   return message

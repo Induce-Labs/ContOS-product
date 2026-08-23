@@ -61,7 +61,7 @@ API docs: [http://localhost:8000/docs](http://localhost:8000/docs)
 ### Scrape enqueue
 
 ```
-POST /projects/{project_id}/competitors/scrape
+POST /avatars/{avatar_id}/competitors/scrape
 Authorization: Bearer <supabase_access_token>
 Body: { "competitor_ids": ["uuid", ...] }
 Response: 202 Accepted
@@ -73,9 +73,9 @@ Queues a FastAPI background task that branches on `competitors.platform`:
 
 **Instagram**
 
-1. Scrapes posts via Apify (`apify/instagram-post-scraper`) into `scraped_content` (30-day lookback)
+1. Scrapes posts via Apify (`apify/instagram-post-scraper`) into `instagram_scraped_content` (7-day lookback)
 2. Transcribes reel URLs via `apple_yang/instagram-transcripts-scraper`
-3. Summarizes into `content_summaries`
+3. Summarizes into `instagram_content_summaries`
 
 **LinkedIn** (see [`Docs/phase-linkedin.md`](../Docs/phase-linkedin.md))
 
@@ -88,7 +88,7 @@ Set `PIPELINE_VERBOSE=true` in `.env` to see `[PIPELINE] Step 1/3 SCRAPE`, `Step
 
 ```sql
 SELECT post_url, content_type, likes, transcription_status, transcript IS NOT NULL AS has_transcript
-FROM scraped_content
+FROM instagram_scraped_content
 WHERE competitor_id = 'YOUR_COMPETITOR_ID'
 ORDER BY posted_at DESC;
 ```

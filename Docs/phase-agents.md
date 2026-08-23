@@ -16,6 +16,13 @@ Frontend (:5173)
 - Scrape pipeline still writes `content_summaries` / `linkedin_content_summaries` as **agent memory**.
 - Primary UX after scrape: `/dashboard/:projectId/agents` with a welcome prompt asking what the user wants.
 
+## Avatar context (Phase 2)
+
+- Avatar = `projects` row. Competitors/RAG remain scoped by `project_id`.
+- Invoke may include `tagged_avatar_ids` (owned project UUIDs).
+- Resolution: tagged → active project → `is_default` → empty.
+- Profile prefers `projects.profiling_data`; see [`Docs/phase-2-avatars.md`](../Docs/phase-2-avatars.md).
+
 ## Auth & scoping
 
 - `Authorization: Bearer <supabase_access_token>` required on invoke/ingest/admin routes.

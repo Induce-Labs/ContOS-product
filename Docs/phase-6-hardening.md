@@ -39,7 +39,7 @@ Implementation: `Backend/app/api/deps.py`, `Backend/app/api/routes/projects.py`
 
 | Control | Enforcement |
 | --- | --- |
-| 30-day scrape window | `SCRAPE_LOOKBACK_DAYS=30` in backend config + Apify `onlyPostsNewerThan` |
+| 7-day scrape window | `SCRAPE_LOOKBACK_DAYS=7` in backend config + Apify `onlyPostsNewerThan` |
 | Apify result cap | `resultsLimit: 50` per profile scrape |
 | Transcription batching | 5 URLs per bulk run (`TRANSCRIBE_BATCH_SIZE`), then single-URL retries; optional `APIFY_INSTAGRAM_SESSION_ID` |
 | Transcription errors | Stored in `scraped_content.transcription_error` |
@@ -107,7 +107,7 @@ pytest
 
 | Variable | Change |
 | --- | --- |
-| `SCRAPE_LOOKBACK_DAYS` | Default changed from `10` to `30` |
+| `SCRAPE_LOOKBACK_DAYS` | Default changed from `30` to `7` (last week of content) |
 | `APIFY_INSTAGRAM_SESSION_ID` | Optional Instagram cookie for transcription reliability |
 | `TRANSCRIBE_BATCH_SIZE` | Default `5` bulk URLs per transcriber run |
 | `TRANSCRIBE_RETRY_DELAY_SECS` | Default `1.5` between single-URL retries |

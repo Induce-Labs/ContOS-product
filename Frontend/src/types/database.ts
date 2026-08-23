@@ -24,7 +24,7 @@ export type Database = {
           last_scraped_at: string | null
           pipeline_step: string
           platform: string
-          project_id: string
+          avatar_id: string
           scrape_status: string
         }
         Insert: {
@@ -36,7 +36,7 @@ export type Database = {
           last_scraped_at?: string | null
           pipeline_step?: string
           platform: string
-          project_id: string
+          avatar_id: string
           scrape_status?: string
         }
         Update: {
@@ -48,27 +48,27 @@ export type Database = {
           last_scraped_at?: string | null
           pipeline_step?: string
           platform?: string
-          project_id?: string
+          avatar_id?: string
           scrape_status?: string
         }
         Relationships: [
           {
-            foreignKeyName: "competitors_project_id_fkey"
-            columns: ["project_id"]
+            foreignKeyName: "competitors_avatar_id_fkey"
+            columns: ["avatar_id"]
             isOneToOne: false
-            referencedRelation: "projects"
+            referencedRelation: "avatars"
             referencedColumns: ["id"]
           },
         ]
       }
-      content_summaries: {
+      instagram_content_summaries: {
         Row: {
           competitor_id: string
           embedding: string | null
           generated_at: string
           id: string
           model_used: string
-          project_id: string
+          avatar_id: string
           summary: Json
         }
         Insert: {
@@ -77,7 +77,7 @@ export type Database = {
           generated_at?: string
           id?: string
           model_used: string
-          project_id: string
+          avatar_id: string
           summary: Json
         }
         Update: {
@@ -86,22 +86,22 @@ export type Database = {
           generated_at?: string
           id?: string
           model_used?: string
-          project_id?: string
+          avatar_id?: string
           summary?: Json
         }
         Relationships: [
           {
-            foreignKeyName: "content_summaries_competitor_id_fkey"
+            foreignKeyName: "instagram_content_summaries_competitor_id_fkey"
             columns: ["competitor_id"]
             isOneToOne: false
             referencedRelation: "competitors"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "content_summaries_project_id_fkey"
-            columns: ["project_id"]
+            foreignKeyName: "instagram_content_summaries_avatar_id_fkey"
+            columns: ["avatar_id"]
             isOneToOne: false
-            referencedRelation: "projects"
+            referencedRelation: "avatars"
             referencedColumns: ["id"]
           },
         ]
@@ -113,7 +113,7 @@ export type Database = {
           generated_at: string
           id: string
           model_used: string
-          project_id: string
+          avatar_id: string
           summary: Json
         }
         Insert: {
@@ -122,7 +122,7 @@ export type Database = {
           generated_at?: string
           id?: string
           model_used: string
-          project_id: string
+          avatar_id: string
           summary: Json
         }
         Update: {
@@ -131,7 +131,7 @@ export type Database = {
           generated_at?: string
           id?: string
           model_used?: string
-          project_id?: string
+          avatar_id?: string
           summary?: Json
         }
         Relationships: [
@@ -143,10 +143,10 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "linkedin_content_summaries_project_id_fkey"
-            columns: ["project_id"]
+            foreignKeyName: "linkedin_content_summaries_avatar_id_fkey"
+            columns: ["avatar_id"]
             isOneToOne: false
-            referencedRelation: "projects"
+            referencedRelation: "avatars"
             referencedColumns: ["id"]
           },
         ]
@@ -207,11 +207,44 @@ export type Database = {
           },
         ]
       }
-      projects: {
+      profiling_questions: {
+        Row: {
+          created_at: string
+          display_order: number
+          id: string
+          is_active: boolean
+          question: string
+          question_key: string
+          type: string
+        }
+        Insert: {
+          created_at?: string
+          display_order?: number
+          id?: string
+          is_active?: boolean
+          question: string
+          question_key: string
+          type: string
+        }
+        Update: {
+          created_at?: string
+          display_order?: number
+          id?: string
+          is_active?: boolean
+          question?: string
+          question_key?: string
+          type?: string
+        }
+        Relationships: []
+      }
+      avatars: {
         Row: {
           created_at: string
           id: string
+          is_default: boolean
           name: string
+          profiling_completeness: number
+          profiling_data: Json
           status: string
           type: string
           updated_at: string
@@ -220,7 +253,10 @@ export type Database = {
         Insert: {
           created_at?: string
           id?: string
+          is_default?: boolean
           name: string
+          profiling_completeness?: number
+          profiling_data?: Json
           status?: string
           type: string
           updated_at?: string
@@ -229,7 +265,10 @@ export type Database = {
         Update: {
           created_at?: string
           id?: string
+          is_default?: boolean
           name?: string
+          profiling_completeness?: number
+          profiling_data?: Json
           status?: string
           type?: string
           updated_at?: string
@@ -237,7 +276,7 @@ export type Database = {
         }
         Relationships: []
       }
-      scraped_content: {
+      instagram_scraped_content: {
         Row: {
           caption: string | null
           comments_count: number | null
@@ -297,7 +336,7 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "scraped_content_competitor_id_fkey"
+            foreignKeyName: "instagram_scraped_content_competitor_id_fkey"
             columns: ["competitor_id"]
             isOneToOne: false
             referencedRelation: "competitors"
@@ -310,7 +349,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      set_default_avatar: {
+        Args: { p_avatar_id: string }
+        Returns: Database["public"]["Tables"]["avatars"]["Row"]
+      }
     }
     Enums: {
       [_ in never]: never

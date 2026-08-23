@@ -57,10 +57,14 @@ class TestSecretExposureGuards:
 
 
 class TestIdempotencyContract:
-    def test_scraped_content_unique_constraint_documented_in_schema(self) -> None:
-        migration = (
+    def test_instagram_scraped_content_unique_constraint_documented(self) -> None:
+        rename_migration = (
+            REPO_ROOT / "supabase" / "migrations" / "20260823120000_rename_tables_for_clarity.sql"
+        ).read_text(encoding="utf-8")
+        base_migration = (
             REPO_ROOT / "supabase" / "migrations" / "20260705120000_create_contos_schema.sql"
         ).read_text(encoding="utf-8")
 
-        assert "scraped_content_competitor_external_id_unique" in migration
-        assert "UNIQUE (competitor_id, external_id)" in migration
+        assert "instagram_scraped_content" in rename_migration
+        assert "scraped_content_competitor_external_id_unique" in base_migration
+        assert "UNIQUE (competitor_id, external_id)" in base_migration

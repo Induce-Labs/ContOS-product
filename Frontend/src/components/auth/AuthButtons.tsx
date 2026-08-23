@@ -28,16 +28,19 @@ type PrimaryButtonProps = {
   children: React.ReactNode
   disabled?: boolean
   type?: 'button' | 'submit'
+  onClick?: () => void
 }
 
 export function PrimaryButton({
   children,
   disabled = false,
   type = 'submit',
+  onClick,
 }: PrimaryButtonProps) {
   return (
     <button
       type={type}
+      onClick={onClick}
       disabled={disabled}
       className="w-full rounded-xl bg-accent-primary px-4 py-3 text-sm font-medium text-white transition hover:bg-accent-primary-deep disabled:cursor-not-allowed disabled:opacity-60"
     >

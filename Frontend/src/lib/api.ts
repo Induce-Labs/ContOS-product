@@ -16,7 +16,7 @@ type EnqueueScrapeResponse = {
 }
 
 export async function enqueueCompetitorScrapeJobs(
-  projectId: string,
+  avatarId: string,
   competitorIds: string[],
 ): Promise<void> {
   if (competitorIds.length === 0) {
@@ -37,7 +37,7 @@ export async function enqueueCompetitorScrapeJobs(
   }
 
   const response = await fetch(
-    `${getApiBaseUrl()}/projects/${projectId}/competitors/scrape`,
+    `${getApiBaseUrl()}/avatars/${avatarId}/competitors/scrape`,
     {
       method: 'POST',
       headers: {
@@ -69,12 +69,12 @@ export async function enqueueCompetitorScrapeJobs(
 }
 
 export function enqueueCompetitorScrapeJobsInBackground(
-  projectId: string,
+  avatarId: string,
   competitorIds: string[],
 ): void {
-  void enqueueCompetitorScrapeJobs(projectId, competitorIds).catch((error: unknown) => {
+  void enqueueCompetitorScrapeJobs(avatarId, competitorIds).catch((error: unknown) => {
     console.warn('Failed to enqueue competitor scrape jobs in background', {
-      projectId,
+      avatarId,
       competitorIds,
       error: error instanceof Error ? error.message : String(error),
     })
@@ -83,14 +83,14 @@ export function enqueueCompetitorScrapeJobsInBackground(
 
 /** Prefer this over the background helper when the UI should surface enqueue failures. */
 export async function enqueueCompetitorScrapeJobsOrThrow(
-  projectId: string,
+  avatarId: string,
   competitorIds: string[],
 ): Promise<void> {
-  await enqueueCompetitorScrapeJobs(projectId, competitorIds)
+  await enqueueCompetitorScrapeJobs(avatarId, competitorIds)
 }
 
 export async function stopCompetitorPipeline(
-  projectId: string,
+  avatarId: string,
   competitorId: string,
 ): Promise<void> {
   const {
@@ -107,7 +107,7 @@ export async function stopCompetitorPipeline(
   }
 
   const response = await fetch(
-    `${getApiBaseUrl()}/projects/${projectId}/competitors/${competitorId}/stop`,
+    `${getApiBaseUrl()}/avatars/${avatarId}/competitors/${competitorId}/stop`,
     {
       method: 'POST',
       headers: {
