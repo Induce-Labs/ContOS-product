@@ -9,6 +9,25 @@ import {
   invokeAgentStream,
   type AgentType,
 } from '../lib/agentsApi'
+import { buildChatHistoryForInvoke } from '../lib/agentChatMemory'
+import {
+  fetchRemoteChatStore,
+  upsertRemoteChatStore,
+} from '../lib/agentChatRemote'
+import {
+  createEmptyStore,
+  getActiveSession,
+  listChatSessions,
+  loadChatStore,
+  saveChatStore,
+  sessionHasUserMessages,
+  startNewChatSession,
+  storeUpdatedAtMs,
+  switchChatSession,
+  updateActiveSessionMessages,
+  type ChatStore,
+  type StoredChatMessage,
+} from '../lib/agentChatStorage'
 
 type ChatRole = 'assistant' | 'user'
 
@@ -33,6 +52,26 @@ function newId(): string {
     return crypto.randomUUID()
   }
   return `msg-${Date.now()}-${Math.random().toString(16).slice(2)}`
+}
+
+function makeWelcomeMessage(): ChatMessage {
+  return {
+    id: newId(),
+    role: 'assistant',
+    content: AGENTS_WELCOME_MESSAGE,
+    agentType: 'chatbot',
+  }
+}
+
+function formatSessionTime(iso: string): string {
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return ''
+  return date.toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  })
 }
 
 function formatAgentOutput(output: unknown): string {
@@ -63,16 +102,40 @@ export function AgentsPage() {
   const [agentType, setAgentType] = useState<AgentType>('chatbot')
   const [input, setInput] = useState('')
   const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [chatStore, setChatStore] = useState<ChatStore | null>(null)
+  const [historyOpen, setHistoryOpen] = useState(false)
   const [streaming, setStreaming] = useState(false)
   const [statusText, setStatusText] = useState('')
   const [sendError, setSendError] = useState<string | null>(null)
+  const [syncError, setSyncError] = useState<string | null>(null)
   const [taggedAvatarIds, setTaggedAvatarIds] = useState<string[]>([])
   const [mentionOpen, setMentionOpen] = useState(false)
   const [mentionQuery, setMentionQuery] = useState('')
   const bottomRef = useRef<HTMLDivElement | null>(null)
   const abortRef = useRef<AbortController | null>(null)
-  const welcomeSeededForProject = useRef<string | null>(null)
+  const chatStoreRef = useRef<ChatStore | null>(null)
+  const skipPersistRef = useRef(false)
+  const remoteSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const inputRef = useRef<HTMLInputElement | null>(null)
+
+  function queueRemoteSave(userId: string, avatarId: string, store: ChatStore) {
+    if (remoteSaveTimerRef.current) {
+      clearTimeout(remoteSaveTimerRef.current)
+    }
+    remoteSaveTimerRef.current = setTimeout(() => {
+      void upsertRemoteChatStore(userId, avatarId, store)
+        .then(() => {
+          setSyncError(null)
+        })
+        .catch((error) => {
+          setSyncError(
+            error instanceof Error
+              ? error.message
+              : 'Failed to sync chat history to Supabase.',
+          )
+        })
+    }, 600)
+  }
 
   useEffect(() => {
     let mounted = true
@@ -86,6 +149,7 @@ export function AgentsPage() {
 
       setIsLoading(true)
       setLoadError(null)
+      setSyncError(null)
 
       try {
         const userProjects = await fetchUserProjects()
@@ -103,23 +167,55 @@ export function AgentsPage() {
         setCompetitors(projectCompetitors)
         setSelectedCompetitorId(projectCompetitors[0]?.id ?? null)
 
-        if (welcomeSeededForProject.current !== projectId) {
-          welcomeSeededForProject.current = projectId
-          setMessages([
-            {
-              id: newId(),
-              role: 'assistant',
-              content: AGENTS_WELCOME_MESSAGE,
-              agentType: 'chatbot',
-            },
-          ])
+        const welcome = makeWelcomeMessage() as StoredChatMessage
+        let store = user?.id
+          ? loadChatStore(user.id, projectId, welcome)
+          : createEmptyStore(welcome)
+
+        skipPersistRef.current = true
+        chatStoreRef.current = store
+        setChatStore(store)
+        setMessages(getActiveSession(store).messages as ChatMessage[])
+        setHistoryOpen(false)
+        setIsLoading(false)
+
+        if (!user?.id) {
+          return
+        }
+
+        try {
+          const remote = await fetchRemoteChatStore(user.id, projectId, welcome)
+          if (!mounted) return
+
+          if (remote) {
+            const localTs = storeUpdatedAtMs(store)
+            const remoteTs = new Date(remote.updatedAt).getTime()
+            if (remoteTs >= localTs) {
+              store = remote.store
+              skipPersistRef.current = true
+              chatStoreRef.current = store
+              setChatStore(store)
+              setMessages(getActiveSession(store).messages as ChatMessage[])
+              saveChatStore(user.id, projectId, store)
+            } else if (sessionHasUserMessages(getActiveSession(store).messages)) {
+              await upsertRemoteChatStore(user.id, projectId, store)
+            }
+          } else if (sessionHasUserMessages(getActiveSession(store).messages)) {
+            await upsertRemoteChatStore(user.id, projectId, store)
+          }
+          if (mounted) setSyncError(null)
+        } catch (error) {
+          if (mounted) {
+            setSyncError(
+              error instanceof Error
+                ? error.message
+                : 'Failed to sync chat history from Supabase.',
+            )
+          }
         }
       } catch (error) {
         if (mounted) {
           setLoadError(error instanceof Error ? error.message : 'Failed to load Agents.')
-        }
-      } finally {
-        if (mounted) {
           setIsLoading(false)
         }
       }
@@ -129,12 +225,80 @@ export function AgentsPage() {
     return () => {
       mounted = false
       abortRef.current?.abort()
+      if (remoteSaveTimerRef.current) {
+        clearTimeout(remoteSaveTimerRef.current)
+      }
     }
-  }, [projectId])
+  }, [projectId, user?.id])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, streaming, statusText])
+
+  useEffect(() => {
+    if (!user?.id || !projectId || !chatStoreRef.current) {
+      return
+    }
+    if (skipPersistRef.current) {
+      skipPersistRef.current = false
+      return
+    }
+    const next = updateActiveSessionMessages(chatStoreRef.current, messages as StoredChatMessage[])
+    chatStoreRef.current = next
+    setChatStore(next)
+    saveChatStore(user.id, projectId, next)
+    // Avoid writing every SSE token to Supabase — sync when stream settles.
+    if (!streaming) {
+      queueRemoteSave(user.id, projectId, next)
+    }
+  }, [messages, user?.id, projectId, streaming])
+
+  function handleNewChat() {
+    if (streaming) {
+      abortRef.current?.abort()
+      setStreaming(false)
+      setStatusText('')
+    }
+    const welcome = makeWelcomeMessage() as StoredChatMessage
+    const base = chatStoreRef.current ?? createEmptyStore(welcome)
+    const next = startNewChatSession(base, welcome)
+    skipPersistRef.current = true
+    chatStoreRef.current = next
+    setChatStore(next)
+    setMessages(getActiveSession(next).messages as ChatMessage[])
+    setSendError(null)
+    setHistoryOpen(false)
+    if (user?.id && projectId) {
+      saveChatStore(user.id, projectId, next)
+      queueRemoteSave(user.id, projectId, next)
+    }
+  }
+
+  function handleSelectSession(sessionId: string) {
+    if (!chatStoreRef.current) {
+      return
+    }
+    if (streaming) {
+      abortRef.current?.abort()
+      setStreaming(false)
+      setStatusText('')
+    }
+    try {
+      const next = switchChatSession(chatStoreRef.current, sessionId)
+      skipPersistRef.current = true
+      chatStoreRef.current = next
+      setChatStore(next)
+      setMessages(getActiveSession(next).messages as ChatMessage[])
+      setSendError(null)
+      setHistoryOpen(false)
+      if (user?.id && projectId) {
+        saveChatStore(user.id, projectId, next)
+        queueRemoteSave(user.id, projectId, next)
+      }
+    } catch (error) {
+      setSendError(error instanceof Error ? error.message : 'Could not open that chat.')
+    }
+  }
 
   const researchReady =
     project?.status === 'ready' ||
@@ -210,6 +374,7 @@ export function AgentsPage() {
     const taggedNames = taggedAvatarIds
       .map((id) => projects.find((avatar) => avatar.id === id)?.name)
       .filter((name): name is string => !!name)
+    const chatHistory = buildChatHistoryForInvoke(messages)
     const userMessage: ChatMessage = {
       id: newId(),
       role: 'user',
@@ -238,6 +403,7 @@ export function AgentsPage() {
           user_input: text,
           chatbot_context_on: true,
           tagged_avatar_ids: taggedAvatarIds.length > 0 ? taggedAvatarIds : undefined,
+          chat_history: chatHistory.length > 0 ? chatHistory : undefined,
         },
         {
           onStatus: (data) => {
@@ -356,6 +522,16 @@ export function AgentsPage() {
           onAddCompetitor={() => navigate(`/dashboard/${projectId}`)}
           isAddCompetitorOpen={false}
           onAvatarsChanged={setProjects}
+          chatActions={{
+            onNewChat: handleNewChat,
+            onToggleHistory: () => setHistoryOpen((open) => !open),
+            historyOpen,
+            previousChatCount: chatStore
+              ? listChatSessions(chatStore).filter((session) =>
+                  sessionHasUserMessages(session.messages),
+                ).length
+              : 0,
+          }}
         />
 
         <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-4 py-6 sm:px-8">
@@ -369,13 +545,85 @@ export function AgentsPage() {
                 Ask for strategies and content ideas from your competitor research.
               </p>
             </div>
-            <Link
-              to={`/dashboard/${projectId}`}
-              className="rounded-xl border border-border-hairline px-3 py-2 text-sm text-ink hover:bg-accent-primary-soft"
-            >
-              Research progress
-            </Link>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={handleNewChat}
+                className="rounded-xl bg-accent-primary px-4 py-2 text-sm font-medium text-white transition hover:bg-accent-primary-deep"
+              >
+                New chat
+              </button>
+              <button
+                type="button"
+                onClick={() => setHistoryOpen((open) => !open)}
+                className={`rounded-xl border px-4 py-2 text-sm font-medium transition ${
+                  historyOpen
+                    ? 'border-accent-primary bg-accent-primary-soft text-accent-primary-deep'
+                    : 'border-border-hairline text-ink hover:bg-accent-primary-soft'
+                }`}
+              >
+                Previous chats
+              </button>
+              <Link
+                to={`/dashboard/${projectId}`}
+                className="rounded-xl border border-border-hairline px-3 py-2 text-sm text-ink hover:bg-accent-primary-soft"
+              >
+                Research progress
+              </Link>
+            </div>
           </div>
+
+          {historyOpen ? (
+            <div className="mb-4 rounded-2xl border border-border-hairline bg-canvas-raised p-4">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <p className="text-sm font-medium text-ink">Previous chats</p>
+                <button
+                  type="button"
+                  onClick={() => setHistoryOpen(false)}
+                  className="text-xs text-ink-muted hover:text-ink"
+                >
+                  Close
+                </button>
+              </div>
+              {chatStore && listChatSessions(chatStore).length > 0 ? (
+                <ul className="max-h-56 space-y-1 overflow-y-auto">
+                  {listChatSessions(chatStore).map((session) => {
+                    const isActive = session.id === chatStore.activeSessionId
+                    return (
+                      <li key={session.id}>
+                        <button
+                          type="button"
+                          onClick={() => handleSelectSession(session.id)}
+                          className={`w-full rounded-xl px-3 py-2.5 text-left transition ${
+                            isActive
+                              ? 'bg-accent-primary text-white'
+                              : 'hover:bg-accent-primary-soft'
+                          }`}
+                        >
+                          <span className="block truncate text-sm font-medium">
+                            {session.title}
+                          </span>
+                          <span
+                            className={`mt-0.5 block text-xs ${
+                              isActive ? 'text-white/80' : 'text-ink-muted'
+                            }`}
+                          >
+                            {formatSessionTime(session.updatedAt)}
+                            {isActive ? ' · Current' : ''}
+                          </span>
+                        </button>
+                      </li>
+                    )
+                  })}
+                </ul>
+              ) : (
+                <p className="text-sm text-ink-muted">
+                  No earlier chats yet. Start a conversation, then use New chat to begin another
+                  thread.
+                </p>
+              )}
+            </div>
+          ) : null}
 
           {!researchReady ? (
             <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
@@ -444,6 +692,11 @@ export function AgentsPage() {
             {sendError ? (
               <p className="border-t border-red-100 bg-red-50 px-4 py-2 text-sm text-red-700">
                 {sendError}
+              </p>
+            ) : null}
+            {syncError ? (
+              <p className="border-t border-amber-100 bg-amber-50 px-4 py-2 text-sm text-amber-800">
+                Chat sync: {syncError}
               </p>
             ) : null}
 

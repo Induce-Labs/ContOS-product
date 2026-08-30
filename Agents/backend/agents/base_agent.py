@@ -205,17 +205,47 @@ class BaseAgent:
         context: dict[str, Any],
         user_input: str,
         chatbot_context_on: bool = False,
+        chat_history: list[dict[str, str]] | None = None,
     ) -> list[dict[str, str]]:
-        if self.agent_type == "chatbot" and not chatbot_context_on:
-            return [
+        history = [turn for turn in (chat_history or []) if turn.get("content")]
+
+        def _with_history(final_user_content: str) -> list[dict[str, str]]:
+            messages: list[dict[str, str]] = [
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_input},
             ]
+            for turn in history:
+                role = turn.get("role")
+                content = (turn.get("content") or "").strip()
+                if role not in ("user", "assistant") or not content:
+                    continue
+                messages.append({"role": role, "content": content})
+            messages.append({"role": "user", "content": final_user_content})
+            return messages
+
+        def _memory_block() -> str:
+            if not history:
+                return ""
+            lines = [
+                f"{turn['role'].upper()}: {turn['content']}"
+                for turn in history
+                if turn.get("role") in ("user", "assistant") and turn.get("content")
+            ]
+            if not lines:
+                return ""
+            return (
+                "\n\nCONVERSATION MEMORY (prior turns in this thread — "
+                "stay consistent with what was already discussed):\n"
+                + "\n".join(lines)
+            )
+
+        if self.agent_type == "chatbot" and not chatbot_context_on:
+            return _with_history(f"{user_input}{_memory_block()}")
 
         context_block = json.dumps(context, default=str)
         user_content = (
             f"CONTEXT (assembled via MCP tools):\n{context_block}\n\n"
             f"USER REQUEST:\n{user_input}"
+            f"{_memory_block()}"
         )
         if self.structured_output:
             user_content += (
@@ -227,10 +257,7 @@ class BaseAgent:
                 "Include reasoning for every creative recommendation. Be concise. "
                 "Never use asterisk (*) characters."
             )
-        return [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_content},
-        ]
+        return _with_history(user_content)
 
     def parse_output(self, raw: str) -> Any:
         if not self.structured_output:
@@ -483,6 +510,7 @@ class BaseAgent:
         competitor_url: str | None = None,
         competitor_summaries: list[dict[str, Any]] | None = None,
         tagged_avatar_ids: list[str] | None = None,
+        chat_history: list[dict[str, str]] | None = None,
         stream: bool = True,
     ) -> Generator[dict[str, Any], None, None]:
         """Execute the agent pipeline, yielding SSE-ready event dicts."""
@@ -576,7 +604,11 @@ class BaseAgent:
                 multi_avatar=bool(avatar_bundle and avatar_bundle.get("multi_avatar")),
             )
             messages = self.build_messages(
-                system_prompt, context, user_input, chatbot_context_on
+                system_prompt,
+                context,
+                user_input,
+                chatbot_context_on,
+                chat_history=chat_history,
             )
 
             yield {

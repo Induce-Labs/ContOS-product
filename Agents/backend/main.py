@@ -10,7 +10,6 @@ from pathlib import Path
 from typing import Any, Literal
 from uuid import UUID
 
-from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
@@ -21,7 +20,9 @@ BACKEND_ROOT = Path(__file__).resolve().parent
 if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
-load_dotenv(BACKEND_ROOT / ".env", override=True)
+from env_loader import load_agents_env  # noqa: E402
+
+load_agents_env()
 
 from agents import get_agent  # noqa: E402
 from auth import (  # noqa: E402
@@ -29,6 +30,7 @@ from auth import (  # noqa: E402
     require_admin_user,
     verify_avatar_owner,
 )
+from chat_history import ChatHistoryTurn, normalize_chat_history  # noqa: E402
 from embeddings.embed import (  # noqa: E402
     backfill_content_summary_embeddings,
     backfill_linkedin_summary_embeddings,
@@ -51,10 +53,19 @@ cors_origins = [
     o.strip()
     for o in os.getenv(
         "CORS_ORIGINS",
-        "http://localhost:5173,http://localhost:5174,http://localhost:3000",
+        "http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174,http://localhost:3000,http://127.0.0.1:3000",
     ).split(",")
     if o.strip()
 ]
+# Always allow local Vite on both localhost and 127.0.0.1 (browsers treat them as different origins).
+for _origin in (
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:5174",
+    "http://127.0.0.1:5174",
+):
+    if _origin not in cors_origins:
+        cors_origins.append(_origin)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins or ["*"],
@@ -79,6 +90,10 @@ class InvokeRequest(BaseModel):
         default=None,
         description="Optional Avatar IDs to include in strategy context",
     )
+    chat_history: list[ChatHistoryTurn] | None = Field(
+        default=None,
+        description="Prior user/assistant turns in this thread (max 12 after normalize)",
+    )
 
 
 class CompetitorIngestItem(BaseModel):
@@ -97,6 +112,10 @@ def _sse(event: str, data: dict[str, Any]) -> str:
 
 @app.get("/api/health")
 def health() -> dict[str, Any]:
+    from env_loader import _SCRAPE_BACKEND_ENV, load_agents_env as _load
+
+    _load()
+    scrape_env = _SCRAPE_BACKEND_ENV
     return {
         "status": "ok",
         "service": "contos-agents",
@@ -110,6 +129,8 @@ def health() -> dict[str, Any]:
         "supabase_configured": bool(
             os.getenv("SUPABASE_URL") and os.getenv("SUPABASE_SERVICE_ROLE_KEY")
         ),
+        "scrape_env_found": scrape_env.is_file(),
+        "scrape_env_bytes": scrape_env.stat().st_size if scrape_env.is_file() else 0,
     }
 
 
@@ -185,6 +206,7 @@ def invoke_agent(
     user_id: UUID = Depends(get_current_user_id),
 ) -> StreamingResponse:
     """Invoke an agent and stream SSE events (status, token, complete, error)."""
+    load_agents_env()
     verify_avatar_owner(body.avatar_id, user_id)
 
     # Validate tagged avatars early (ownership) before streaming
@@ -204,6 +226,11 @@ def invoke_agent(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    try:
+        normalized_history = normalize_chat_history(body.chat_history)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     auth_user_id = str(user_id)
     auth_avatar_id = body.avatar_id
 
@@ -219,6 +246,7 @@ def invoke_agent(
                 competitor_url=body.competitor_url,
                 competitor_summaries=body.competitor_summaries,
                 tagged_avatar_ids=body.tagged_avatar_ids,
+                chat_history=normalized_history,
                 stream=True,
             ):
                 yield _sse(evt["event"], evt["data"])

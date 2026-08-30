@@ -8,14 +8,12 @@ from __future__ import annotations
 import logging
 import os
 from functools import lru_cache
-from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
-from dotenv import load_dotenv
+from env_loader import load_agents_env
 
-_ENV_PATH = Path(__file__).resolve().parents[1] / ".env"
-load_dotenv(_ENV_PATH, override=True)
+load_agents_env()
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +31,7 @@ def _normalize_supabase_url(url: str | None) -> str | None:
 @lru_cache(maxsize=1)
 def get_supabase_client():
     """Return a Supabase client or None if credentials are missing/invalid."""
-    load_dotenv(_ENV_PATH, override=True)
+    load_agents_env()
     url = _normalize_supabase_url(os.getenv("SUPABASE_URL"))
     key = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_KEY")
     if not url or not key:

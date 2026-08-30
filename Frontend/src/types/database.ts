@@ -14,6 +14,35 @@ export type Database = {
   }
   public: {
     Tables: {
+      agent_chat_stores: {
+        Row: {
+          avatar_id: string
+          store: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          avatar_id: string
+          store: Json
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          avatar_id?: string
+          store?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_chat_stores_avatar_id_fkey"
+            columns: ["avatar_id"]
+            isOneToOne: false
+            referencedRelation: "avatars"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       competitors: {
         Row: {
           cancel_requested: boolean

@@ -20,6 +20,13 @@ type DashboardSidebarProps = {
   onAddCompetitor: () => void
   isAddCompetitorOpen: boolean
   onAvatarsChanged?: (avatars: Project[]) => void
+  /** When set on the Agents page, replaces “Open chat” with New / Previous chat controls. */
+  chatActions?: {
+    onNewChat: () => void
+    onToggleHistory: () => void
+    historyOpen: boolean
+    previousChatCount: number
+  }
 }
 
 export function DashboardSidebar({
@@ -31,6 +38,7 @@ export function DashboardSidebar({
   onAddCompetitor,
   isAddCompetitorOpen,
   onAvatarsChanged,
+  chatActions,
 }: DashboardSidebarProps) {
   const location = useLocation()
   const navigate = useNavigate()
@@ -174,16 +182,38 @@ export function DashboardSidebar({
             </span>
           </div>
 
-          <Link
-            to={`/dashboard/${activeProject.id}/agents`}
-            className={`mb-3 block rounded-xl px-3 py-2 text-center text-xs font-medium transition ${
-              onAgentsPage
-                ? 'bg-accent-primary text-white'
-                : 'border border-border-hairline text-accent-primary hover:bg-accent-primary-soft'
-            }`}
-          >
-            Open chat
-          </Link>
+          {onAgentsPage && chatActions ? (
+            <div className="mb-3 space-y-2">
+              <button
+                type="button"
+                onClick={chatActions.onNewChat}
+                className="block w-full rounded-xl bg-accent-primary px-3 py-2.5 text-center text-sm font-medium text-white transition hover:bg-accent-primary-deep"
+              >
+                New chat
+              </button>
+              <button
+                type="button"
+                onClick={chatActions.onToggleHistory}
+                className={`block w-full rounded-xl border px-3 py-2.5 text-center text-sm font-medium transition ${
+                  chatActions.historyOpen
+                    ? 'border-accent-primary bg-accent-primary-soft text-accent-primary-deep'
+                    : 'border-border-hairline text-ink hover:bg-accent-primary-soft'
+                }`}
+              >
+                Previous chats
+                {chatActions.previousChatCount > 0
+                  ? ` (${chatActions.previousChatCount})`
+                  : ''}
+              </button>
+            </div>
+          ) : (
+            <Link
+              to={`/dashboard/${activeProject.id}/agents`}
+              className="mb-3 block rounded-xl border border-border-hairline px-3 py-2.5 text-center text-sm font-medium text-accent-primary transition hover:bg-accent-primary-soft"
+            >
+              Open chat
+            </Link>
+          )}
 
           <div className="min-h-0 flex-1 space-y-1 overflow-y-auto">
             {competitors.length === 0 ? (

@@ -48,10 +48,17 @@ class ChatbotAgent(BaseAgent):
         competitor_url: str | None = None,
         competitor_summaries: list[dict[str, Any]] | None = None,
         tagged_avatar_ids: list[str] | None = None,
+        chat_history: list[dict[str, str]] | None = None,
         stream: bool = True,
     ) -> Generator[dict[str, Any], None, None]:
         # Instant path for greetings — skip OpenRouter entirely
-        if _is_greeting(user_input) and not live_mode and not competitor_summaries:
+        # (skip when prior turns exist so mid-thread "hi" still uses memory)
+        if (
+            _is_greeting(user_input)
+            and not live_mode
+            and not competitor_summaries
+            and not chat_history
+        ):
             reply = (
                 "Hey! I'm ContOS — your fractional CMO assistant. "
                 "What would you like help with today?"
@@ -112,5 +119,6 @@ class ChatbotAgent(BaseAgent):
             competitor_url=competitor_url,
             competitor_summaries=competitor_summaries,
             tagged_avatar_ids=tagged_avatar_ids,
+            chat_history=chat_history,
             stream=stream,
         )

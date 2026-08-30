@@ -5,6 +5,7 @@ import {
   useState,
   type ReactNode,
 } from 'react'
+import { clearAgentChatsForUser } from '../lib/agentChatStorage'
 import { supabase } from '../lib/supabase'
 import { AuthContext, type AuthContextValue } from './auth-context'
 
@@ -50,12 +51,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, [])
 
   const signOut = useCallback(async () => {
+    const userId = session?.user?.id
     const { error } = await supabase.auth.signOut()
 
     if (error) {
       throw new Error(`Sign out failed: ${error.message}`)
     }
-  }, [])
+
+    clearAgentChatsForUser(userId)
+  }, [session?.user?.id])
 
   const value = useMemo<AuthContextValue>(
     () => ({

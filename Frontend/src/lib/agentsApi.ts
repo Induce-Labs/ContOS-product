@@ -20,6 +20,8 @@ export type AgentsInvokeRequest = {
   chatbot_context_on?: boolean
   competitor_url?: string | null
   tagged_avatar_ids?: string[]
+  /** Prior turns in this thread (excludes the message about to be sent). */
+  chat_history?: Array<{ role: 'user' | 'assistant'; content: string }>
 }
 
 export type AgentsSseHandlers = {
@@ -156,6 +158,10 @@ export async function invokeAgentStream(
       tagged_avatar_ids: body.tagged_avatar_ids?.length
         ? body.tagged_avatar_ids
         : undefined,
+      chat_history:
+        body.chat_history && body.chat_history.length > 0
+          ? body.chat_history
+          : undefined,
     }),
     signal,
   })

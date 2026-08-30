@@ -219,15 +219,21 @@ Optional open policies for local/dev if not using the **secret / service_role** 
 
 ```json
 {
-  "user_id": "uuid",
-  "project_id": "uuid",
+  "avatar_id": "uuid",
   "agent_type": "playbook | instagram | linkedin | twitter | chatbot",
   "user_input": "string",
   "live_mode": false,
   "chatbot_context_on": false,
-  "competitor_url": null
+  "competitor_url": null,
+  "tagged_avatar_ids": ["uuid"],
+  "chat_history": [
+    { "role": "user", "content": "prior message" },
+    { "role": "assistant", "content": "prior reply" }
+  ]
 }
 ```
+
+`chat_history` is optional. Backend keeps at most the last 12 user/assistant turns (2000 chars each) and injects them into the LLM messages for thread continuity.
 
 ---
 
@@ -262,6 +268,8 @@ Optional open policies for local/dev if not using the **secret / service_role** 
 #    sql/001_agent_tables.sql
 #    sql/002_rls_policies.sql
 #    sql/003_content_summary_embeddings.sql  (optional RPC/index)
+#    sql/005_agent_chat_stores.sql  (chat history JSONB + RLS)
+#    Or apply repo migrations under supabase/migrations/
 
 # 2) Backend (use port 8001 if 8000 is blocked on Windows)
 cd contos-agents/backend
@@ -307,13 +315,13 @@ Platform content generation (full LinkedIn calendars, etc.) is still slower — 
 - Chatbot-first UI with platforms, toggle, competitor table  
 - Playbooks embedded in Supabase via OpenRouter  
 - Live `content_summaries.summary` + row embedding backfill  
+- Agents **New chat** / **Previous chats** (browser `localStorage` cache + Supabase `agent_chat_stores` JSONB)  
+- LLM **conversation memory** via client `chat_history` on invoke (last 12 turns)  
 
 **Not done / placeholders**
 
 - Real **Apify** scraping (today: resolve existing DB summaries)  
 - Real Gemini summary pipeline wired into agents  
-- Auth (JWT → `user_id`)  
-- Persistent chat history  
 - Dedicated Reddit agent (today: chatbot + Reddit hint)  
 - Richer `profiles` rows (today: falls back to `projects.name` / `type`)  
 
