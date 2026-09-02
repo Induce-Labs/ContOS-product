@@ -5,36 +5,17 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from context.profiling_data import profile_from_avatar_row
 from mcp.tools.fetch_profile import fetch_profile
 from mcp.tools.fetch_summaries import fetch_summaries
 from mcp.tools.similarity_search import similarity_search
+from services.profile_summary import maybe_refresh_stale_profile_summary
 
 logger = logging.getLogger(__name__)
 
 
 def _profile_from_avatar_row(row: dict[str, Any], user_id: str) -> dict[str, Any]:
-    profiling = row.get("profiling_data") or {}
-    if not isinstance(profiling, dict):
-        profiling = {}
-
-    return {
-        "source": "avatars.profiling_data",
-        "avatar_id": row.get("id"),
-        "user_id": str(row.get("user_id") or user_id),
-        "name": row.get("name"),
-        "type": row.get("type"),
-        "profiling_completeness": row.get("profiling_completeness"),
-        "profiling_data": profiling,
-        # Flatten common keys for older prompt consumers
-        "business_name": row.get("name"),
-        "brand_voice": profiling.get("voice") or profiling.get("positioning"),
-        "target_audience": profiling.get("audience") or profiling.get("icp"),
-        "goals": profiling.get("goals"),
-        "industry": profiling.get("expertise")
-        or profiling.get("product")
-        or row.get("type"),
-        "is_default": bool(row.get("is_default")),
-    }
+    return profile_from_avatar_row(row, user_id)
 
 
 def _competitor_context_for_avatar(
@@ -141,6 +122,17 @@ def build_avatar_context(
 
     for row in rows:
         avatar_id = str(row["id"])
+        refresh = maybe_refresh_stale_profile_summary(row, user_id)
+        if refresh and refresh.get("profile_summary"):
+            row = {
+                **row,
+                "profile_summary": refresh["profile_summary"],
+                "profile_summary_status": refresh.get("status", "completed"),
+                "profile_summary_generated_at": refresh.get("generated_at"),
+            }
+            if refresh.get("website_summary_status"):
+                row["website_summary_status"] = refresh["website_summary_status"]
+
         profile = _profile_from_avatar_row(row, user_id)
 
         if not profile.get("profiling_data"):

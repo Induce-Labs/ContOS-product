@@ -27,7 +27,7 @@ Migrations:
 | `avatars.profiling_data` | `{question_key: answer}` JSONB — source of truth for profiling |
 | `avatars.profiling_completeness` | 0–100, **server-owned** (trigger on `profiling_data` update) |
 | `avatars.is_default` | One default avatar per user |
-| `profiling_questions` | DB-driven questions per `personal_branding` / `business` |
+| `profiling_questionnaires` | Profiling questionnaires (2 rows: personal_branding + business; questions in JSONB) |
 | `set_default_avatar(uuid)` | RPC with ownership check |
 | Avatar cap trigger | Basic plan `max_avatars = 3` (`AVATAR_LIMIT_REACHED`) |
 
@@ -36,7 +36,7 @@ RLS: questions readable by authenticated users; responses via avatar ownership.
 ## Profiling flow
 
 1. Select type → name Avatar
-2. Answer questions from `profiling_questions`
+2. Answer questions from the template resolved for the avatar type (`personal_branding` or shared `business` for `business_1` / `business_2`)
 3. Merge each answer into `avatars.profiling_data` → trigger updates `profiling_completeness`
 4. Add competitors → Apify pipeline
 

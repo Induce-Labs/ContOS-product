@@ -11,6 +11,7 @@
   --color-signal-positive: #1fa97e;
   --color-signal-positive-soft: #e4f7ef;
   --color-border-hairline: #e7e4de;
+  --font-serif: "Instrument Serif", Georgia, "Times New Roman", serif;
 }
 
 body {

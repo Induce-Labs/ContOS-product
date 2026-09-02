@@ -212,6 +212,7 @@ Optional open policies for local/dev if not using the **secret / service_role** 
 |--------|------|-------------|
 | `GET` | `/api/health` | Health + model / key flags |
 | `POST` | `/api/agents/invoke` | Agent invoke (SSE) |
+| `POST` | `/api/profiling/summarize` | Generate `avatars.website_summary` (optional URL via Apify WCC) then `avatars.profile_summary` from `profiling_data` (+ website context) |
 | `POST` | `/api/embeddings/store-playbooks` | Embed + store mock playbooks |
 | `GET` | `/api/mcp/tools` | List MCP tool schemas |
 
@@ -247,6 +248,10 @@ Optional open policies for local/dev if not using the **secret / service_role** 
 | `SUPABASE_SERVICE_ROLE_KEY` | **Secret** key (`sb_secret_…`) |
 | `OPENROUTER_API_KEY` | LLM + embeddings |
 | `LLM_MODEL` | `moonshotai/kimi-k2.6` |
+| `PROFILE_SUMMARY_MODEL` | `google/gemini-2.5-flash` (profiling + website summary after onboarding) |
+| `APIFY_API_TOKEN` | Website Content Crawler (shared with scrape Backend via env_loader) |
+| `APIFY_WEBSITE_CRAWLER_ACTOR_ID` | Default `apify/website-content-crawler` |
+| `WEBSITE_CRAWL_WAIT_SECS` / `WEBSITE_CRAWL_MAX_PAGES` / `WEBSITE_CRAWL_MAX_DEPTH` | Bounded onboarding crawl |
 | `EMBEDDING_MODEL` | `openai/text-embedding-3-small` |
 | `LLM_ENV` | Environment label |
 | `PREFER_MOCK_DATA` | Must be `false` — tools use live Supabase only |
@@ -321,7 +326,6 @@ Platform content generation (full LinkedIn calendars, etc.) is still slower — 
 **Not done / placeholders**
 
 - Real **Apify** scraping (today: resolve existing DB summaries)  
-- Real Gemini summary pipeline wired into agents  
 - Dedicated Reddit agent (today: chatbot + Reddit hint)  
 - Richer `profiles` rows (today: falls back to `projects.name` / `type`)  
 

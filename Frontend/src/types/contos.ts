@@ -1,4 +1,4 @@
-export type ProjectType = 'personal_branding' | 'business'
+export type ProjectType = 'personal_branding' | 'business' | 'business_1' | 'business_2'
 
 export type ProjectStatus = 'onboarding' | 'scraping' | 'ready' | 'failed'
 

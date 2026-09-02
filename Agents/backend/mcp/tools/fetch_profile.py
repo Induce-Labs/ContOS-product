@@ -5,30 +5,13 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from context.profiling_data import profile_from_avatar_row
+
 logger = logging.getLogger(__name__)
 
 
 def _from_avatar_profiling(avatar: dict[str, Any], user_id: str) -> dict[str, Any]:
-    profiling = avatar.get("profiling_data") or {}
-    if not isinstance(profiling, dict):
-        profiling = {}
-    return {
-        "source": "avatars.profiling_data",
-        "avatar_id": avatar.get("id"),
-        "user_id": str(avatar.get("user_id") or user_id),
-        "name": avatar.get("name"),
-        "type": avatar.get("type"),
-        "profiling_completeness": avatar.get("profiling_completeness"),
-        "profiling_data": profiling,
-        "business_name": avatar.get("name"),
-        "brand_voice": profiling.get("voice") or profiling.get("positioning"),
-        "target_audience": profiling.get("audience") or profiling.get("icp"),
-        "goals": profiling.get("goals"),
-        "industry": profiling.get("expertise")
-        or profiling.get("product")
-        or avatar.get("type"),
-        "is_default": bool(avatar.get("is_default")),
-    }
+    return profile_from_avatar_row(avatar, user_id)
 
 
 def fetch_profile(user_id: str, avatar_id: str | None = None) -> dict[str, Any]:
@@ -66,5 +49,10 @@ def fetch_profile(user_id: str, avatar_id: str | None = None) -> dict[str, Any]:
         "goals": None,
         "industry": None,
         "profiling_data": {},
+        "profile_summary": None,
+        "profile_summary_status": "pending",
+        "website_summary": None,
+        "website_summary_status": "pending",
+        "website_summary_url": None,
         "note": "No avatar profile found for this user",
     }

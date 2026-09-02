@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { isOnboardingComplete, resolveCurrentOnboardingPath } from './onboarding'
 import type { Tables, TablesInsert } from '../types/database'
 import type { ProjectType } from '../types/contos'
 
@@ -132,7 +133,7 @@ export function resolveActiveProject(projects: Project[]): Project | null {
   return projects.find((project) => project.is_default) ?? projects[0]
 }
 
-export async function resolvePostAuthPath(): Promise<string> {
+export async function resolveDashboardPath(): Promise<string> {
   const projects = await fetchUserProjects()
 
   if (projects.length === 0) {
@@ -147,4 +148,14 @@ export async function resolvePostAuthPath(): Promise<string> {
 
   setLastUsedProjectId(activeProject.id)
   return `/dashboard/${activeProject.id}`
+}
+
+export async function resolvePostAuthPath(): Promise<string> {
+  const completed = await isOnboardingComplete()
+
+  if (!completed) {
+    return resolveCurrentOnboardingPath()
+  }
+
+  return resolveDashboardPath()
 }

@@ -23,7 +23,10 @@ Define the ContOS v1 Postgres schema in Supabase with Row Level Security (RLS) s
 | Table | Description |
 | --- | --- |
 | `avatars` | User-owned Avatar/workspace (name, type, status, profiling_data, is_default) |
-| `profiling_questions` | DB-driven Avatar profiling questions (Phase 2) |
+| `profiling_questionnaires` | Avatar profiling questionnaires (JSONB; Phase 2) |
+| `avatars.profile_summary` | LLM-generated chatbot context summary (Phase 2 onboarding) |
+| `avatars.website_summary` | LLM summary of optional `website_url` via Apify Website Content Crawler |
+| `avatars.website_summary_*` | Status / URL / hash / error columns (service_role write-only, same guard as profile_summary) |
 | `avatar_profiling_responses` | **removed** — answers live in `avatars.profiling_data` |
 | `competitors` | Social profiles tracked per avatar |
 | `instagram_scraped_content` | Raw Instagram reel/post data per competitor |

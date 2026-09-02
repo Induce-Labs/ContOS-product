@@ -236,35 +236,67 @@ export type Database = {
           },
         ]
       }
-      profiling_questions: {
+      profiling_questionnaires: {
         Row: {
           created_at: string
-          display_order: number
           id: string
-          is_active: boolean
-          question: string
-          question_key: string
-          type: string
+          label: string
+          questions: Json
+          updated_at: string
         }
         Insert: {
           created_at?: string
-          display_order?: number
-          id?: string
-          is_active?: boolean
-          question: string
-          question_key: string
-          type: string
+          id: string
+          label: string
+          questions: Json
+          updated_at?: string
         }
         Update: {
           created_at?: string
-          display_order?: number
           id?: string
-          is_active?: boolean
-          question?: string
-          question_key?: string
-          type?: string
+          label?: string
+          questions?: Json
+          updated_at?: string
         }
         Relationships: []
+      }
+      user_profiles: {
+        Row: {
+          created_at: string
+          onboarding_avatar_id: string | null
+          onboarding_completed_at: string | null
+          onboarding_project_type: string | null
+          onboarding_step: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          onboarding_avatar_id?: string | null
+          onboarding_completed_at?: string | null
+          onboarding_project_type?: string | null
+          onboarding_step?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          onboarding_avatar_id?: string | null
+          onboarding_completed_at?: string | null
+          onboarding_project_type?: string | null
+          onboarding_step?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_profiles_onboarding_avatar_id_fkey"
+            columns: ["onboarding_avatar_id"]
+            isOneToOne: false
+            referencedRelation: "avatars"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       avatars: {
         Row: {
@@ -272,36 +304,69 @@ export type Database = {
           id: string
           is_default: boolean
           name: string
+          profile_summary: string | null
+          profile_summary_error: string | null
+          profile_summary_generated_at: string | null
+          profile_summary_source_hash: string | null
+          profile_summary_status: string
           profiling_completeness: number
           profiling_data: Json
           status: string
           type: string
           updated_at: string
           user_id: string
+          website_summary: string | null
+          website_summary_error: string | null
+          website_summary_generated_at: string | null
+          website_summary_source_hash: string | null
+          website_summary_status: string
+          website_summary_url: string | null
         }
         Insert: {
           created_at?: string
           id?: string
           is_default?: boolean
           name: string
+          profile_summary?: string | null
+          profile_summary_error?: string | null
+          profile_summary_generated_at?: string | null
+          profile_summary_source_hash?: string | null
+          profile_summary_status?: string
           profiling_completeness?: number
           profiling_data?: Json
           status?: string
           type: string
           updated_at?: string
           user_id: string
+          website_summary?: string | null
+          website_summary_error?: string | null
+          website_summary_generated_at?: string | null
+          website_summary_source_hash?: string | null
+          website_summary_status?: string
+          website_summary_url?: string | null
         }
         Update: {
           created_at?: string
           id?: string
           is_default?: boolean
           name?: string
+          profile_summary?: string | null
+          profile_summary_error?: string | null
+          profile_summary_generated_at?: string | null
+          profile_summary_source_hash?: string | null
+          profile_summary_status?: string
           profiling_completeness?: number
           profiling_data?: Json
           status?: string
           type?: string
           updated_at?: string
           user_id?: string
+          website_summary?: string | null
+          website_summary_error?: string | null
+          website_summary_generated_at?: string | null
+          website_summary_source_hash?: string | null
+          website_summary_status?: string
+          website_summary_url?: string | null
         }
         Relationships: []
       }
@@ -378,6 +443,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      resolve_profiling_template: {
+        Args: { p_avatar_type: string }
+        Returns: string
+      }
       set_default_avatar: {
         Args: { p_avatar_id: string }
         Returns: Database["public"]["Tables"]["avatars"]["Row"]

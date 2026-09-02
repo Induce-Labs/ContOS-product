@@ -38,7 +38,22 @@ function mapAvatarError(error: { message: string; code?: string }): AvatarsServi
 }
 
 export function avatarTypeLabel(type: ProjectType | string): string {
-  return type === 'business' ? 'Business' : 'Personal Brand'
+  switch (type) {
+    case 'personal_branding':
+      return 'Personal Brand'
+    case 'business_1':
+      return 'Business 1'
+    case 'business_2':
+      return 'Business 2'
+    case 'business':
+      return 'Business'
+    default:
+      return 'Workspace'
+  }
+}
+
+export function defaultAvatarNameForType(type: ProjectType): string {
+  return avatarTypeLabel(type)
 }
 
 export async function fetchUserAvatars(): Promise<Avatar[]> {

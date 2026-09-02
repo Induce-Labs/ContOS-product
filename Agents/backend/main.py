@@ -106,6 +106,11 @@ class CompetitorIngestRequest(BaseModel):
     avatar_id: str = Field(..., min_length=1)
 
 
+class ProfileSummarizeRequest(BaseModel):
+    avatar_id: str = Field(..., min_length=1)
+    force: bool = False
+
+
 def _sse(event: str, data: dict[str, Any]) -> str:
     return f"event: {event}\ndata: {json.dumps(data, default=str)}\n\n"
 
@@ -198,6 +203,32 @@ def ingest_competitors(
         "errors": errors,
         "message": message,
     }
+
+
+@app.post("/api/profiling/summarize")
+def summarize_profiling(
+    body: ProfileSummarizeRequest,
+    user_id: UUID = Depends(get_current_user_id),
+) -> dict[str, Any]:
+    """Generate a structured profile summary from avatars.profiling_data (Gemini via OpenRouter)."""
+    verify_avatar_owner(body.avatar_id, user_id)
+
+    from services.profile_summary import ProfileSummaryError, generate_and_store_profile_summary
+
+    try:
+        return generate_and_store_profile_summary(
+            avatar_id=body.avatar_id,
+            user_id=str(user_id),
+            force=body.force,
+        )
+    except ProfileSummaryError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "message": str(exc),
+                "avatar_id": body.avatar_id,
+            },
+        ) from exc
 
 
 @app.post("/api/agents/invoke")

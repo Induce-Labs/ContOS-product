@@ -84,9 +84,9 @@ export function LoginPage() {
         </PrimaryButton>
       </form>
 
-      <div className="my-6 flex items-center gap-3">
+      <div className="my-5 flex items-center gap-3 sm:my-6">
         <div className="h-px flex-1 bg-border-hairline" />
-        <span className="text-xs uppercase tracking-wide text-ink-muted">or</span>
+        <span className="text-[13px] font-medium text-ink-muted">or continue with</span>
         <div className="h-px flex-1 bg-border-hairline" />
       </div>
 

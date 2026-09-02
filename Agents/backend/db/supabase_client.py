@@ -590,3 +590,130 @@ def log_agent_call(payload: dict[str, Any]) -> dict[str, Any] | None:
     except Exception as exc:
         logger.error("Failed to log agent_call: %s", exc)
         return None
+
+
+def update_avatar_profile_summary(
+    *,
+    avatar_id: str,
+    status: str,
+    summary: str | None = None,
+    generated_at: str | None = None,
+    source_hash: str | None = None,
+    error: str | None = None,
+) -> dict[str, Any]:
+    """Persist profile summary fields (service_role only — guarded on client updates)."""
+    if not avatar_id or not str(avatar_id).strip():
+        raise ValueError("avatar_id is required for update_avatar_profile_summary")
+    if status not in {"pending", "generating", "completed", "failed"}:
+        raise ValueError(f"Invalid profile_summary_status: {status}")
+
+    client = _require_client()
+    payload: dict[str, Any] = {
+        "profile_summary_status": status,
+        "profile_summary_error": error,
+    }
+    if summary is not None:
+        payload["profile_summary"] = summary
+    if generated_at is not None:
+        payload["profile_summary_generated_at"] = generated_at
+    if source_hash is not None:
+        payload["profile_summary_source_hash"] = source_hash
+
+    try:
+        result = (
+            client.table("avatars")
+            .update(payload)
+            .eq("id", avatar_id)
+            .execute()
+        )
+        data = result.data or []
+        if data:
+            return data[0]
+
+        row = fetch_avatar_row(avatar_id=avatar_id, user_id=None)
+        if row is None:
+            raise RuntimeError(
+                f"Failed to update profile summary for avatar {avatar_id}: avatar not found"
+            )
+        return row
+    except Exception as exc:
+        logger.error(
+            "update_avatar_profile_summary failed avatar_id=%s status=%s: %s",
+            avatar_id,
+            status,
+            exc,
+        )
+        raise
+
+
+_WEBSITE_SUMMARY_STATUSES = {
+    "pending",
+    "generating",
+    "completed",
+    "failed",
+    "skipped",
+}
+
+
+def update_avatar_website_summary(
+    *,
+    avatar_id: str,
+    status: str,
+    summary: str | None = None,
+    url: str | None = None,
+    generated_at: str | None = None,
+    source_hash: str | None = None,
+    error: str | None = None,
+    clear_summary: bool = False,
+) -> dict[str, Any]:
+    """Persist website summary fields (service_role only — guarded on client updates)."""
+    if not avatar_id or not str(avatar_id).strip():
+        raise ValueError("avatar_id is required for update_avatar_website_summary")
+    if status not in _WEBSITE_SUMMARY_STATUSES:
+        raise ValueError(f"Invalid website_summary_status: {status}")
+
+    client = _require_client()
+    payload: dict[str, Any] = {
+        "website_summary_status": status,
+        "website_summary_error": error,
+    }
+    if clear_summary:
+        payload["website_summary"] = None
+        payload["website_summary_url"] = None
+        payload["website_summary_source_hash"] = None
+        payload["website_summary_generated_at"] = None
+    else:
+        if summary is not None:
+            payload["website_summary"] = summary
+        if url is not None:
+            payload["website_summary_url"] = url
+        if generated_at is not None:
+            payload["website_summary_generated_at"] = generated_at
+        if source_hash is not None:
+            payload["website_summary_source_hash"] = source_hash
+
+    try:
+        result = (
+            client.table("avatars")
+            .update(payload)
+            .eq("id", avatar_id)
+            .execute()
+        )
+        data = result.data or []
+        if data:
+            return data[0]
+
+        row = fetch_avatar_row(avatar_id=avatar_id, user_id=None)
+        if row is None:
+            raise RuntimeError(
+                f"Failed to update website summary for avatar {avatar_id}: avatar not found"
+            )
+        return row
+    except Exception as exc:
+        logger.error(
+            "update_avatar_website_summary failed avatar_id=%s status=%s: %s",
+            avatar_id,
+            status,
+            exc,
+        )
+        raise

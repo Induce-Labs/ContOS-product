@@ -84,6 +84,8 @@ def test_profile_from_avatar_prefers_profiling_data():
             "icp": "Founders",
             "goals": "Leads",
         },
+        "profile_summary": "## Goals\nLeads",
+        "profile_summary_status": "completed",
         "is_default": True,
     }
     with patch("db.supabase_client.assert_avatar_owned"):
@@ -93,3 +95,4 @@ def test_profile_from_avatar_prefers_profiling_data():
     assert profile["source"] == "avatars.profiling_data"
     assert profile["profiling_data"]["product"] == "AI studio"
     assert profile["target_audience"] == "Founders"
+    assert profile["profile_summary"] == "## Goals\nLeads"

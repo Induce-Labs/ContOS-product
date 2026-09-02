@@ -1,0 +1,123 @@
+import { AuthAlert } from '../auth/AuthButtons'
+import type { ProfilingQuestionDef } from '../../config/onboardingProfilingQuestions'
+import { avatarTypeLabel } from '../../lib/avatars'
+import { ProfilingQuestionField } from '../project-setup/ProfilingQuestionField'
+import { OverviewWorkspaceHeader } from './OverviewWorkspaceHeader'
+
+export type ProfilingReviewPanelProps = {
+  workspaceLabel: string
+  sections: Array<[string, ProfilingQuestionDef[]]>
+  draftAnswers: Record<string, string>
+  fieldErrors: Record<string, string>
+  errorMessage: string | null
+  hasChanges: boolean
+  isSaving: boolean
+  isSummarizing: boolean
+  onDraftChange: (key: string, value: string) => void
+  onSave: () => void
+}
+
+export function ProfilingReviewPanel({
+  workspaceLabel,
+  sections,
+  draftAnswers,
+  fieldErrors,
+  errorMessage,
+  hasChanges,
+  isSaving,
+  isSummarizing,
+  onDraftChange,
+  onSave,
+}: ProfilingReviewPanelProps) {
+  const disabled = isSaving || isSummarizing
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <OverviewWorkspaceHeader
+        title="Profiling"
+        subtitle="Your answers personalize the ContOS chatbot. Edit any response below and save when you're done."
+      />
+
+      <p className="mb-6 text-sm text-ink-muted">
+        Workspace:{' '}
+        <span className="font-medium text-ink">{avatarTypeLabel(workspaceLabel)}</span>
+      </p>
+
+      {errorMessage ? (
+        <div className="mb-6">
+          <AuthAlert message={errorMessage} />
+        </div>
+      ) : null}
+
+      <div className="min-h-0 flex-1 space-y-8 overflow-y-auto pb-6">
+        {sections.map(([sectionLabel, sectionQuestions]) => (
+          <section
+            key={sectionLabel}
+            className="rounded-[2rem] border border-border-hairline bg-white p-6 shadow-[0_18px_40px_rgba(28,27,41,0.05)] sm:p-8"
+          >
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-ink-muted">
+              {sectionLabel}
+            </p>
+
+            <div className="mt-6 space-y-8">
+              {sectionQuestions.map((question) => {
+                const value = draftAnswers[question.key] ?? ''
+                const fieldError = fieldErrors[question.key]
+
+                return (
+                  <div key={question.key} className="border-b border-border-hairline pb-8 last:border-b-0 last:pb-0">
+                    <div className="flex flex-wrap items-baseline gap-3">
+                      <h2 className="font-serif text-xl leading-snug text-ink sm:text-2xl">
+                        {question.question}
+                      </h2>
+                      {!question.required ? (
+                        <span className="rounded-full bg-[#f3f0eb] px-3 py-1 text-xs font-medium uppercase tracking-wide text-ink-muted">
+                          Optional
+                        </span>
+                      ) : null}
+                    </div>
+
+                    <div className="mt-4">
+                      <ProfilingQuestionField
+                        question={question}
+                        value={value}
+                        onChange={(next) => onDraftChange(question.key, next)}
+                        disabled={disabled}
+                        autoAdvanceOnSelect={false}
+                      />
+                    </div>
+
+                    {fieldError ? (
+                      <p className="mt-3 text-sm text-red-600">{fieldError}</p>
+                    ) : null}
+                  </div>
+                )
+              })}
+            </div>
+          </section>
+        ))}
+      </div>
+
+      <div className="sticky bottom-0 border-t border-border-hairline bg-[#faf9f7]/95 py-4 backdrop-blur-sm">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-ink-muted">
+            {isSummarizing
+              ? 'Building your profile summary…'
+              : hasChanges
+                ? 'You have unsaved changes.'
+                : 'All changes saved.'}
+          </p>
+
+          <button
+            type="button"
+            onClick={onSave}
+            disabled={disabled || !hasChanges}
+            className="inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-accent-primary to-[#8d67cf] px-8 py-3.5 text-sm font-semibold uppercase tracking-wide text-white shadow-[0_12px_28px_rgba(116,79,185,0.32)] transition hover:from-accent-primary-deep hover:to-accent-primary disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isSummarizing ? 'Updating summary…' : isSaving ? 'Saving…' : 'Save changes'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}

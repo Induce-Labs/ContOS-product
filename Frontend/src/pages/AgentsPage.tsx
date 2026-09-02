@@ -1,9 +1,15 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
-import { useAuth } from '../hooks/useAuth'
-import { fetchUserProjects, setLastUsedProjectId, type Project } from '../lib/projects'
+import { Link, useParams, useSearchParams } from 'react-router-dom'
+import { avatarTypeLabel } from '../lib/avatars'
 import { fetchCompetitorsForProject, type Competitor } from '../lib/competitors'
-import { DashboardSidebar } from '../components/dashboard/DashboardSidebar'
+import type { Project } from '../lib/projects'
+import { DashboardLayout } from '../components/dashboard/DashboardLayout'
+import { IncompleteProfilingBanner } from '../components/dashboard/IncompleteProfilingBanner'
+import {
+  AgentChatHistoryPanel,
+  AgentTypePills,
+} from '../components/agents/AgentChatHistoryPanel'
+import { useDashboardShell } from '../hooks/useDashboardShell'
 import {
   AGENTS_WELCOME_MESSAGE,
   invokeAgentStream,
@@ -17,7 +23,6 @@ import {
 import {
   createEmptyStore,
   getActiveSession,
-  listChatSessions,
   loadChatStore,
   saveChatStore,
   sessionHasUserMessages,
@@ -44,7 +49,6 @@ const AGENT_OPTIONS: Array<{ value: AgentType; label: string }> = [
   { value: 'chatbot', label: 'Chat' },
   { value: 'linkedin', label: 'LinkedIn' },
   { value: 'instagram', label: 'Instagram' },
-  { value: 'playbook', label: 'Playbook' },
 ]
 
 function newId(): string {
@@ -63,17 +67,6 @@ function makeWelcomeMessage(): ChatMessage {
   }
 }
 
-function formatSessionTime(iso: string): string {
-  const date = new Date(iso)
-  if (Number.isNaN(date.getTime())) return ''
-  return date.toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  })
-}
-
 function formatAgentOutput(output: unknown): string {
   if (typeof output === 'string') {
     return output
@@ -90,15 +83,23 @@ function formatAgentOutput(output: unknown): string {
 
 export function AgentsPage() {
   const { projectId } = useParams()
-  const navigate = useNavigate()
-  const { user, signOut } = useAuth()
-  const [projects, setProjects] = useState<Project[]>([])
-  const [project, setProject] = useState<Project | null>(null)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const {
+    user,
+    projects,
+    setProjects,
+    activeProject,
+    projectsLoading,
+    isSigningOut,
+    sidebarOpen,
+    setSidebarOpen,
+    handleSignOut,
+    refreshProjects,
+  } = useDashboardShell()
+  const project = activeProject
   const [competitors, setCompetitors] = useState<Competitor[]>([])
-  const [selectedCompetitorId, setSelectedCompetitorId] = useState<string | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
-  const [isSigningOut, setIsSigningOut] = useState(false)
   const [agentType, setAgentType] = useState<AgentType>('chatbot')
   const [input, setInput] = useState('')
   const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -138,6 +139,10 @@ export function AgentsPage() {
   }
 
   useEffect(() => {
+    void refreshProjects()
+  }, [refreshProjects])
+
+  useEffect(() => {
     let mounted = true
 
     async function load() {
@@ -152,20 +157,11 @@ export function AgentsPage() {
       setSyncError(null)
 
       try {
-        const userProjects = await fetchUserProjects()
-        const selected = userProjects.find((entry) => entry.id === projectId) ?? null
-        if (!selected) {
-          throw new Error('Project not found or you do not have access to it.')
-        }
         const projectCompetitors = await fetchCompetitorsForProject(projectId)
         if (!mounted) {
           return
         }
-        setProjects(userProjects)
-        setProject(selected)
-        setLastUsedProjectId(selected.id)
         setCompetitors(projectCompetitors)
-        setSelectedCompetitorId(projectCompetitors[0]?.id ?? null)
 
         const welcome = makeWelcomeMessage() as StoredChatMessage
         let store = user?.id
@@ -176,7 +172,7 @@ export function AgentsPage() {
         chatStoreRef.current = store
         setChatStore(store)
         setMessages(getActiveSession(store).messages as ChatMessage[])
-        setHistoryOpen(false)
+        setHistoryPanel(searchParams.get('panel') === 'history')
         setIsLoading(false)
 
         if (!user?.id) {
@@ -253,6 +249,19 @@ export function AgentsPage() {
     }
   }, [messages, user?.id, projectId, streaming])
 
+  useEffect(() => {
+    setHistoryOpen(searchParams.get('panel') === 'history')
+  }, [searchParams])
+
+  function setHistoryPanel(open: boolean) {
+    setHistoryOpen(open)
+    if (open) {
+      setSearchParams({ panel: 'history' }, { replace: true })
+      return
+    }
+    setSearchParams({}, { replace: true })
+  }
+
   function handleNewChat() {
     if (streaming) {
       abortRef.current?.abort()
@@ -267,7 +276,7 @@ export function AgentsPage() {
     setChatStore(next)
     setMessages(getActiveSession(next).messages as ChatMessage[])
     setSendError(null)
-    setHistoryOpen(false)
+    setHistoryPanel(false)
     if (user?.id && projectId) {
       saveChatStore(user.id, projectId, next)
       queueRemoteSave(user.id, projectId, next)
@@ -290,7 +299,7 @@ export function AgentsPage() {
       setChatStore(next)
       setMessages(getActiveSession(next).messages as ChatMessage[])
       setSendError(null)
-      setHistoryOpen(false)
+      setHistoryPanel(false)
       if (user?.id && projectId) {
         saveChatStore(user.id, projectId, next)
         queueRemoteSave(user.id, projectId, next)
@@ -346,16 +355,6 @@ export function AgentsPage() {
     setMentionOpen(false)
     setMentionQuery('')
     inputRef.current?.focus()
-  }
-
-  async function handleSignOut() {
-    setIsSigningOut(true)
-    try {
-      await signOut()
-      navigate('/login', { replace: true })
-    } catch {
-      setIsSigningOut(false)
-    }
   }
 
   async function handleSend(event: FormEvent) {
@@ -468,301 +467,214 @@ export function AgentsPage() {
     }
   }
 
-  if (isLoading) {
+  if (isLoading || projectsLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-canvas text-ink-muted">
-        Loading Agents…
-      </div>
+      <DashboardLayout
+        projects={projects}
+        activeProject={project}
+        onAvatarsChanged={setProjects}
+        userEmail={user?.email}
+        isSigningOut={isSigningOut}
+        onSignOut={() => void handleSignOut()}
+        sidebarOpen={sidebarOpen}
+        onSidebarOpenChange={setSidebarOpen}
+        isLoading
+      >
+        {null}
+      </DashboardLayout>
     )
   }
 
   if (loadError || !project || !projectId) {
     return (
-      <div className="min-h-screen bg-canvas px-6 py-10">
+      <DashboardLayout
+        projects={projects}
+        activeProject={project}
+        onAvatarsChanged={setProjects}
+        userEmail={user?.email}
+        isSigningOut={isSigningOut}
+        onSignOut={() => void handleSignOut()}
+        sidebarOpen={sidebarOpen}
+        onSidebarOpenChange={setSidebarOpen}
+        mainClassName="overflow-y-auto px-6 py-10"
+      >
         <p className="text-sm text-red-700">{loadError ?? 'Project unavailable.'}</p>
         <Link to="/dashboard" className="mt-4 inline-block text-sm text-accent-primary">
           Back to dashboard
         </Link>
-      </div>
+      </DashboardLayout>
     )
   }
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-canvas">
-      <header className="shrink-0 border-b border-border-hairline bg-canvas-raised">
-        <div className="flex items-center justify-between px-4 py-4 sm:px-6">
-          <div>
-            <p className="text-sm font-medium text-accent-primary">ContOS</p>
-            <h1 className="text-lg font-semibold text-ink">Command center</h1>
-          </div>
-          <div className="flex items-center gap-3">
-            <span className="hidden text-sm text-ink-muted sm:inline">{user?.email}</span>
-            <button
-              type="button"
-              onClick={() => void handleSignOut()}
-              disabled={isSigningOut}
-              className="rounded-xl border border-border-hairline px-4 py-2 text-sm text-ink transition hover:bg-accent-primary-soft disabled:opacity-60"
-            >
-              {isSigningOut ? 'Signing out…' : 'Sign out'}
-            </button>
-          </div>
+    <DashboardLayout
+      projects={projects}
+      activeProject={project}
+      onAvatarsChanged={setProjects}
+      userEmail={user?.email}
+      isSigningOut={isSigningOut}
+      onSignOut={() => void handleSignOut()}
+      sidebarOpen={sidebarOpen}
+      onSidebarOpenChange={setSidebarOpen}
+      mainClassName="flex min-h-0 flex-col overflow-hidden px-4 pb-2 pt-0 sm:px-8"
+    >
+      <IncompleteProfilingBanner
+        projectId={project.id}
+        profilingCompleteness={project.profiling_completeness}
+      />
+
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-2 py-2">
+        <div className="min-w-0">
+          <h1 className="font-serif text-2xl leading-tight text-ink sm:text-3xl">{project.name}</h1>
+          <p className="mt-0.5 truncate text-xs text-ink-muted sm:text-sm">
+            Ask for strategies and content ideas from your competitor research.
+          </p>
         </div>
-      </header>
-
-      <div className="flex min-h-0 flex-1 flex-row">
-        <DashboardSidebar
-          projects={projects}
-          activeProject={project}
-          competitors={competitors}
-          selectedCompetitorId={selectedCompetitorId}
-          onSelectCompetitor={(competitorId) => {
-            setSelectedCompetitorId(competitorId)
-            navigate(`/dashboard/${projectId}`)
-          }}
-          onAddCompetitor={() => navigate(`/dashboard/${projectId}`)}
-          isAddCompetitorOpen={false}
-          onAvatarsChanged={setProjects}
-          chatActions={{
-            onNewChat: handleNewChat,
-            onToggleHistory: () => setHistoryOpen((open) => !open),
-            historyOpen,
-            previousChatCount: chatStore
-              ? listChatSessions(chatStore).filter((session) =>
-                  sessionHasUserMessages(session.messages),
-                ).length
-              : 0,
-          }}
-        />
-
-        <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-4 py-6 sm:px-8">
-          <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-accent-primary">
-                Agents
-              </p>
-              <h2 className="text-2xl font-semibold text-ink">{project.name}</h2>
-              <p className="mt-1 text-sm text-ink-muted">
-                Ask for strategies and content ideas from your competitor research.
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={handleNewChat}
-                className="rounded-xl bg-accent-primary px-4 py-2 text-sm font-medium text-white transition hover:bg-accent-primary-deep"
-              >
-                New chat
-              </button>
-              <button
-                type="button"
-                onClick={() => setHistoryOpen((open) => !open)}
-                className={`rounded-xl border px-4 py-2 text-sm font-medium transition ${
-                  historyOpen
-                    ? 'border-accent-primary bg-accent-primary-soft text-accent-primary-deep'
-                    : 'border-border-hairline text-ink hover:bg-accent-primary-soft'
-                }`}
-              >
-                Previous chats
-              </button>
-              <Link
-                to={`/dashboard/${projectId}`}
-                className="rounded-xl border border-border-hairline px-3 py-2 text-sm text-ink hover:bg-accent-primary-soft"
-              >
-                Research progress
-              </Link>
-            </div>
-          </div>
-
-          {historyOpen ? (
-            <div className="mb-4 rounded-2xl border border-border-hairline bg-canvas-raised p-4">
-              <div className="mb-3 flex items-center justify-between gap-2">
-                <p className="text-sm font-medium text-ink">Previous chats</p>
-                <button
-                  type="button"
-                  onClick={() => setHistoryOpen(false)}
-                  className="text-xs text-ink-muted hover:text-ink"
-                >
-                  Close
-                </button>
-              </div>
-              {chatStore && listChatSessions(chatStore).length > 0 ? (
-                <ul className="max-h-56 space-y-1 overflow-y-auto">
-                  {listChatSessions(chatStore).map((session) => {
-                    const isActive = session.id === chatStore.activeSessionId
-                    return (
-                      <li key={session.id}>
-                        <button
-                          type="button"
-                          onClick={() => handleSelectSession(session.id)}
-                          className={`w-full rounded-xl px-3 py-2.5 text-left transition ${
-                            isActive
-                              ? 'bg-accent-primary text-white'
-                              : 'hover:bg-accent-primary-soft'
-                          }`}
-                        >
-                          <span className="block truncate text-sm font-medium">
-                            {session.title}
-                          </span>
-                          <span
-                            className={`mt-0.5 block text-xs ${
-                              isActive ? 'text-white/80' : 'text-ink-muted'
-                            }`}
-                          >
-                            {formatSessionTime(session.updatedAt)}
-                            {isActive ? ' · Current' : ''}
-                          </span>
-                        </button>
-                      </li>
-                    )
-                  })}
-                </ul>
-              ) : (
-                <p className="text-sm text-ink-muted">
-                  No earlier chats yet. Start a conversation, then use New chat to begin another
-                  thread.
-                </p>
-              )}
-            </div>
-          ) : null}
-
-          {!researchReady ? (
-            <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-              Research is still in progress. Competitor-grounded answers work best after scraping
-              finishes.{' '}
-              <Link className="font-medium underline" to={`/dashboard/${projectId}`}>
-                View progress
-              </Link>
-            </div>
-          ) : null}
-
-          <div className="mb-4 flex flex-wrap gap-2">
-            {AGENT_OPTIONS.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                disabled={streaming}
-                onClick={() => setAgentType(option.value)}
-                className={`rounded-full px-3 py-1.5 text-sm transition ${
-                  agentType === option.value
-                    ? 'bg-accent-primary text-white'
-                    : 'border border-border-hairline bg-canvas-raised text-ink-muted hover:bg-accent-primary-soft'
-                }`}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
-
-          <section className="flex min-h-0 flex-1 flex-col rounded-[2rem] border border-border-hairline bg-canvas-raised">
-            <div className="flex-1 space-y-4 overflow-y-auto px-4 py-5 sm:px-6">
-              {messages.map((message) => (
-                <div
-                  key={message.id}
-                  className={`max-w-[90%] rounded-2xl px-4 py-3 text-sm whitespace-pre-wrap ${
-                    message.role === 'user'
-                      ? 'ml-auto bg-accent-primary text-white'
-                      : 'bg-canvas text-ink'
-                  }`}
-                >
-                  {message.taggedAvatarNames && message.taggedAvatarNames.length > 0 ? (
-                    <div className="mb-2 flex flex-wrap gap-1">
-                      {message.taggedAvatarNames.map((name) => (
-                        <span
-                          key={name}
-                          className={`rounded-full px-2 py-0.5 text-[11px] ${
-                            message.role === 'user'
-                              ? 'bg-white/20 text-white'
-                              : 'bg-accent-primary-soft text-accent-primary-deep'
-                          }`}
-                        >
-                          {name}
-                        </span>
-                      ))}
-                    </div>
-                  ) : null}
-                  {message.content || (streaming ? '…' : '')}
-                </div>
-              ))}
-              {statusText ? (
-                <p className="text-xs uppercase tracking-wide text-ink-muted">{statusText}</p>
-              ) : null}
-              <div ref={bottomRef} />
-            </div>
-
-            {sendError ? (
-              <p className="border-t border-red-100 bg-red-50 px-4 py-2 text-sm text-red-700">
-                {sendError}
-              </p>
-            ) : null}
-            {syncError ? (
-              <p className="border-t border-amber-100 bg-amber-50 px-4 py-2 text-sm text-amber-800">
-                Chat sync: {syncError}
-              </p>
-            ) : null}
-
-            <form
-              className="border-t border-border-hairline p-4"
-              onSubmit={(event) => void handleSend(event)}
-            >
-              {taggedAvatarIds.length > 0 ? (
-                <div className="mb-2 flex flex-wrap gap-2">
-                  {taggedAvatarIds.map((id) => {
-                    const avatar = projects.find((entry) => entry.id === id)
-                    if (!avatar) {
-                      return null
-                    }
-                    return (
-                      <button
-                        key={id}
-                        type="button"
-                        onClick={() => toggleTaggedAvatar(id)}
-                        className="rounded-full bg-accent-primary-soft px-3 py-1 text-xs font-medium text-accent-primary-deep"
-                      >
-                        {avatar.name} ×
-                      </button>
-                    )
-                  })}
-                </div>
-              ) : null}
-
-              <div className="relative flex gap-2">
-                {mentionOpen && mentionCandidates.length > 0 ? (
-                  <div className="absolute bottom-full left-0 z-10 mb-2 max-h-48 w-64 overflow-y-auto rounded-xl border border-border-hairline bg-canvas-raised shadow-lg">
-                    {mentionCandidates.map((avatar) => (
-                      <button
-                        key={avatar.id}
-                        type="button"
-                        onClick={() => selectMention(avatar)}
-                        className="block w-full px-3 py-2 text-left text-sm text-ink hover:bg-accent-primary-soft"
-                      >
-                        <span className="font-medium">@{avatar.name}</span>
-                        <span className="mt-0.5 block text-xs text-ink-muted capitalize">
-                          {avatar.type === 'business' ? 'Business' : 'Personal Brand'}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                ) : null}
-                <input
-                  ref={inputRef}
-                  value={input}
-                  onChange={(event) => handleInputChange(event.target.value)}
-                  disabled={streaming}
-                  placeholder="Ask for strategies… Type @ to tag avatars"
-                  className="min-w-0 flex-1 rounded-xl border border-border-hairline bg-canvas px-4 py-3 text-sm text-ink outline-none focus:border-accent-primary"
-                />
-                <button
-                  type="submit"
-                  disabled={streaming || !input.trim()}
-                  className="rounded-xl bg-accent-primary px-4 py-3 text-sm font-medium text-white transition hover:bg-accent-primary-deep disabled:opacity-60"
-                >
-                  {streaming ? 'Sending…' : 'Send'}
-                </button>
-              </div>
-            </form>
-          </section>
-        </main>
+        <button
+          type="button"
+          onClick={handleNewChat}
+          className="shrink-0 rounded-full bg-accent-primary px-4 py-2 text-sm font-medium text-white transition hover:bg-accent-primary-deep"
+        >
+          New chat
+        </button>
       </div>
-    </div>
+
+      {historyOpen ? (
+        <AgentChatHistoryPanel
+          chatStore={chatStore}
+          onSelectSession={handleSelectSession}
+          onClose={() => setHistoryPanel(false)}
+        />
+      ) : null}
+
+      {!researchReady ? (
+        <div className="mb-2 shrink-0 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-900">
+          Research is still in progress. Competitor-grounded answers work best after scraping
+          finishes.{' '}
+          <Link className="font-medium underline" to={`/dashboard/${projectId}`}>
+            View progress
+          </Link>
+        </div>
+      ) : null}
+
+      <div className="mb-2 shrink-0">
+        <AgentTypePills
+          agentType={agentType}
+          streaming={streaming}
+          options={AGENT_OPTIONS}
+          onChange={setAgentType}
+        />
+      </div>
+
+      <section className="flex min-h-0 flex-1 flex-col rounded-[1.75rem] border border-white/80 bg-white/90 shadow-[0_18px_50px_rgba(28,27,41,0.06)]">
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4 sm:px-6">
+          {messages.map((message) => (
+            <div
+              key={message.id}
+              className={`max-w-[90%] rounded-2xl px-4 py-3 text-sm whitespace-pre-wrap ${
+                message.role === 'user'
+                  ? 'ml-auto bg-accent-primary text-white'
+                  : 'bg-canvas text-ink'
+              }`}
+            >
+              {message.taggedAvatarNames && message.taggedAvatarNames.length > 0 ? (
+                <div className="mb-2 flex flex-wrap gap-1">
+                  {message.taggedAvatarNames.map((name) => (
+                    <span
+                      key={name}
+                      className={`rounded-full px-2 py-0.5 text-[11px] ${
+                        message.role === 'user'
+                          ? 'bg-white/20 text-white'
+                          : 'bg-accent-primary-soft text-accent-primary-deep'
+                      }`}
+                    >
+                      {name}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+              {message.content || (streaming ? '…' : '')}
+            </div>
+          ))}
+          {statusText ? (
+            <p className="text-xs uppercase tracking-wide text-ink-muted">{statusText}</p>
+          ) : null}
+          <div ref={bottomRef} />
+        </div>
+
+        {sendError ? (
+          <p className="border-t border-red-100 bg-red-50 px-4 py-2 text-sm text-red-700">
+            {sendError}
+          </p>
+        ) : null}
+        {syncError ? (
+          <p className="border-t border-amber-100 bg-amber-50 px-4 py-2 text-sm text-amber-800">
+            Chat sync: {syncError}
+          </p>
+        ) : null}
+
+        <form className="p-3 sm:p-4" onSubmit={(event) => void handleSend(event)}>
+          {taggedAvatarIds.length > 0 ? (
+            <div className="mb-2 flex flex-wrap gap-2">
+              {taggedAvatarIds.map((id) => {
+                const avatar = projects.find((entry) => entry.id === id)
+                if (!avatar) {
+                  return null
+                }
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => toggleTaggedAvatar(id)}
+                    className="rounded-full bg-accent-primary-soft px-3 py-1 text-xs font-medium text-accent-primary-deep"
+                  >
+                    {avatar.name} ×
+                  </button>
+                )
+              })}
+            </div>
+          ) : null}
+
+          <div className="relative">
+            {mentionOpen && mentionCandidates.length > 0 ? (
+              <div className="absolute bottom-full left-0 z-10 mb-2 max-h-48 w-64 overflow-y-auto rounded-xl border border-border-hairline bg-white shadow-lg">
+                {mentionCandidates.map((avatar) => (
+                  <button
+                    key={avatar.id}
+                    type="button"
+                    onClick={() => selectMention(avatar)}
+                    className="block w-full px-3 py-2 text-left text-sm text-ink hover:bg-accent-primary-soft"
+                  >
+                    <span className="font-medium">@{avatar.name}</span>
+                    <span className="mt-0.5 block text-xs text-ink-muted capitalize">
+                      {avatarTypeLabel(avatar.type)}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+            <div className="flex items-center gap-2 rounded-full border border-border-hairline bg-white px-4 py-2 shadow-[0_10px_30px_rgba(116,79,185,0.12)]">
+              <input
+                ref={inputRef}
+                value={input}
+                onChange={(event) => handleInputChange(event.target.value)}
+                disabled={streaming}
+                placeholder="Ask ContOS anything about your brand… Type @ to tag avatars"
+                className="min-w-0 flex-1 bg-transparent px-2 py-2 text-sm text-ink outline-none"
+              />
+              <button
+                type="submit"
+                disabled={streaming || !input.trim()}
+                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent-primary text-white transition hover:bg-accent-primary-deep disabled:opacity-60"
+                aria-label={streaming ? 'Sending' : 'Send'}
+              >
+                ↑
+              </button>
+            </div>
+          </div>
+        </form>
+      </section>
+    </DashboardLayout>
   )
 }
+
