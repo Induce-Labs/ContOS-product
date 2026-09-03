@@ -11,10 +11,18 @@ import {
 } from '../components/agents/AgentChatHistoryPanel'
 import { useDashboardShell } from '../hooks/useDashboardShell'
 import {
-  AGENTS_WELCOME_MESSAGE,
+  buildAgentsWelcomeMessage,
+  getUserFirstName,
   invokeAgentStream,
+  isAgentsWelcomeMessage,
   type AgentType,
 } from '../lib/agentsApi'
+import contosMark from '../assets/contos-mark.png'
+import { AgentOutputRenderer } from '../components/agents/AgentOutputRenderer'
+import {
+  formatStructuredAgentOutput,
+  isStructuredAgentOutput,
+} from '../lib/agentOutputDisplay'
 import { buildChatHistoryForInvoke } from '../lib/agentChatMemory'
 import {
   fetchRemoteChatStore,
@@ -27,6 +35,7 @@ import {
   saveChatStore,
   sessionHasUserMessages,
   startNewChatSession,
+  storeHasUserMessages,
   storeUpdatedAtMs,
   switchChatSession,
   updateActiveSessionMessages,
@@ -41,6 +50,7 @@ type ChatMessage = {
   role: ChatRole
   content: string
   agentType?: AgentType
+  output?: unknown
   taggedAvatarIds?: string[]
   taggedAvatarNames?: string[]
 }
@@ -58,11 +68,11 @@ function newId(): string {
   return `msg-${Date.now()}-${Math.random().toString(16).slice(2)}`
 }
 
-function makeWelcomeMessage(): ChatMessage {
+function makeWelcomeMessage(firstName: string): ChatMessage {
   return {
     id: newId(),
     role: 'assistant',
-    content: AGENTS_WELCOME_MESSAGE,
+    content: buildAgentsWelcomeMessage(firstName),
     agentType: 'chatbot',
   }
 }
@@ -74,11 +84,29 @@ function formatAgentOutput(output: unknown): string {
   if (output == null) {
     return ''
   }
-  try {
-    return JSON.stringify(output, null, 2)
-  } catch {
-    return String(output)
+  const structured = formatStructuredAgentOutput(output)
+  if (structured.trim()) {
+    return structured
   }
+  return ''
+}
+
+function tryParseStructuredContent(content: string): unknown | null {
+  const trimmed = content.trim()
+  if (!trimmed.startsWith('{')) return null
+  try {
+    const parsed: unknown = JSON.parse(trimmed)
+    return isStructuredAgentOutput(parsed) ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+function resolveAssistantOutput(message: ChatMessage): unknown | null {
+  if (message.output != null && isStructuredAgentOutput(message.output)) {
+    return message.output
+  }
+  return tryParseStructuredContent(message.content)
 }
 
 export function AgentsPage() {
@@ -106,7 +134,6 @@ export function AgentsPage() {
   const [chatStore, setChatStore] = useState<ChatStore | null>(null)
   const [historyOpen, setHistoryOpen] = useState(false)
   const [streaming, setStreaming] = useState(false)
-  const [statusText, setStatusText] = useState('')
   const [sendError, setSendError] = useState<string | null>(null)
   const [syncError, setSyncError] = useState<string | null>(null)
   const [taggedAvatarIds, setTaggedAvatarIds] = useState<string[]>([])
@@ -163,10 +190,15 @@ export function AgentsPage() {
         }
         setCompetitors(projectCompetitors)
 
-        const welcome = makeWelcomeMessage() as StoredChatMessage
+        const firstName = getUserFirstName(user)
+        const welcome = makeWelcomeMessage(firstName) as StoredChatMessage
         let store = user?.id
           ? loadChatStore(user.id, projectId, welcome)
           : createEmptyStore(welcome)
+
+        // Do NOT refresh the welcome / bump timestamps before remote merge —
+        // that made a fresh empty local store look "newer" than cloud history
+        // after logout wiped localStorage.
 
         skipPersistRef.current = true
         chatStoreRef.current = store
@@ -184,21 +216,36 @@ export function AgentsPage() {
           if (!mounted) return
 
           if (remote) {
+            const localEmpty = !storeHasUserMessages(store)
+            const remoteHasHistory = storeHasUserMessages(remote.store)
             const localTs = storeUpdatedAtMs(store)
             const remoteTs = new Date(remote.updatedAt).getTime()
-            if (remoteTs >= localTs) {
+            // Prefer cloud when local is welcome-only (e.g. post-logout), even if
+            // a local welcome refresh made updatedAt look newer.
+            if ((localEmpty && remoteHasHistory) || remoteTs >= localTs) {
               store = remote.store
               skipPersistRef.current = true
               chatStoreRef.current = store
               setChatStore(store)
               setMessages(getActiveSession(store).messages as ChatMessage[])
               saveChatStore(user.id, projectId, store)
-            } else if (sessionHasUserMessages(getActiveSession(store).messages)) {
+            } else if (storeHasUserMessages(store)) {
               await upsertRemoteChatStore(user.id, projectId, store)
             }
-          } else if (sessionHasUserMessages(getActiveSession(store).messages)) {
+          } else if (storeHasUserMessages(store)) {
             await upsertRemoteChatStore(user.id, projectId, store)
           }
+
+          // Refresh greeting only after remote merge, and only on empty threads.
+          if (!sessionHasUserMessages(getActiveSession(store).messages)) {
+            store = startNewChatSession(store, welcome)
+            skipPersistRef.current = true
+            chatStoreRef.current = store
+            setChatStore(store)
+            setMessages(getActiveSession(store).messages as ChatMessage[])
+            saveChatStore(user.id, projectId, store)
+          }
+
           if (mounted) setSyncError(null)
         } catch (error) {
           if (mounted) {
@@ -207,6 +254,14 @@ export function AgentsPage() {
                 ? error.message
                 : 'Failed to sync chat history from Supabase.',
             )
+          }
+          // Still refresh empty greeting when remote sync fails.
+          if (!sessionHasUserMessages(getActiveSession(store).messages)) {
+            store = startNewChatSession(store, welcome)
+            skipPersistRef.current = true
+            chatStoreRef.current = store
+            setChatStore(store)
+            setMessages(getActiveSession(store).messages as ChatMessage[])
           }
         }
       } catch (error) {
@@ -229,7 +284,7 @@ export function AgentsPage() {
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, streaming, statusText])
+  }, [messages, streaming])
 
   useEffect(() => {
     if (!user?.id || !projectId || !chatStoreRef.current) {
@@ -266,9 +321,8 @@ export function AgentsPage() {
     if (streaming) {
       abortRef.current?.abort()
       setStreaming(false)
-      setStatusText('')
     }
-    const welcome = makeWelcomeMessage() as StoredChatMessage
+    const welcome = makeWelcomeMessage(getUserFirstName(user)) as StoredChatMessage
     const base = chatStoreRef.current ?? createEmptyStore(welcome)
     const next = startNewChatSession(base, welcome)
     skipPersistRef.current = true
@@ -290,7 +344,6 @@ export function AgentsPage() {
     if (streaming) {
       abortRef.current?.abort()
       setStreaming(false)
-      setStatusText('')
     }
     try {
       const next = switchChatSession(chatStoreRef.current, sessionId)
@@ -388,7 +441,6 @@ export function AgentsPage() {
       { id: assistantId, role: 'assistant', content: '', agentType },
     ])
     setStreaming(true)
-    setStatusText('Thinking…')
 
     abortRef.current?.abort()
     const controller = new AbortController()
@@ -405,11 +457,14 @@ export function AgentsPage() {
           chat_history: chatHistory.length > 0 ? chatHistory : undefined,
         },
         {
-          onStatus: (data) => {
-            const stage = typeof data.stage === 'string' ? data.stage : 'working'
-            setStatusText(stage)
+          onStatus: () => {
+            // Pipeline stages stay internal; UI shows the ContOS loading mark instead.
           },
           onToken: (token) => {
+            // Structured agents return JSON — don't stream partial JSON into the bubble.
+            if (agentType !== 'chatbot') {
+              return
+            }
             setMessages((current) =>
               current.map((message) =>
                 message.id === assistantId
@@ -419,20 +474,31 @@ export function AgentsPage() {
             )
           },
           onComplete: (data) => {
-            const formatted = formatAgentOutput(data.output)
-            if (formatted) {
-              setMessages((current) =>
-                current.map((message) =>
-                  message.id === assistantId
-                    ? {
-                        ...message,
-                        content: message.content.trim() ? message.content : formatted,
-                      }
-                    : message,
-                ),
-              )
-            }
-            setStatusText('')
+            const output = data.output
+            const formatted = formatAgentOutput(output)
+            setMessages((current) =>
+              current.map((message) => {
+                if (message.id !== assistantId) {
+                  return message
+                }
+                if (isStructuredAgentOutput(output)) {
+                  return {
+                    ...message,
+                    content: formatted || message.content,
+                    output,
+                    agentType,
+                  }
+                }
+                if (formatted) {
+                  return {
+                    ...message,
+                    content: message.content.trim() ? message.content : formatted,
+                    agentType,
+                  }
+                }
+                return { ...message, agentType }
+              }),
+            )
           },
           onError: (message) => {
             setSendError(message)
@@ -463,7 +529,6 @@ export function AgentsPage() {
       )
     } finally {
       setStreaming(false)
-      setStatusText('')
     }
   }
 
@@ -505,6 +570,15 @@ export function AgentsPage() {
       </DashboardLayout>
     )
   }
+
+  const conversationMessages = messages.filter(
+    (message) => !(message.role === 'assistant' && isAgentsWelcomeMessage(message.content)),
+  )
+  const welcomeGreeting =
+    messages.find(
+      (message) => message.role === 'assistant' && isAgentsWelcomeMessage(message.content),
+    )?.content ?? buildAgentsWelcomeMessage(getUserFirstName(user))
+  const showClaudeStyleGreeting = conversationMessages.length === 0
 
   return (
     <DashboardLayout
@@ -568,36 +642,82 @@ export function AgentsPage() {
 
       <section className="flex min-h-0 flex-1 flex-col rounded-[1.75rem] border border-white/80 bg-white/90 shadow-[0_18px_50px_rgba(28,27,41,0.06)]">
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4 sm:px-6">
-          {messages.map((message) => (
-            <div
-              key={message.id}
-              className={`max-w-[90%] rounded-2xl px-4 py-3 text-sm whitespace-pre-wrap ${
-                message.role === 'user'
-                  ? 'ml-auto bg-accent-primary text-white'
-                  : 'bg-canvas text-ink'
-              }`}
-            >
-              {message.taggedAvatarNames && message.taggedAvatarNames.length > 0 ? (
-                <div className="mb-2 flex flex-wrap gap-1">
-                  {message.taggedAvatarNames.map((name) => (
-                    <span
-                      key={name}
-                      className={`rounded-full px-2 py-0.5 text-[11px] ${
-                        message.role === 'user'
-                          ? 'bg-white/20 text-white'
-                          : 'bg-accent-primary-soft text-accent-primary-deep'
-                      }`}
-                    >
-                      {name}
-                    </span>
-                  ))}
-                </div>
-              ) : null}
-              {message.content || (streaming ? '…' : '')}
+          {showClaudeStyleGreeting ? (
+            <div className="flex h-full min-h-[14rem] flex-col items-center justify-center px-4 text-center">
+              <h2 className="inline-flex items-center gap-3 font-serif text-3xl tracking-tight text-ink sm:gap-4 sm:text-4xl md:text-5xl">
+                <img
+                  src={contosMark}
+                  alt=""
+                  aria-hidden="true"
+                  className="h-8 w-8 shrink-0 object-contain sm:h-10 sm:w-10 md:h-12 md:w-12"
+                />
+                <span>{welcomeGreeting}</span>
+              </h2>
             </div>
-          ))}
-          {statusText ? (
-            <p className="text-xs uppercase tracking-wide text-ink-muted">{statusText}</p>
+          ) : (
+            conversationMessages
+              .filter((message) => {
+                if (message.role === 'user') return true
+                if (resolveAssistantOutput(message)) return true
+                return message.content.trim().length > 0
+              })
+              .map((message) => {
+                const structuredOutput =
+                  message.role === 'assistant' ? resolveAssistantOutput(message) : null
+
+                if (structuredOutput) {
+                  return (
+                    <div
+                      key={message.id}
+                      className="max-w-[95%] rounded-2xl bg-canvas px-4 py-3 text-ink"
+                    >
+                      <AgentOutputRenderer
+                        agentType={message.agentType}
+                        output={structuredOutput}
+                      />
+                    </div>
+                  )
+                }
+
+                return (
+                  <div
+                    key={message.id}
+                    className={`max-w-[90%] rounded-2xl px-4 py-3 text-sm whitespace-pre-wrap ${
+                      message.role === 'user'
+                        ? 'ml-auto bg-accent-primary text-white'
+                        : 'bg-canvas text-ink'
+                    }`}
+                  >
+                    {message.taggedAvatarNames && message.taggedAvatarNames.length > 0 ? (
+                      <div className="mb-2 flex flex-wrap gap-1">
+                        {message.taggedAvatarNames.map((name) => (
+                          <span
+                            key={name}
+                            className={`rounded-full px-2 py-0.5 text-[11px] ${
+                              message.role === 'user'
+                                ? 'bg-white/20 text-white'
+                                : 'bg-accent-primary-soft text-accent-primary-deep'
+                            }`}
+                          >
+                            {name}
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
+                    {message.content}
+                  </div>
+                )
+              })
+          )}
+          {streaming ? (
+            <div className="flex items-center gap-2 py-1" aria-live="polite" aria-label="ContOS is responding">
+              <img
+                src={contosMark}
+                alt=""
+                aria-hidden="true"
+                className="contos-mark-loading h-7 w-7 object-contain"
+              />
+            </div>
           ) : null}
           <div ref={bottomRef} />
         </div>

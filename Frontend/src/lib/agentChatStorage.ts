@@ -80,6 +80,41 @@ export function sessionHasUserMessages(messages: StoredChatMessage[]): boolean {
   return messages.some((message) => message.role === 'user' && message.content.trim())
 }
 
+/** True when any session in the store has a user message. */
+export function storeHasUserMessages(store: ChatStore): boolean {
+  return store.sessions.some((session) => sessionHasUserMessages(session.messages))
+}
+
+/**
+ * Enumerate local agent chat cache entries for a user.
+ * Returns `{ avatarId, store }` for each valid store blob.
+ */
+export function listLocalAgentChatStores(
+  userId: string,
+  welcomeMessage: StoredChatMessage,
+): Array<{ avatarId: string; store: ChatStore }> {
+  if (typeof localStorage === 'undefined' || !userId) return []
+  const prefix = `${STORAGE_PREFIX}:${userId}:`
+  const results: Array<{ avatarId: string; store: ChatStore }> = []
+  for (let i = 0; i < localStorage.length; i += 1) {
+    const key = localStorage.key(i)
+    if (!key?.startsWith(prefix)) continue
+    const avatarId = key.slice(prefix.length)
+    if (!avatarId) continue
+    const raw = localStorage.getItem(key)
+    if (!raw) continue
+    try {
+      results.push({
+        avatarId,
+        store: hydrateChatStore(JSON.parse(raw) as unknown, welcomeMessage),
+      })
+    } catch {
+      // Skip corrupt cache entries — remote remains source of truth.
+    }
+  }
+  return results
+}
+
 export function createEmptyStore(welcomeMessage: StoredChatMessage): ChatStore {
   const id = newSessionId()
   const now = new Date().toISOString()
@@ -201,7 +236,10 @@ export function compactChatStore(store: ChatStore): ChatStore {
         if (message.taggedAvatarNames?.length) {
           compact.taggedAvatarNames = message.taggedAvatarNames
         }
-        // Intentionally omit `output` — display text lives in `content`.
+        // Keep structured agent payloads so Instagram/LinkedIn cards rehydrate after reload.
+        if (message.output != null) {
+          compact.output = message.output
+        }
         return compact
       }),
     })),

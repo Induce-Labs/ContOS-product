@@ -8,8 +8,8 @@ Show Instagram / LinkedIn / Playbook / Twitter agent replies as readable strateg
 
 - `Frontend/src/components/agents/AgentOutputRenderer.tsx` — maps structured `complete` payloads into sections (analysis narrative, hooks, caption formulas, competitor cards, calendars, etc.).
 - `Frontend/src/pages/AgentsPage.tsx` — stores structured `output` on assistant messages; skips streaming raw JSON tokens for non-chatbot agents; replaces content with the renderer on `complete`.
-- `Agents/frontend` `OutputRenderer.jsx` — analysis mode also renders hooks, formulas, frequency, competitor insights, and differentiation (not only the `analysis` string).
-- Instagram system prompt — strategy / insights asks use `response_type: "analysis"` with narrative `analysis` **plus** actionable list fields for the UI.
+- Instagram greetings (`hi` / `hello`) must use `response_type: "analysis"` — never auto-generate a content calendar.
+- Chat history persists structured `output` so calendar cards rehydrate after reload.
 
 ## Architecture decisions
 

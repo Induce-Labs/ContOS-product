@@ -5,7 +5,10 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import { clearAgentChatsForUser } from '../lib/agentChatStorage'
+import {
+  clearAgentChatsForUser,
+} from '../lib/agentChatStorage'
+import { flushLocalAgentChatsToRemote } from '../lib/agentChatRemote'
 import { supabase } from '../lib/supabase'
 import { AuthContext, type AuthContextValue } from './auth-context'
 
@@ -52,6 +55,22 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const signOut = useCallback(async () => {
     const userId = session?.user?.id
+
+    // Persist chats to Supabase before clearing the local cache so history
+    // survives logout → login on this (and other) devices.
+    if (userId) {
+      try {
+        await flushLocalAgentChatsToRemote(userId)
+      } catch (error) {
+        throw new Error(
+          `Sign out aborted: failed to save chat history (${
+            error instanceof Error ? error.message : String(error)
+          }). Stay signed in and try again.`,
+          { cause: error instanceof Error ? error : undefined },
+        )
+      }
+    }
+
     const { error } = await supabase.auth.signOut()
 
     if (error) {

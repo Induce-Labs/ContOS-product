@@ -37,7 +37,8 @@ def get_llm_client() -> OpenAI:
         api_key=api_key,
         base_url=OPENROUTER_BASE,
         timeout=180.0,
-        max_retries=1,
+        # Credit/402 errors should not be auto-retried with the same oversized max_tokens.
+        max_retries=0,
     )
 
 
@@ -45,8 +46,72 @@ def _max_tokens_for(agent_type: str, structured: bool) -> int:
     if agent_type == "chatbot":
         return int(os.getenv("CHATBOT_MAX_TOKENS", "350"))
     if structured:
-        return int(os.getenv("AGENT_MAX_TOKENS", "10000"))
+        # Keep well under typical OpenRouter free-tier residual credit budgets.
+        # Lower default also speeds structured JSON generation.
+        return int(os.getenv("AGENT_MAX_TOKENS", "2500"))
     return 800
+
+
+def _affordable_tokens_from_error(exc: BaseException) -> int | None:
+    """Parse OpenRouter 402 'can only afford N' if present."""
+    text = str(exc)
+    match = re.search(r"can only afford\s+(\d+)", text, flags=re.IGNORECASE)
+    if not match:
+        return None
+    try:
+        return int(match.group(1))
+    except ValueError:
+        return None
+
+
+def _is_credit_limit_error(exc: BaseException) -> bool:
+    text = str(exc).lower()
+    return "402" in text or "can only afford" in text or "requires more credits" in text
+
+
+def _friendly_credit_error(exc: BaseException) -> RuntimeError:
+    affordable = _affordable_tokens_from_error(exc)
+    hint = (
+        f" OpenRouter credits only cover about {affordable} tokens right now."
+        if affordable
+        else ""
+    )
+    return RuntimeError(
+        "OpenRouter is out of credits for this request."
+        f"{hint} Add credits at https://openrouter.ai/settings/credits "
+        "or lower AGENT_MAX_TOKENS / prompt size, then try again."
+    )
+
+
+def _create_chat_completion(client: OpenAI, kwargs: dict[str, Any]) -> Any:
+    """Create a chat completion; on OpenRouter 402, shrink max_tokens and retry once."""
+    try:
+        return client.chat.completions.create(**kwargs)
+    except Exception as exc:
+        if not _is_credit_limit_error(exc):
+            raise
+        affordable = _affordable_tokens_from_error(exc)
+        current = int(kwargs.get("max_tokens") or 0)
+        if affordable is None:
+            raise _friendly_credit_error(exc) from exc
+        # Leave headroom for prompt/system overhead billed against the same balance.
+        next_max = min(current, max(512, affordable - 800))
+        if next_max >= current:
+            raise _friendly_credit_error(exc) from exc
+        logger.warning(
+            "OpenRouter credit limit hit (affordable=%s, requested=%s); retrying with max_tokens=%s",
+            affordable,
+            current,
+            next_max,
+        )
+        retry_kwargs = dict(kwargs)
+        retry_kwargs["max_tokens"] = next_max
+        try:
+            return client.chat.completions.create(**retry_kwargs)
+        except Exception as retry_exc:
+            if _is_credit_limit_error(retry_exc):
+                raise _friendly_credit_error(retry_exc) from retry_exc
+            raise
 
 
 def strip_asterisks(value: Any) -> Any:
@@ -251,6 +316,8 @@ class BaseAgent:
             user_content += (
                 "\n\nRespond with valid JSON only matching the required schema. "
                 "ANSWER THE USER REQUEST DIRECTLY. "
+                "If they only said hi/hello/thanks with no content ask, use response_type "
+                "analysis with a short friendly reply — do NOT invent a content calendar. "
                 "If they asked to compare/analyze competitors, use response_type "
                 "competitor_comparison or analysis — do NOT invent a content calendar. "
                 "Only generate a content calendar when they ask for posts/Reels/calendar. "
@@ -314,15 +381,17 @@ class BaseAgent:
             kwargs["response_format"] = {"type": "json_object"}
 
         try:
-            stream = client.chat.completions.create(**kwargs)
+            stream = _create_chat_completion(client, kwargs)
         except Exception as first_exc:
+            if _is_credit_limit_error(first_exc):
+                raise
             logger.warning(
                 "stream_llm with extras failed (%s); retry keeping no-thinking",
                 first_exc,
             )
             kwargs.pop("response_format", None)
             kwargs["extra_body"] = _kimi_no_thinking_body()
-            stream = client.chat.completions.create(**kwargs)
+            stream = _create_chat_completion(client, kwargs)
 
         full_parts: list[str] = []
         usage = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
@@ -392,12 +461,62 @@ class BaseAgent:
             kwargs["response_format"] = {"type": "json_object"}
 
         try:
-            response = client.chat.completions.create(**kwargs)
+            response = _create_chat_completion(client, kwargs)
         except Exception as exc:
+            if _is_credit_limit_error(exc):
+                raise
             logger.warning("complete_llm with extras failed (%s); retry no-thinking only", exc)
             kwargs.pop("response_format", None)
             kwargs["extra_body"] = _kimi_no_thinking_body()
-            response = client.chat.completions.create(**kwargs)
+            response = _create_chat_completion(client, kwargs)
+
+        # Some OpenRouter / model responses return choices=None (or empty).
+        if not getattr(response, "choices", None):
+            logger.warning(
+                "complete_llm empty choices agent=%s; retrying without response_format",
+                self.agent_type,
+            )
+            kwargs.pop("response_format", None)
+            kwargs["extra_body"] = _kimi_no_thinking_body()
+            response = _create_chat_completion(client, kwargs)
+
+        if not getattr(response, "choices", None):
+            logger.warning(
+                "complete_llm still empty choices agent=%s; falling back to stream_llm",
+                self.agent_type,
+            )
+            # Reuse stream_llm path (already guards empty choices per chunk).
+            gen = self.stream_llm(messages, tools=tools)
+            content_parts: list[str] = []
+            try:
+                while True:
+                    token = next(gen)
+                    content_parts.append(token)
+            except StopIteration as stop:
+                streamed = "".join(content_parts)
+                usage = self._last_usage or {
+                    "input_tokens": 0,
+                    "output_tokens": 0,
+                    "total_tokens": 0,
+                }
+                if stop.value and isinstance(stop.value, tuple) and len(stop.value) >= 2:
+                    streamed = stop.value[0] or streamed
+                    usage = stop.value[1] or usage
+                if not streamed.strip():
+                    raise RuntimeError(
+                        f"LLM returned no choices and empty stream for agent={self.agent_type}"
+                    )
+
+                class _Msg:
+                    content = streamed
+
+                logger.info(
+                    "complete_llm agent=%s finish=%s content_len=%s via_stream_fallback=1",
+                    self.agent_type,
+                    self._last_finish_reason,
+                    len(streamed),
+                )
+                return _Msg(), streamed, usage
 
         message = response.choices[0].message
         content = message.content or ""
@@ -553,16 +672,41 @@ class BaseAgent:
                 )
                 tools_used = list(avatar_bundle.get("tools_used") or [])
 
-            # Keep legacy gather for playbooks / live scrape / ingest merge
-            gathered = self.select_tools(
-                user_id=user_id,
-                avatar_id=avatar_ids[0] if avatar_ids else avatar_id,
-                user_input=user_input,
-                live_mode=live_mode,
-                chatbot_context_on=chatbot_context_on and not avatar_bundle,
-                competitor_url=competitor_url,
-                competitor_summaries=competitor_summaries,
+            # Avoid a second full RAG pass when avatar_bundle already loaded profile +
+            # competitor intel (was roughly doubling pre-LLM latency).
+            needs_legacy_gather = (
+                agent_type == "playbook"
+                or live_mode
+                or bool(competitor_summaries)
+                or (
+                    agent_type == "chatbot"
+                    and chatbot_context_on
+                    and not avatar_bundle
+                )
+                or (
+                    agent_type in {"linkedin", "instagram", "twitter"}
+                    and not avatar_bundle
+                )
             )
+            if needs_legacy_gather:
+                gathered = self.select_tools(
+                    user_id=user_id,
+                    avatar_id=avatar_ids[0] if avatar_ids else avatar_id,
+                    user_input=user_input,
+                    live_mode=live_mode,
+                    chatbot_context_on=chatbot_context_on and not avatar_bundle,
+                    competitor_url=competitor_url,
+                    competitor_summaries=competitor_summaries,
+                )
+            else:
+                gathered = {
+                    "profile": None,
+                    "summaries": [],
+                    "playbooks": [],
+                    "similar": [],
+                    "scrape_result": None,
+                    "tools_used": [],
+                }
             for tool_name in gathered.get("tools_used") or []:
                 if tool_name not in tools_used:
                     tools_used.append(tool_name)

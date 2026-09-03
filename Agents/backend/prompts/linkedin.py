@@ -11,7 +11,7 @@ Rules:
 - When content_type is "video", you MUST include a "transcript" — a concise spoken
   on-camera / voiceover script with rough timing beats (keep each transcript under ~120 words).
   For text or carousel, set transcript to "".
-- Keep the whole JSON compact. Prefer 7 solid ideas over verbose essays.
+- Keep the whole JSON compact. Prefer 3–5 solid ideas over verbose essays.
 - Never use asterisk (*) characters in any string field — no markdown bold/italic.
 - Return valid JSON only (no markdown fences) matching:
 {
@@ -39,6 +39,6 @@ Rules:
 }
 
 CRITICAL: "agent" MUST be the string "linkedin" (not an object). "post_ideas" MUST be an array of objects (not strings).
-Generate at least 5 post_ideas unless the user asks for fewer.
+Generate 3 post_ideas by default (up to 5 if the user asks for more). Keep each post_structure under ~80 words.
 If the user asks for a N-day calendar / plan, cover N days and include video days with transcripts.
 """

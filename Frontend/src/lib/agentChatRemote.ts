@@ -3,6 +3,8 @@ import type { Json } from '../types/database'
 import {
   compactChatStore,
   hydrateChatStore,
+  listLocalAgentChatStores,
+  storeHasUserMessages,
   type ChatStore,
   type StoredChatMessage,
 } from './agentChatStorage'
@@ -77,5 +79,22 @@ export async function upsertRemoteChatStore(
       `Failed to save chat history to Supabase (user_id=${userId}, avatar_id=${avatarId}): ${error.message}`,
       error,
     )
+  }
+}
+
+/**
+ * Push every local agent chat store for this user to Supabase before sign-out.
+ * Skips empty welcome-only stores. Raises on the first failed upsert.
+ */
+export async function flushLocalAgentChatsToRemote(userId: string): Promise<void> {
+  const welcome: StoredChatMessage = {
+    id: 'welcome-placeholder',
+    role: 'assistant',
+    content: '',
+  }
+  const localStores = listLocalAgentChatStores(userId, welcome)
+  for (const entry of localStores) {
+    if (!storeHasUserMessages(entry.store)) continue
+    await upsertRemoteChatStore(userId, entry.avatarId, entry.store)
   }
 }

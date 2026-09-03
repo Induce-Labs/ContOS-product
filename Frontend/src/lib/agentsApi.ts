@@ -196,5 +196,71 @@ export async function invokeAgentStream(
   }
 }
 
+/** Legacy seed text — kept so older stored welcome bubbles still skip in chat memory. */
 export const AGENTS_WELCOME_MESSAGE =
   'Research for this avatar is ready. I can turn competitor data into strategies, content ideas, or comparisons. What do you want to focus on — LinkedIn, Instagram, or a growth playbook?'
+
+const WELCOME_GREETING_RE =
+  /^Good (morning|afternoon|evening|Morning|Afternoon|Evening),\s+.+/
+
+export function timeOfDayGreeting(now: Date = new Date()): 'Good morning' | 'Good afternoon' | 'Good evening' {
+  const hour = now.getHours()
+  if (hour >= 5 && hour < 12) return 'Good morning'
+  if (hour >= 12 && hour < 17) return 'Good afternoon'
+  return 'Good evening'
+}
+
+/** First name from auth metadata, else email local-part, else "there". */
+export function getUserFirstName(user: {
+  email?: string | null
+  user_metadata?: Record<string, unknown> | null
+} | null | undefined): string {
+  const meta = user?.user_metadata ?? {}
+  const rawCandidates = [
+    meta.full_name,
+    meta.name,
+    meta.given_name,
+    meta.first_name,
+  ]
+
+  for (const candidate of rawCandidates) {
+    if (typeof candidate !== 'string') continue
+    const trimmed = candidate.trim()
+    if (!trimmed) continue
+    const first = trimmed.split(/\s+/)[0]
+    if (first) return first
+  }
+
+  const email = user?.email?.trim()
+  if (email) {
+    const local = email.split('@')[0]?.trim()
+    if (local) {
+      const token = local.split(/[._+-]/)[0]
+      if (token) {
+        return token.charAt(0).toUpperCase() + token.slice(1)
+      }
+    }
+  }
+
+  return 'there'
+}
+
+/** Claude-style empty-state line: "Good morning, Sara" */
+export function buildAgentsWelcomeMessage(
+  firstName: string,
+  now: Date = new Date(),
+): string {
+  const name = firstName.trim() || 'there'
+  return `${timeOfDayGreeting(now)}, ${name}`
+}
+
+export function isAgentsWelcomeMessage(content: string): boolean {
+  const text = content.trim()
+  if (!text) return false
+  if (text === AGENTS_WELCOME_MESSAGE) return true
+  if (text.includes(AGENTS_WELCOME_MESSAGE) && WELCOME_GREETING_RE.test(text)) {
+    return true
+  }
+  // Short Claude-style greeting only (no trailing pitch).
+  return WELCOME_GREETING_RE.test(text) && !text.includes('\n') && text.length < 80
+}

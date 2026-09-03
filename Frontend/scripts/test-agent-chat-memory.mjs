@@ -22,6 +22,12 @@ function compile(abs, sourceOverride) {
         join(root, 'src/lib/agentsApi.ts'),
         [
           "export const AGENTS_WELCOME_MESSAGE = 'Research for this project is ready.';",
+          "export function isAgentsWelcomeMessage(content) {",
+          "  const text = String(content || '').trim();",
+          "  if (text === AGENTS_WELCOME_MESSAGE) return true;",
+          "  if (text.includes(AGENTS_WELCOME_MESSAGE) && /^Good (morning|afternoon|evening|Morning|Afternoon|Evening),/.test(text)) return true;",
+          "  return /^Good (morning|afternoon|evening|Morning|Afternoon|Evening),\\s+.+/.test(text) && !text.includes('\\n') && text.length < 80;",
+          "}",
           "export type AgentType = 'chatbot' | 'linkedin' | 'instagram' | 'playbook' | 'twitter';",
         ].join('\n'),
       )
@@ -41,12 +47,22 @@ const { AGENTS_WELCOME_MESSAGE } = compile(
   join(root, 'src/lib/agentsApi.ts'),
   [
     "export const AGENTS_WELCOME_MESSAGE = 'Research for this project is ready.';",
+    "export function isAgentsWelcomeMessage(content) {",
+    "  const text = String(content || '').trim();",
+    "  if (text === AGENTS_WELCOME_MESSAGE) return true;",
+    "  if (text.includes(AGENTS_WELCOME_MESSAGE) && /^Good (morning|afternoon|evening|Morning|Afternoon|Evening),/.test(text)) return true;",
+    "  return /^Good (morning|afternoon|evening|Morning|Afternoon|Evening),\\s+.+/.test(text) && !text.includes('\\n') && text.length < 80;",
+    "}",
     "export type AgentType = 'chatbot' | 'linkedin' | 'instagram' | 'playbook' | 'twitter';",
   ].join('\n'),
 )
 
+const personalizedWelcome = 'Good morning, Ada'
+
 const hist = buildChatHistoryForInvoke([
   { role: 'assistant', content: AGENTS_WELCOME_MESSAGE, agentType: 'chatbot' },
+  { role: 'assistant', content: personalizedWelcome, agentType: 'chatbot' },
+  { role: 'assistant', content: 'Good Morning, Ada! Research for this project is ready.', agentType: 'chatbot' },
   { role: 'user', content: 'I sell poetry' },
   { role: 'assistant', content: 'Try carousels', agentType: 'chatbot' },
   {
@@ -65,4 +81,6 @@ assert.equal(hist[0].content, 'I sell poetry')
 assert.ok(hist.some((t) => t.content.includes('carousels') || t.content.includes('Founder')))
 assert.equal(hist[hist.length - 1].content, 'and Reels?')
 assert.ok(!hist.some((t) => t.content === AGENTS_WELCOME_MESSAGE))
+assert.ok(!hist.some((t) => t.content === personalizedWelcome))
+assert.ok(!hist.some((t) => t.content.startsWith('Good Morning, Ada!')))
 console.log('OK frontend chat memory builder')

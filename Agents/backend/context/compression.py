@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from typing import Any
 
 logger = logging.getLogger(__name__)
 
-MAX_CONTEXT_TOKENS = 6000
+MAX_CONTEXT_TOKENS = int(os.getenv("AGENT_MAX_CONTEXT_TOKENS", "3500"))
 
 
 def estimate_tokens(text: str) -> int:

@@ -20,3 +20,19 @@ body {
   background-color: var(--color-canvas);
   color: var(--color-ink);
 }
+
+@keyframes contos-mark-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.92);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.contos-mark-loading {
+  animation: contos-mark-pulse 1.1s ease-in-out infinite;
+}

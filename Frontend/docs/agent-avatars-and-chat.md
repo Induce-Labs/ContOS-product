@@ -14,10 +14,10 @@
 - **Source of truth:** Supabase table `agent_chat_stores` — **one JSONB row per `(user_id, avatar_id)`** (space-efficient vs per-message rows).
 - **Local cache:** `contos_agents_chat:${userId}:${avatarId}` in `localStorage` for instant hydrate.
 - Helpers: [Frontend/src/lib/agentChatStorage.ts](../src/lib/agentChatStorage.ts), [Frontend/src/lib/agentChatRemote.ts](../src/lib/agentChatRemote.ts)
-- Versioned store (`version: 2`) with `activeSessionId` + up to 30 sessions (80 messages each); `output` blobs stripped before persist
-- [AgentsPage.tsx](../src/pages/AgentsPage.tsx) loads local → merges remote by `updated_at` → upserts when local is newer or remote is empty
+- Versioned store (`version: 2`) with `activeSessionId` + up to 30 sessions (80 messages each); structured `output` is kept so agent cards rehydrate
+- [AgentsPage.tsx](../src/pages/AgentsPage.tsx) loads local → merges remote (cloud wins when local is welcome-only after logout) → upserts when local is newer
 - Remote upserts are debounced and skipped while SSE is streaming (tokens only hit `localStorage`)
-- Sign-out clears the **local** cache only; cloud rows remain for the next sign-in
+- Sign-out **flushes** local chats to Supabase first, then clears the device cache; cloud rows restore on next sign-in
 
 ### SQL
 
@@ -31,6 +31,15 @@
 - Frontend sends `chat_history` on `POST /api/agents/invoke` (prior turns only; excludes the new user message)
 - Backend: [Agents/backend/chat_history.py](../../Agents/backend/chat_history.py) normalizes roles/length; [BaseAgent.build_messages](../../Agents/backend/agents/base_agent.py) interleaves turns and appends a `CONVERSATION MEMORY` block
 - Instant chatbot greetings are skipped when `chat_history` is present
+
+### Personalized welcome
+
+- Empty chat shows a Claude-style centered heading only: ContOS mark + `Good morning, Sara` (time-aware)
+- Name comes from Supabase auth metadata (`full_name` / `name` / `given_name`), else the email local-part
+- Not rendered as a chat bubble; conversation bubbles appear after the first user message
+- Empty threads refresh the greeting on open so the time-of-day line stays current
+- While the agent is responding, pipeline stages (e.g. `calling_llm`) are hidden; a pulsing ContOS mark is shown instead
+- `isAgentsWelcomeMessage` keeps personalized (and legacy) welcome text out of LLM history
 
 ### New chat / Previous chats
 

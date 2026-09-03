@@ -36,8 +36,61 @@ def _competitor_context_for_avatar(
     )
     platform = "linkedin" if agent_type == "linkedin" else "instagram"
 
+    # Prefer a single summaries fetch first. Embedding RAG is only worth it when
+    # there are more rows than we would send to the model anyway.
     try:
-        if agent_type in {"linkedin", "instagram"}:
+        fetched = fetch_summaries(
+            avatar_id=avatar_id,
+            user_id=user_id,
+            platform=None if agent_type == "chatbot" else platform,
+        )
+        tools_used.append("fetch_summaries")
+        if isinstance(fetched, list):
+            summaries = [s for s in fetched if isinstance(s, dict)]
+        elif isinstance(fetched, dict):
+            summaries = list(fetched.get("summaries") or [])
+    except Exception as exc:
+        logger.warning(
+            "avatar fetch_summaries failed avatar_id=%s: %s",
+            avatar_id,
+            exc,
+        )
+
+    if agent_type == "chatbot":
+        # Light dual-platform lexical rank when many rows; otherwise keep raw list.
+        if len(summaries) > 4:
+            try:
+                ranked: list[dict[str, Any]] = []
+                for tbl, plat in (
+                    ("linkedin_content_summaries", "linkedin"),
+                    ("instagram_content_summaries", "instagram"),
+                ):
+                    matches = similarity_search(
+                        query_text=user_input,
+                        table=tbl,
+                        top_k=2,
+                        avatar_id=avatar_id,
+                        user_id=user_id,
+                        platform=plat if tbl == "instagram_content_summaries" else None,
+                        fast=True,
+                    )
+                    tools_used.append("similarity_search")
+                    for match in matches or []:
+                        payload = match.get("content") if isinstance(match, dict) else None
+                        if isinstance(payload, dict):
+                            ranked.append(payload)
+                if ranked:
+                    summaries = ranked
+            except Exception as exc:
+                logger.warning(
+                    "avatar chatbot lexical rank failed avatar_id=%s: %s",
+                    avatar_id,
+                    exc,
+                )
+        return summaries[:4], tools_used
+
+    if agent_type in {"linkedin", "instagram"} and len(summaries) > 3:
+        try:
             matches = similarity_search(
                 query_text=user_input,
                 table=table,
@@ -45,58 +98,25 @@ def _competitor_context_for_avatar(
                 avatar_id=avatar_id,
                 user_id=user_id,
                 platform=platform if agent_type == "instagram" else None,
+                # Lexical rank avoids an OpenRouter embedding round-trip (~1–3s).
+                fast=True,
             )
             tools_used.append("similarity_search")
+            ranked = []
             for match in matches or []:
                 payload = match.get("content") if isinstance(match, dict) else None
                 if isinstance(payload, dict):
-                    summaries.append(payload)
-        else:
-            # chatbot / default: search both platforms lightly
-            for tbl, plat in (
-                ("linkedin_content_summaries", "linkedin"),
-                ("instagram_content_summaries", "instagram"),
-            ):
-                matches = similarity_search(
-                    query_text=user_input,
-                    table=tbl,
-                    top_k=2,
-                    avatar_id=avatar_id,
-                    user_id=user_id,
-                    platform=plat if tbl == "instagram_content_summaries" else None,
-                )
-                tools_used.append("similarity_search")
-                for match in matches or []:
-                    payload = match.get("content") if isinstance(match, dict) else None
-                    if isinstance(payload, dict):
-                        summaries.append(payload)
-    except Exception as exc:
-        logger.warning(
-            "avatar RAG similarity_search failed avatar_id=%s: %s",
-            avatar_id,
-            exc,
-        )
-
-    if not summaries:
-        try:
-            fetched = fetch_summaries(
-                avatar_id=avatar_id,
-                user_id=user_id,
-                platform=None if agent_type == "chatbot" else platform,
-            )
-            tools_used.append("fetch_summaries")
-            if isinstance(fetched, list):
-                summaries = [s for s in fetched if isinstance(s, dict)]
-            elif isinstance(fetched, dict):
-                summaries = list(fetched.get("summaries") or [])
+                    ranked.append(payload)
+            if ranked:
+                summaries = ranked
         except Exception as exc:
             logger.warning(
-                "avatar fetch_summaries failed avatar_id=%s: %s",
+                "avatar RAG similarity_search failed avatar_id=%s: %s",
                 avatar_id,
                 exc,
             )
 
-    return summaries, tools_used
+    return summaries[:3], tools_used
 
 
 def build_avatar_context(

@@ -1,4 +1,4 @@
-import { AGENTS_WELCOME_MESSAGE, type AgentType } from './agentsApi'
+import { isAgentsWelcomeMessage, type AgentType } from './agentsApi'
 import { formatStructuredAgentOutput } from './agentOutputDisplay'
 
 export type ChatHistoryTurn = {
@@ -40,7 +40,7 @@ export function buildChatHistoryForInvoke(
   const turns: ChatHistoryTurn[] = []
 
   for (const message of messages) {
-    if (message.role === 'assistant' && message.content === AGENTS_WELCOME_MESSAGE) {
+    if (message.role === 'assistant' && isAgentsWelcomeMessage(message.content)) {
       continue
     }
 

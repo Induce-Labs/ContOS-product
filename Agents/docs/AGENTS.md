@@ -163,7 +163,8 @@ contos-agents/
 | Embeddings | `openai/text-embedding-3-small` via OpenRouter (1536 dims) |
 | Streaming | SSE `status` → `token`* → `complete` / `error` |
 | Chatbot max tokens | `CHATBOT_MAX_TOKENS` (default 350) |
-| Platform agent max tokens | `AGENT_MAX_TOKENS` (default 1800) |
+| Platform agent max tokens | `AGENT_MAX_TOKENS` (default 2500) |
+| Context token budget | `AGENT_MAX_CONTEXT_TOKENS` (default 3500) |
 
 ---
 
@@ -301,14 +302,14 @@ npm run dev
 | Optimization | Effect |
 |--------------|--------|
 | Instant greetings | No OpenRouter for `hi` / `hello` |
-| Short chat skips heavy RAG | Faster chatbot replies |
-| Live `content_summaries.summary` | Agents use real competitor intel |
-| Local cosine when RPC missing | Still ranks stored row embeddings |
-| `max_tokens` caps | Shorter generations |
+| Skip duplicate gather when avatar context exists | Cuts a second full RAG/embed pass (~5–15s) |
+| Lexical competitor rank (`fast=True`) | Avoids OpenRouter embedding round-trips |
+| Smaller context budget (`AGENT_MAX_CONTEXT_TOKENS=3500`) | Faster LLM prefill |
+| `AGENT_MAX_TOKENS` default 2500 | Faster structured JSON; fits credit budgets |
+| 3–5 LinkedIn/Instagram ideas by default | Shorter generations |
 | Async `agent_calls` logging | Don’t block SSE close |
-| No `stream_options` retry | Avoid double OpenRouter request |
 
-Platform content generation (full LinkedIn calendars, etc.) is still slower — that is model generation time on Kimi.
+Platform content generation is still model-bound on Kimi. Expect ~20–40s for LinkedIn/Instagram strategy asks after these cuts; add OpenRouter credits / a faster model if you need consistently under 20s.
 
 ---
 
