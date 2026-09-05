@@ -1,13 +1,13 @@
 import logging
 from uuid import UUID
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
 from app.api.deps import get_current_user_id
 from app.constants import MAX_COMPETITORS_PER_AVATAR
 from app.errors import ConfigurationError, RepositoryError
-from app.services.pipeline import run_pipeline_batch
+from app.services.enqueue import EnqueueError, enqueue_competitor_jobs
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +38,6 @@ class StopCompetitorResponse(BaseModel):
 def enqueue_competitor_scrape_jobs(
     avatar_id: UUID,
     body: ScrapeEnqueueRequest,
-    background_tasks: BackgroundTasks,
     user_id: UUID = Depends(get_current_user_id),
 ) -> ScrapeEnqueueResponse:
     try:
@@ -66,7 +65,13 @@ def enqueue_competitor_scrape_jobs(
             detail=str(error),
         ) from error
 
-    background_tasks.add_task(run_pipeline_batch, avatar_id, body.competitor_ids)
+    try:
+        enqueue_competitor_jobs(avatar_id, body.competitor_ids)
+    except EnqueueError as error:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(error),
+        ) from error
 
     logger.info(
         "Queued competitor scrape batch",

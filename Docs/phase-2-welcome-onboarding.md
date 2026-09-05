@@ -62,7 +62,9 @@ Completeness counts **required** active questions only (string or object-with-an
 
 ### Profile summary (chatbot context)
 
-When the user finishes the last profiling question, the frontend calls **`POST /api/profiling/summarize`** on the Agents API (default client timeout **240s** to allow website crawl). The backend:
+When the user finishes the last profiling question, the frontend calls **`POST /api/profiling/summarize`** on the Agents API. That endpoint returns **`202 Accepted`** and enqueues a Celery `website` queue job (Redis). The client then polls `avatars.profile_summary_status` (default overall timeout **240s**) until `completed` or `failed`. See [`Docs/phase-celery.md`](./phase-celery.md).
+
+The worker:
 
 1. If `profiling_data.website_url` is present — crawl with Apify **Website Content Crawler** (`apify/website-content-crawler`), LLM-summarize the pages, and store **`avatars.website_summary*`** (replace in place on URL change; skip when no URL).
 2. Generate the overall **`avatars.profile_summary*`** from questionnaire answers **plus** `website_summary` when available (Gemini via OpenRouter, env `PROFILE_SUMMARY_MODEL`).
@@ -83,7 +85,7 @@ Website crawl/summarize failures are **non-fatal**: status is set to `failed` / 
 | `website_summary_generated_at` | Last successful website summary timestamp           |
 | `website_summary_error`        | Last website crawl/summary failure (if any)         |
 
-**Env (Agents, often via `Backend/.env`):** `APIFY_API_TOKEN`, `APIFY_WEBSITE_CRAWLER_ACTOR_ID`, `WEBSITE_CRAWL_WAIT_SECS`, `WEBSITE_CRAWL_MAX_PAGES`, `WEBSITE_CRAWL_MAX_DEPTH`.
+**Env (Agents, often via `Backend/.env`):** `APIFY_API_TOKEN`, `APIFY_WEBSITE_CRAWLER_ACTOR_ID`, `WEBSITE_CRAWL_WAIT_SECS`, `WEBSITE_CRAWL_MAX_PAGES`, `WEBSITE_CRAWL_MAX_DEPTH`, `REDIS_URL`.
 
 - **Raw answers** remain in `profiling_data` (source of truth).
 - Summary fields are **server-written only** (Supabase trigger blocks client updates).

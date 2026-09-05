@@ -50,7 +50,7 @@ Migration: `supabase/migrations/20260810120000_competitor_cancel_requested.sql`
 
 
 
-Returns `202 Accepted` immediately. Work runs in a FastAPI `BackgroundTasks` job.
+Returns `202 Accepted` immediately. Work is published to the Celery `scrape` queue (Redis broker). See [`Docs/phase-celery.md`](./phase-celery.md).
 
 
 
@@ -248,7 +248,7 @@ Stored in `instagram_content_summaries.summary`:
 
 
 
-- Uses Apify sync actor endpoints (simple for v1; may need queue/worker at scale)
+- Uses Celery workers + Redis for scrape jobs at scale (see [`phase-celery.md`](./phase-celery.md)); Apify actor calls remain sync inside each worker task
 
 - Transcriber sends reel URLs in `bulkUrls` batches of `TRANSCRIBE_BATCH_SIZE` (default 5), retries failures one URL at a time, and stores `transcription_error` on failures
 

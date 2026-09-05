@@ -61,7 +61,36 @@ export async function createCompetitors(
 
   const existingCompetitors = await fetchCompetitorsForAvatar(avatarId)
 
-  if (existingCompetitors.length + handleOrUrls.length > MAX_COMPETITORS_PER_AVATAR) {
+  const existingByKey = new Map(
+    existingCompetitors.map((competitor) => [
+      competitorIdentityKey(
+        competitor.platform as CompetitorPlatform,
+        competitor.handle_or_url,
+      ),
+      competitor,
+    ]),
+  )
+
+  const reused: Competitor[] = []
+  const toInsert: string[] = []
+  const seenInRequest = new Set<string>()
+
+  for (const handleOrUrl of handleOrUrls) {
+    const key = competitorIdentityKey(platform, handleOrUrl)
+    if (seenInRequest.has(key)) {
+      continue
+    }
+    seenInRequest.add(key)
+
+    const already = existingByKey.get(key)
+    if (already) {
+      reused.push(already)
+      continue
+    }
+    toInsert.push(handleOrUrl)
+  }
+
+  if (existingCompetitors.length + toInsert.length > MAX_COMPETITORS_PER_AVATAR) {
     const remainingSlots = MAX_COMPETITORS_PER_AVATAR - existingCompetitors.length
     throw new CompetitorsServiceError(
       remainingSlots <= 0
@@ -70,34 +99,11 @@ export async function createCompetitors(
     )
   }
 
-  const existingKeys = new Set(
-    existingCompetitors.map((competitor) =>
-      competitorIdentityKey(
-        competitor.platform as CompetitorPlatform,
-        competitor.handle_or_url,
-      ),
-    ),
-  )
-
-  for (const handleOrUrl of handleOrUrls) {
-    const key = competitorIdentityKey(platform, handleOrUrl)
-    if (existingKeys.has(key)) {
-      throw new CompetitorsServiceError(
-        platform === 'linkedin'
-          ? `${getLinkedInSlug(handleOrUrl)} is already tracked on this avatar.`
-          : `@${getInstagramHandle(handleOrUrl)} is already tracked on this avatar.`,
-      )
-    }
-    existingKeys.add(key)
+  if (toInsert.length === 0) {
+    return reused
   }
 
-  if (handleOrUrls.length > MAX_COMPETITORS_PER_AVATAR) {
-    throw new CompetitorsServiceError(
-      `An avatar can have at most ${MAX_COMPETITORS_PER_AVATAR} competitors.`,
-    )
-  }
-
-  const rows: TablesInsert<'competitors'>[] = handleOrUrls.map((handleOrUrl) => ({
+  const rows: TablesInsert<'competitors'>[] = toInsert.map((handleOrUrl) => ({
     avatar_id: avatarId,
     platform,
     handle_or_url: handleOrUrl,
@@ -111,7 +117,7 @@ export async function createCompetitors(
     throw new CompetitorsServiceError(mapCompetitorCapError(error.message), error)
   }
 
-  return data
+  return [...reused, ...data]
 }
 
 function mapCompetitorCapError(message: string): string {

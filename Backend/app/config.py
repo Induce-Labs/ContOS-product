@@ -58,6 +58,34 @@ class Settings(BaseSettings):
     llm_timeout_secs: int = Field(default=120, validation_alias="LLM_TIMEOUT_SECS")
     llm_max_tokens: int = Field(default=4096, validation_alias="LLM_MAX_TOKENS")
     llm_max_content_items: int = Field(default=10, validation_alias="LLM_MAX_CONTENT_ITEMS")
+    redis_url: str = Field(
+        default="redis://localhost:6379/0",
+        validation_alias="REDIS_URL",
+    )
+    celery_task_soft_time_limit: int = Field(
+        default=840,
+        validation_alias="CELERY_TASK_SOFT_TIME_LIMIT",
+    )
+    celery_task_time_limit: int = Field(
+        default=900,
+        validation_alias="CELERY_TASK_TIME_LIMIT",
+    )
+    celery_worker_concurrency: int = Field(
+        default=2,
+        validation_alias="CELERY_WORKER_CONCURRENCY",
+    )
+    celery_scrape_rate_limit: str = Field(
+        default="10/m",
+        validation_alias="CELERY_SCRAPE_RATE_LIMIT",
+    )
+    celery_task_max_retries: int = Field(
+        default=2,
+        validation_alias="CELERY_TASK_MAX_RETRIES",
+    )
+    celery_task_retry_backoff: int = Field(
+        default=15,
+        validation_alias="CELERY_TASK_RETRY_BACKOFF",
+    )
 
     @property
     def cors_origin_list(self) -> list[str]:

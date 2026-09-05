@@ -21,6 +21,8 @@ export type CompetitorsStepProps = {
   onRemoveField: (index: number) => void
   onSubmit: (event: FormEvent<HTMLFormElement>) => void
   onBack: () => void
+  onSignOut?: () => void
+  isSigningOut?: boolean
 }
 
 export function CompetitorsStepLoading() {
@@ -31,11 +33,29 @@ export function CompetitorsStepLoading() {
   )
 }
 
-export function CompetitorsStepUnavailable({ message }: { message: string }) {
+export function CompetitorsStepUnavailable({
+  message,
+  onSignOut,
+  isSigningOut = false,
+}: {
+  message: string
+  onSignOut?: () => void
+  isSigningOut?: boolean
+}) {
   return (
     <div className="flex min-h-dvh items-center justify-center bg-canvas px-4">
-      <div className="max-w-md rounded-[2rem] border border-red-200 bg-red-50 p-6 text-center text-sm text-red-700">
-        {message}
+      <div className="max-w-md space-y-4 rounded-[2rem] border border-red-200 bg-red-50 p-6 text-center text-sm text-red-700">
+        <p>{message}</p>
+        {onSignOut ? (
+          <button
+            type="button"
+            onClick={onSignOut}
+            disabled={isSigningOut}
+            className="rounded-xl border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-700 transition hover:bg-red-100 disabled:opacity-60"
+          >
+            {isSigningOut ? 'Signing out…' : 'Sign out'}
+          </button>
+        ) : null}
       </div>
     </div>
   )
@@ -54,18 +74,32 @@ export function CompetitorsStep({
   onRemoveField,
   onSubmit,
   onBack,
+  onSignOut,
+  isSigningOut = false,
 }: CompetitorsStepProps) {
   return (
     <div className="min-h-dvh overflow-y-auto bg-canvas px-4 py-10">
       <div className="mx-auto w-full max-w-2xl">
-        <div className="mb-8">
-          <p className="text-sm font-medium text-accent-primary">ContOS</p>
-          <h1 className="mt-1 text-2xl font-semibold text-ink">Know your competitive landscape</h1>
-          <p className="mt-2 text-sm text-ink-muted">
-            Add competitors to help ContOS understand what is happening in your space. Instagram
-            and LinkedIn profiles. Add {minCompetitors}–{maxCompetitors} (recommend{' '}
-            {RECOMMENDED_COMPETITORS_PER_AVATAR}).
-          </p>
+        <div className="mb-8 flex items-start justify-between gap-4">
+          <div>
+            <p className="text-sm font-medium text-accent-primary">ContOS</p>
+            <h1 className="mt-1 text-2xl font-semibold text-ink">Know your competitive landscape</h1>
+            <p className="mt-2 text-sm text-ink-muted">
+              Add competitors to help ContOS understand what is happening in your space. Instagram
+              and LinkedIn profiles. Add {minCompetitors}–{maxCompetitors} (recommend{' '}
+              {RECOMMENDED_COMPETITORS_PER_AVATAR}).
+            </p>
+          </div>
+          {onSignOut ? (
+            <button
+              type="button"
+              onClick={onSignOut}
+              disabled={isSubmitting || isSigningOut}
+              className="shrink-0 rounded-full border border-border-hairline bg-white px-4 py-2 text-sm text-ink transition hover:bg-accent-primary-soft disabled:opacity-60"
+            >
+              {isSigningOut ? 'Signing out…' : 'Sign out'}
+            </button>
+          ) : null}
         </div>
 
         <section className="rounded-[2rem] border border-border-hairline bg-canvas-raised p-8">
@@ -134,12 +168,12 @@ export function CompetitorsStep({
               <button
                 type="button"
                 onClick={onBack}
-                disabled={isSubmitting}
+                disabled={isSubmitting || isSigningOut}
                 className="rounded-xl border border-border-hairline px-4 py-3 text-sm font-medium text-ink transition hover:bg-accent-primary-soft disabled:opacity-60"
               >
                 Back
               </button>
-              <PrimaryButton disabled={isSubmitting}>
+              <PrimaryButton disabled={isSubmitting || isSigningOut}>
                 {isSubmitting ? 'Starting research…' : 'Research Competitors →'}
               </PrimaryButton>
             </div>

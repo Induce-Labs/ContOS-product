@@ -6,7 +6,7 @@ import logging
 import os
 import time
 from typing import Any
-from urllib.parse import quote, urlparse
+from urllib.parse import urlparse
 
 import httpx
 
@@ -175,16 +175,18 @@ class ApifyWebsiteCrawler:
         actor_input: dict[str, Any],
     ) -> list[dict[str, Any]]:
         actor_path = self._actor_id_to_path(actor_id)
+        # Prefer Authorization header so httpx/access logs never print the token.
         url = (
             f"https://api.apify.com/v2/acts/{actor_path}/run-sync-get-dataset-items"
-            f"?token={quote(self._token)}&timeout={self._wait_secs}"
+            f"?timeout={self._wait_secs}"
         )
+        headers = {"Authorization": f"Bearer {self._token}"}
 
         last_error: Exception | None = None
         for attempt in range(1, 3):
             try:
                 with httpx.Client(timeout=self._wait_secs + 30) as client:
-                    response = client.post(url, json=actor_input)
+                    response = client.post(url, json=actor_input, headers=headers)
 
                 if response.status_code >= 400:
                     raise WebsiteCrawlError(

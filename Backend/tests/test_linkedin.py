@@ -164,6 +164,7 @@ class TestLinkedInPipelineBranch:
         competitor_id = uuid4()
         avatar_id = uuid4()
         repository = MagicMock()
+        repository.is_cancel_requested.return_value = False
         apify_client = MagicMock()
         apify_client.scrape_linkedin_profile.return_value = []
 

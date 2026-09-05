@@ -48,7 +48,15 @@ def get_current_user_id(
             detail="Authentication service is not configured.",
         ) from error
     except Exception as error:
-        logger.warning("Failed to validate access token", extra={"error": str(error)})
+        logger.warning(
+            "Failed to validate access token",
+            extra={
+                "error": str(error),
+                "error_type": type(error).__name__,
+                "supabase_host": settings.supabase_url.split("//", 1)[-1].split("/", 1)[0],
+                "token_segments": len(access_token.split(".")),
+            },
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired access token.",

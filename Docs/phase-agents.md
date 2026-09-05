@@ -33,18 +33,29 @@ Frontend (:5173)
 
 ## Local run
 
-Three processes:
+Five processes (Redis + scrape API/worker + Agents API/worker + frontend):
 
 ```bash
+# Terminal 0 — Redis (repo root)
+docker compose up -d
+
 # Terminal 1 — scrape Backend
 cd Backend && uvicorn app.main:app --reload --port 8000
 
-# Terminal 2 — Agents
+# Terminal 2 — scrape Celery worker
+cd Backend && celery -A app.celery_app worker --loglevel=info -Q scrape
+
+# Terminal 3 — Agents
 cd Agents/backend && uvicorn main:app --reload --host 127.0.0.1 --port 8001
 
-# Terminal 3 — Frontend
+# Terminal 4 — Agents Celery website worker
+cd Agents/backend && celery -A celery_app worker --loglevel=info -Q website
+
+# Terminal 5 — Frontend
 cd Frontend && npm run dev
 ```
+
+See [`Docs/phase-celery.md`](./phase-celery.md).
 
 Frontend env:
 

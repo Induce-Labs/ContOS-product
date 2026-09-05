@@ -44,10 +44,11 @@ class SupabaseRepository:
             .select("id")
             .eq("id", str(avatar_id))
             .eq("user_id", str(user_id))
-            .maybe_single()
+            .limit(1)
             .execute()
         )
-        if response.data is None:
+        rows = [] if response is None else (response.data or [])
+        if not rows:
             raise RepositoryError(
                 "Avatar not found or you do not have permission to access it.",
             )
@@ -100,23 +101,25 @@ class SupabaseRepository:
             .select("id, avatar_id, pipeline_step, scrape_status, cancel_requested")
             .eq("id", str(competitor_id))
             .eq("avatar_id", str(avatar_id))
-            .maybe_single()
+            .limit(1)
             .execute()
         )
-        if response.data is None:
+        rows = [] if response is None else (response.data or [])
+        if not rows:
             raise RepositoryError(
                 "Competitor not found or does not belong to the specified avatar.",
             )
+        row = rows[0]
 
-        pipeline_step = str(response.data.get("pipeline_step") or "")
+        pipeline_step = str(row.get("pipeline_step") or "")
         if pipeline_step not in {"scraping", "transcribing", "analyzing"}:
             raise RepositoryError(
                 f"Competitor {competitor_id} is not running "
                 f"(pipeline_step={pipeline_step}). Stop is only available while research is in progress.",
             )
 
-        if response.data.get("cancel_requested"):
-            return response.data
+        if row.get("cancel_requested"):
+            return row
 
         update_response = (
             self._client.table("competitors")
@@ -125,24 +128,25 @@ class SupabaseRepository:
             .eq("avatar_id", str(avatar_id))
             .execute()
         )
-        if update_response.data is None:
+        if update_response is None or update_response.data is None:
             raise RepositoryError(
                 f"Failed to request cancel for competitor {competitor_id}.",
             )
 
-        return {**response.data, "cancel_requested": True}
+        return {**row, "cancel_requested": True}
 
     def is_cancel_requested(self, competitor_id: UUID) -> bool:
         response = (
             self._client.table("competitors")
             .select("cancel_requested")
             .eq("id", str(competitor_id))
-            .maybe_single()
+            .limit(1)
             .execute()
         )
-        if response.data is None:
+        rows = [] if response is None else (response.data or [])
+        if not rows:
             raise RepositoryError(f"Competitor {competitor_id} was not found.")
-        return bool(response.data.get("cancel_requested"))
+        return bool(rows[0].get("cancel_requested"))
 
     def clear_cancel_requested(self, competitor_id: UUID) -> None:
         response = (

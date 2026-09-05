@@ -1,4 +1,5 @@
-import { supabase, getApiBaseUrl } from './supabase'
+import { getAccessToken as getAuthAccessToken } from './auth'
+import { getApiBaseUrl } from './supabase'
 
 export class AgentsApiError extends Error {
   readonly statusCode: number | null
@@ -64,20 +65,13 @@ export function getScrapeApiBaseUrl(): string {
 }
 
 async function getAccessToken(): Promise<string> {
-  const {
-    data: { session },
-    error: sessionError,
-  } = await supabase.auth.getSession()
-
-  if (sessionError) {
-    throw new AgentsApiError(`Failed to read auth session: ${sessionError.message}`)
+  try {
+    return await getAuthAccessToken()
+  } catch (error: unknown) {
+    throw new AgentsApiError(
+      error instanceof Error ? error.message : 'You must be signed in to use ContOS Agents.',
+    )
   }
-
-  if (!session?.access_token) {
-    throw new AgentsApiError('You must be signed in to use ContOS Agents.')
-  }
-
-  return session.access_token
 }
 
 function parseSseChunk(

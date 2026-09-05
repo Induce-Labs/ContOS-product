@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, Literal
 from uuid import UUID
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
@@ -116,14 +116,17 @@ def _sse(event: str, data: dict[str, Any]) -> str:
 
 
 @app.get("/api/health")
-def health() -> dict[str, Any]:
+def health(response: Response) -> dict[str, Any]:
     from env_loader import _SCRAPE_BACKEND_ENV, load_agents_env as _load
+    from services.redis_health import ping_redis
 
     _load()
     scrape_env = _SCRAPE_BACKEND_ENV
-    return {
-        "status": "ok",
+    redis_ok = ping_redis()
+    payload: dict[str, Any] = {
+        "status": "ok" if redis_ok else "degraded",
         "service": "contos-agents",
+        "redis": "up" if redis_ok else "down",
         "llm_model": os.getenv("LLM_MODEL", "moonshotai/kimi-k2.6"),
         "embedding_model": os.getenv(
             "EMBEDDING_MODEL", "openai/text-embedding-3-small"
@@ -137,6 +140,9 @@ def health() -> dict[str, Any]:
         "scrape_env_found": scrape_env.is_file(),
         "scrape_env_bytes": scrape_env.stat().st_size if scrape_env.is_file() else 0,
     }
+    if not redis_ok:
+        response.status_code = 503
+    return payload
 
 
 @app.post("/api/competitors/ingest")
@@ -205,30 +211,35 @@ def ingest_competitors(
     }
 
 
-@app.post("/api/profiling/summarize")
+@app.post("/api/profiling/summarize", status_code=202)
 def summarize_profiling(
     body: ProfileSummarizeRequest,
     user_id: UUID = Depends(get_current_user_id),
 ) -> dict[str, Any]:
-    """Generate a structured profile summary from avatars.profiling_data (Gemini via OpenRouter)."""
+    """Enqueue website crawl + profile summary on the Celery website queue."""
     verify_avatar_owner(body.avatar_id, user_id)
 
-    from services.profile_summary import ProfileSummaryError, generate_and_store_profile_summary
+    from services.enqueue_profiling import EnqueueProfilingError, enqueue_profiling_summarize
 
     try:
-        return generate_and_store_profile_summary(
+        enqueue_profiling_summarize(
             avatar_id=body.avatar_id,
             user_id=str(user_id),
             force=body.force,
         )
-    except ProfileSummaryError as exc:
+    except EnqueueProfilingError as exc:
         raise HTTPException(
-            status_code=502,
-            detail={
-                "message": str(exc),
-                "avatar_id": body.avatar_id,
-            },
+            status_code=500,
+            detail=str(exc),
         ) from exc
+
+    return {
+        "status": "queued",
+        "avatar_id": body.avatar_id,
+        "message": (
+            f"Website crawl and profile summarization queued for avatar {body.avatar_id}."
+        ),
+    }
 
 
 @app.post("/api/agents/invoke")

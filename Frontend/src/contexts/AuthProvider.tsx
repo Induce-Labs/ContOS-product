@@ -53,12 +53,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   }, [])
 
-  const signOut = useCallback(async () => {
+  const signOut = useCallback(async (options?: { force?: boolean }) => {
     const userId = session?.user?.id
+    const force = options?.force === true
 
     // Persist chats to Supabase before clearing the local cache so history
     // survives logout → login on this (and other) devices.
-    if (userId) {
+    if (userId && !force) {
       try {
         await flushLocalAgentChatsToRemote(userId)
       } catch (error) {
@@ -71,10 +72,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
     }
 
-    const { error } = await supabase.auth.signOut()
+    const { error } = await supabase.auth.signOut(
+      force ? { scope: 'local' } : undefined,
+    )
 
     if (error) {
-      throw new Error(`Sign out failed: ${error.message}`)
+      // Last-resort local clear when the auth server also rejects the session.
+      const { error: localError } = await supabase.auth.signOut({ scope: 'local' })
+      if (localError) {
+        throw new Error(`Sign out failed: ${error.message}`)
+      }
     }
 
     clearAgentChatsForUser(userId)

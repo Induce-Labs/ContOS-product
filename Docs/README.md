@@ -12,3 +12,4 @@
 | 6 | [phase-6-hardening.md](./phase-6-hardening.md) |
 | LinkedIn | [phase-linkedin.md](./phase-linkedin.md) |
 | Agents | [phase-agents.md](./phase-agents.md) |
+| Celery / Redis | [phase-celery.md](./phase-celery.md) |

@@ -7,3 +7,5 @@ httpx
 tiktoken
 pydantic
 sse-starlette
+celery[redis]==5.5.3
+redis==5.2.1

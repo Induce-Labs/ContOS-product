@@ -1,0 +1,21 @@
+# Local Redis broker for ContOS Celery (Backend scrape + Agents website queues).
+# Production uses a hosted REDIS_URL — do not deploy this Compose file as-is.
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: contos-redis
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - contos-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  contos-redis-data:

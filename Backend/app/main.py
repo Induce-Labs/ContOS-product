@@ -1,16 +1,28 @@
 import logging
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes.avatars import router as avatars_router
 from app.config import get_settings
+from app.services.redis_health import ping_redis
 
 settings = get_settings()
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(name)s %(message)s",
+)
+
+_logger = logging.getLogger(__name__)
+_supabase_host = settings.supabase_url.split("//", 1)[-1].split("/", 1)[0]
+_logger.info(
+    "ContOS API starting",
+    extra={
+        "supabase_host": _supabase_host,
+        "service_role_configured": bool(settings.supabase_service_role_key),
+        "cors_origins": settings.cors_origin_list,
+    },
 )
 
 if settings.pipeline_verbose:
@@ -40,5 +52,9 @@ app.include_router(avatars_router)
 
 
 @app.get("/health")
-def health() -> dict[str, str]:
-    return {"status": "ok"}
+def health(response: Response) -> dict[str, str]:
+    redis_ok = ping_redis()
+    if not redis_ok:
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+        return {"status": "degraded", "redis": "down"}
+    return {"status": "ok", "redis": "up"}

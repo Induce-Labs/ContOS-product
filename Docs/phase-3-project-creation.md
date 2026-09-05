@@ -10,10 +10,10 @@ Let authenticated users create a project, add 1–10 Instagram competitors, pers
 2. **Step 1:** Enter project name + select Personal Branding or Business
 3. **Step 2:** Add Instagram competitor handles/URLs (recommended 5, min 1, max 10)
 4. On submit:
-   - Insert `projects` row (`status: onboarding` → updated to `scraping`)
    - Insert `competitors` rows (`scrape_status: pending`, `pipeline_step: queued`)
-   - Fire-and-forget `POST /projects/{id}/competitors/scrape` to backend
-   - Redirect to `/dashboard/:projectId` without waiting for pipeline completion
+   - Reuse any same handle/URL already on the avatar (idempotent retry after a prior partial submit)
+   - Enqueue scrape for returned competitor IDs (new + reused)
+   - Redirect to dashboard without waiting for pipeline completion
 
 ## Frontend files
 

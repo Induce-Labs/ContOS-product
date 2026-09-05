@@ -32,7 +32,7 @@ Project switching lives in the header dropdown. `+ New Project` remains at the b
 | `/dashboard/:projectId/agents` | Chatbot |
 | `/dashboard/:projectId/agents?panel=history` | Chat history panel |
 | `/dashboard/:projectId/profiling` | Profiling — review list when required answers complete; step wizard when incomplete |
-| `/dashboard/:projectId/analytics` | Competitor summaries |
+| `/dashboard/:projectId/analytics` | Competitor progress + summaries; Add competitor |
 | `/dashboard/:projectId/calendar` | Coming soon |
 | `/dashboard/:projectId/insights` | Coming soon |
 
@@ -40,7 +40,7 @@ Project switching lives in the header dropdown. `+ New Project` remains at the b
 
 Shared chrome: `DashboardLayout`, `DashboardTopBar`, `ProjectSwitcher`, `DashboardSidebarNav`.
 
-Competitor list + add action moved into Overview via `CompetitorWorkspacePanel`. Chat handlers in `AgentsPage` are unchanged aside from presentation and history query support.
+Competitor list + add action live on Overview via `CompetitorWorkspacePanel`. Analytics (`/dashboard/:projectId/analytics`) also exposes **Add competitor** so users can expand research after Overview auto-redirects to chat.
 
 ## Profiling tab
 

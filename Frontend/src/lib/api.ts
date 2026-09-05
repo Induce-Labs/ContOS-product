@@ -1,4 +1,5 @@
-import { supabase, getApiBaseUrl } from './supabase'
+import { getAccessToken } from './auth'
+import { getApiBaseUrl } from './supabase'
 
 export class ApiServiceError extends Error {
   readonly statusCode: number | null
@@ -15,6 +16,16 @@ type EnqueueScrapeResponse = {
   competitor_ids: string[]
 }
 
+async function requireAccessToken(): Promise<string> {
+  try {
+    return await getAccessToken()
+  } catch (error: unknown) {
+    throw new ApiServiceError(
+      error instanceof Error ? error.message : 'You must be signed in to continue.',
+    )
+  }
+}
+
 export async function enqueueCompetitorScrapeJobs(
   avatarId: string,
   competitorIds: string[],
@@ -23,18 +34,7 @@ export async function enqueueCompetitorScrapeJobs(
     return
   }
 
-  const {
-    data: { session },
-    error: sessionError,
-  } = await supabase.auth.getSession()
-
-  if (sessionError) {
-    throw new ApiServiceError(`Failed to read auth session: ${sessionError.message}`)
-  }
-
-  if (!session?.access_token) {
-    throw new ApiServiceError('You must be signed in to start competitor research.')
-  }
+  const accessToken = await requireAccessToken()
 
   const response = await fetch(
     `${getApiBaseUrl()}/avatars/${avatarId}/competitors/scrape`,
@@ -42,7 +42,7 @@ export async function enqueueCompetitorScrapeJobs(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${session.access_token}`,
+        Authorization: `Bearer ${accessToken}`,
       },
       body: JSON.stringify({ competitor_ids: competitorIds }),
     },
@@ -93,25 +93,14 @@ export async function stopCompetitorPipeline(
   avatarId: string,
   competitorId: string,
 ): Promise<void> {
-  const {
-    data: { session },
-    error: sessionError,
-  } = await supabase.auth.getSession()
-
-  if (sessionError) {
-    throw new ApiServiceError(`Failed to read auth session: ${sessionError.message}`)
-  }
-
-  if (!session?.access_token) {
-    throw new ApiServiceError('You must be signed in to stop competitor research.')
-  }
+  const accessToken = await requireAccessToken()
 
   const response = await fetch(
     `${getApiBaseUrl()}/avatars/${avatarId}/competitors/${competitorId}/stop`,
     {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${session.access_token}`,
+        Authorization: `Bearer ${accessToken}`,
       },
     },
   )

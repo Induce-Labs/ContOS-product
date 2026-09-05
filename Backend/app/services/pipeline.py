@@ -17,6 +17,34 @@ logger = logging.getLogger(__name__)
 
 
 def run_pipeline_batch(avatar_id: UUID, competitor_ids: list[UUID]) -> None:
+    """Run competitors sequentially (tests/helpers only; HTTP uses Celery fan-out)."""
+    for competitor_id in competitor_ids:
+        try:
+            run_competitor_job(avatar_id, competitor_id)
+        except Exception as error:
+            logger.exception(
+                "Competitor pipeline failed in batch helper",
+                extra={
+                    "avatar_id": str(avatar_id),
+                    "competitor_id": str(competitor_id),
+                    "error": str(error),
+                },
+            )
+            try:
+                mark_competitor_pipeline_failed(avatar_id, competitor_id, str(error))
+            except Exception as mark_error:
+                logger.error(
+                    "Failed to mark competitor failed after batch error",
+                    extra={
+                        "avatar_id": str(avatar_id),
+                        "competitor_id": str(competitor_id),
+                        "error": str(mark_error),
+                    },
+                )
+
+
+def run_competitor_job(avatar_id: UUID, competitor_id: UUID) -> None:
+    """Load one competitor and run its Instagram or LinkedIn pipeline."""
     settings = get_settings()
     try:
         repository = SupabaseRepository(settings)
@@ -24,82 +52,109 @@ def run_pipeline_batch(avatar_id: UUID, competitor_ids: list[UUID]) -> None:
         llm_client = LlmClient(settings)
     except ConfigurationError as error:
         logger.error(
-            "Pipeline batch aborted due to configuration error",
-            extra={"avatar_id": str(avatar_id), "error": str(error)},
+            "Competitor job aborted due to configuration error",
+            extra={
+                "avatar_id": str(avatar_id),
+                "competitor_id": str(competitor_id),
+                "error": str(error),
+            },
         )
-        return
+        raise
+
     try:
-        competitors = repository.get_competitors_for_avatar(avatar_id, competitor_ids)
+        competitors = repository.get_competitors_for_avatar(avatar_id, [competitor_id])
     except Exception as error:
         logger.error(
-            "Failed to load competitors for pipeline batch",
-            extra={"avatar_id": str(avatar_id), "error": str(error)},
+            "Failed to load competitor for pipeline job",
+            extra={
+                "avatar_id": str(avatar_id),
+                "competitor_id": str(competitor_id),
+                "error": str(error),
+            },
         )
-        return
-    for competitor in competitors:
-        competitor_id = UUID(competitor["id"])
-        platform = resolve_competitor_platform(competitor)
+        raise
+
+    competitor = competitors[0]
+    platform = resolve_competitor_platform(competitor)
+    if platform == "linkedin":
+        logger.info(
+            "[PIPELINE] Dispatching LinkedIn pipeline (scrape→analyze)",
+            extra={
+                "avatar_id": str(avatar_id),
+                "competitor_id": str(competitor_id),
+                "platform": platform,
+                "handle_or_url": competitor.get("handle_or_url"),
+            },
+        )
         try:
-            if platform == "linkedin":
-                logger.info(
-                    "[PIPELINE] Dispatching LinkedIn pipeline (scrape→analyze)",
-                    extra={
-                        "avatar_id": str(avatar_id),
-                        "competitor_id": str(competitor_id),
-                        "platform": platform,
-                        "handle_or_url": competitor.get("handle_or_url"),
-                    },
-                )
-                run_linkedin_competitor_pipeline(
-                    avatar_id=avatar_id,
-                    competitor=competitor,
-                    settings=settings,
-                    repository=repository,
-                    apify_client=apify_client,
-                    llm_client=llm_client,
-                )
-            else:
-                logger.info(
-                    "[PIPELINE] Dispatching Instagram pipeline (scrape→transcribe→analyze)",
-                    extra={
-                        "avatar_id": str(avatar_id),
-                        "competitor_id": str(competitor_id),
-                        "platform": platform,
-                        "handle_or_url": competitor.get("handle_or_url"),
-                    },
-                )
-                run_instagram_competitor_pipeline(
-                    avatar_id=avatar_id,
-                    competitor=competitor,
-                    settings=settings,
-                    repository=repository,
-                    apify_client=apify_client,
-                    llm_client=llm_client,
-                )
-        except Exception as error:
-            logger.exception(
-                "Competitor pipeline failed",
-                extra={
-                    "avatar_id": str(avatar_id),
-                    "competitor_id": str(competitor_id),
-                    "platform": platform,
-                    "error": str(error),
-                },
+            run_linkedin_competitor_pipeline(
+                avatar_id=avatar_id,
+                competitor=competitor,
+                settings=settings,
+                repository=repository,
+                apify_client=apify_client,
+                llm_client=llm_client,
             )
-            repository.clear_cancel_requested(competitor_id)
-            repository.update_competitor_status(
-                competitor_id,
-                scrape_status="failed",
-                pipeline_step="failed",
-                error_message=str(error),
-            )
+        finally:
+            _safe_refresh_avatar_status(repository, avatar_id, competitor_id)
+        return
+
+    logger.info(
+        "[PIPELINE] Dispatching Instagram pipeline (scrape→transcribe→analyze)",
+        extra={
+            "avatar_id": str(avatar_id),
+            "competitor_id": str(competitor_id),
+            "platform": platform,
+            "handle_or_url": competitor.get("handle_or_url"),
+        },
+    )
+    try:
+        run_instagram_competitor_pipeline(
+            avatar_id=avatar_id,
+            competitor=competitor,
+            settings=settings,
+            repository=repository,
+            apify_client=apify_client,
+            llm_client=llm_client,
+        )
+    finally:
+        _safe_refresh_avatar_status(repository, avatar_id, competitor_id)
+
+
+def _safe_refresh_avatar_status(
+    repository: SupabaseRepository,
+    avatar_id: UUID,
+    competitor_id: UUID,
+) -> None:
     try:
         repository.refresh_avatar_status(avatar_id)
-    except Exception as error:
+    except Exception as refresh_error:
         logger.error(
-            "Failed to refresh avatar status after pipeline batch",
-            extra={"avatar_id": str(avatar_id), "error": str(error)},
+            "Failed to refresh avatar status after competitor job",
+            extra={
+                "avatar_id": str(avatar_id),
+                "competitor_id": str(competitor_id),
+                "error": str(refresh_error),
+            },
         )
+
+
+def mark_competitor_pipeline_failed(
+    avatar_id: UUID,
+    competitor_id: UUID,
+    error_message: str,
+) -> None:
+    """Persist failed status after non-retryable errors or exhausted retries."""
+    settings = get_settings()
+    repository = SupabaseRepository(settings)
+    repository.clear_cancel_requested(competitor_id)
+    repository.update_competitor_status(
+        competitor_id,
+        scrape_status="failed",
+        pipeline_step="failed",
+        error_message=error_message,
+    )
+    _safe_refresh_avatar_status(repository, avatar_id, competitor_id)
 
 
 def resolve_competitor_platform(competitor: dict[str, Any]) -> str:
