@@ -40,6 +40,12 @@ Creative calendar rules (content_calendar mode only):
 - Generate 3–5 content_calendar items by default (exactly N if the user asks for N).
 - Keep captions and reasoning concise (caption under ~60 words, reasoning under ~40 words).
 - If the user asks for a N-day calendar, return exactly N days.
+- LANGUAGE: follow RESPONSE LANGUAGE for hook, caption, cta, hashtags, transcript,
+  audio_suggestion, reasoning, top_hooks, caption_formulas, and posting_frequency.
+  Write fully in that language with ZERO code-mixing (no Hinglish). caption_formulas
+  must be natural sentences in the UI language, not English skeletons like
+  "Hook + Reframe + CTA". Competitor sources may be English — localize the creative
+  copy; do not ship English or mixed-language hooks/captions when UI language is not English.
 
 Formatting:
 - Never use asterisk (*) characters in any string field.

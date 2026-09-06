@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 import { AuthAlert } from '../auth/AuthButtons'
 import type { ProjectType } from '../../types/contos'
 
@@ -32,6 +33,34 @@ export const PROJECT_TYPE_OPTIONS: ProjectTypeOption[] = [
     icon: 'building',
   },
 ]
+
+function projectTypeOptionKeys(value: ProjectType): {
+  title: string
+  description: string
+} {
+  switch (value) {
+    case 'personal_branding':
+      return {
+        title: 'onboarding.projectType.options.personalBrand.title',
+        description: 'onboarding.projectType.options.personalBrand.description',
+      }
+    case 'business_1':
+      return {
+        title: 'onboarding.projectType.options.business1.title',
+        description: 'onboarding.projectType.options.business1.description',
+      }
+    case 'business_2':
+      return {
+        title: 'onboarding.projectType.options.business2.title',
+        description: 'onboarding.projectType.options.business2.description',
+      }
+    default:
+      return {
+        title: 'onboarding.projectType.options.personalBrand.title',
+        description: 'onboarding.projectType.options.personalBrand.description',
+      }
+  }
+}
 
 function ProjectTypeIcon({ icon }: { icon: ProjectTypeOption['icon'] }) {
   if (icon === 'user') {
@@ -81,24 +110,27 @@ export function ProjectTypeStep({
   errorMessage,
   fieldError,
   backControl,
-  stepLabel = 'Workspace Setup · Step 2',
+  stepLabel,
 }: ProjectTypeStepProps) {
+  const { t } = useTranslation()
+  const resolvedStepLabel = stepLabel ?? t('onboarding.projectType.stepLabel')
+
   return (
     <div className="flex h-dvh flex-col overflow-hidden bg-[radial-gradient(circle_at_top,_#f3ecff_0%,_#faf9f7_42%,_#faf9f7_100%)] px-4 py-5 sm:px-6 sm:py-6 lg:px-10">
       <div className="mx-auto flex h-full w-full max-w-[1180px] min-w-0 flex-col">
         <header className="flex shrink-0 items-center justify-between gap-4">
           {backControl}
           <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-ink-muted">
-            {stepLabel}
+            {resolvedStepLabel}
           </p>
         </header>
 
         <div className="mt-8 shrink-0 text-center sm:mt-10">
           <h1 className="font-serif text-4xl leading-tight text-ink sm:text-5xl lg:text-[3.25rem]">
-            Start a New Project
+            {t('onboarding.projectType.title')}
           </h1>
           <p className="mx-auto mt-3 max-w-2xl text-sm text-ink-muted sm:text-base">
-            Select the primary focus for this workspace to tailor the insights and strategy.
+            {t('onboarding.projectType.subtitle')}
           </p>
         </div>
 
@@ -111,6 +143,7 @@ export function ProjectTypeStep({
         <section className="mt-8 grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-y-auto sm:mt-10 md:grid-cols-3 md:gap-5">
           {PROJECT_TYPE_OPTIONS.map((option) => {
             const isSelected = selectedType === option.value
+            const keys = projectTypeOptionKeys(option.value)
 
             return (
               <button
@@ -135,9 +168,9 @@ export function ProjectTypeStep({
 
                 <div className="mt-auto space-y-3 pt-10">
                   <h2 className="font-serif text-2xl leading-tight text-ink sm:text-[1.7rem]">
-                    {option.title}
+                    {t(keys.title)}
                   </h2>
-                  <p className="text-sm leading-relaxed text-ink-muted">{option.description}</p>
+                  <p className="text-sm leading-relaxed text-ink-muted">{t(keys.description)}</p>
                 </div>
               </button>
             )
@@ -155,7 +188,7 @@ export function ProjectTypeStep({
             disabled={isSubmitting}
             className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-accent-primary to-[#8d67cf] px-8 py-3.5 text-sm font-semibold text-white shadow-[0_12px_28px_rgba(116,79,185,0.32)] transition hover:from-accent-primary-deep hover:to-accent-primary disabled:cursor-not-allowed disabled:opacity-60 sm:px-10 sm:text-base"
           >
-            {isSubmitting ? 'Creating…' : 'Continue'}
+            {isSubmitting ? t('onboarding.projectType.creating') : t('onboarding.projectType.continue')}
             <span aria-hidden="true">→</span>
           </button>
         </div>

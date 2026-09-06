@@ -8,13 +8,35 @@ from collections.abc import Generator
 from typing import Any
 
 from agents.base_agent import BaseAgent
+from constants import LANGUAGE_DISPLAY_NAMES, normalize_response_language
 
 
 _GREETING_RE = re.compile(
-    r"^(hi|hii+|hello|hey|yo|sup|hiya|good\s*(morning|afternoon|evening)|howdy|hola)"
+    r"^(hi|hii+|hello|hey|yo|sup|hiya|good\s*(morning|afternoon|evening)|howdy|hola|"
+    r"bonjour|salut|bonsoir|namaste|namaskar|ninhao|ni\s*hao|ciao)"
     r"([\s,.!?]|$)",
     re.I,
 )
+
+_INSTANT_GREETING_BY_LANG: dict[str, str] = {
+    "en": (
+        "Hey! I'm ContOS — your fractional CMO assistant. "
+        "What would you like help with today?"
+    ),
+    "hi": (
+        "नमस्ते! मैं ContOS हूँ — आपका fractional CMO सहायक। "
+        "आज मैं आपकी किस तरह मदद कर सकता हूँ?"
+    ),
+    "zh": "你好！我是 ContOS — 你的 fractional CMO 助手。今天想让我帮你做什么？",
+    "fr": (
+        "Salut ! Je suis ContOS — votre assistant fractional CMO. "
+        "Comment puis-je vous aider aujourd'hui ?"
+    ),
+    "es": (
+        "¡Hola! Soy ContOS — tu asistente fractional CMO. "
+        "¿En qué te puedo ayudar hoy?"
+    ),
+}
 
 
 def _is_greeting(text: str) -> bool:
@@ -22,6 +44,14 @@ def _is_greeting(text: str) -> bool:
     if not t or len(t) > 60:
         return False
     return bool(_GREETING_RE.match(t))
+
+
+def _instant_greeting(response_language: str) -> str:
+    try:
+        code = normalize_response_language(response_language)
+    except ValueError:
+        code = "en"
+    return _INSTANT_GREETING_BY_LANG.get(code, _INSTANT_GREETING_BY_LANG["en"])
 
 
 def _log_async(payload: dict[str, Any]) -> None:
@@ -49,6 +79,7 @@ class ChatbotAgent(BaseAgent):
         competitor_summaries: list[dict[str, Any]] | None = None,
         tagged_avatar_ids: list[str] | None = None,
         chat_history: list[dict[str, str]] | None = None,
+        response_language: str = "en",
         stream: bool = True,
     ) -> Generator[dict[str, Any], None, None]:
         # Instant path for greetings — skip OpenRouter entirely
@@ -59,10 +90,7 @@ class ChatbotAgent(BaseAgent):
             and not competitor_summaries
             and not chat_history
         ):
-            reply = (
-                "Hey! I'm ContOS — your fractional CMO assistant. "
-                "What would you like help with today?"
-            )
+            reply = _instant_greeting(response_language)
             yield {"event": "status", "data": {"stage": "instant_reply", "agent": "chatbot"}}
             for i in range(0, len(reply), 12):
                 yield {
@@ -77,6 +105,7 @@ class ChatbotAgent(BaseAgent):
                     "usage": {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0},
                     "tools_used": [],
                     "status": "success",
+                    "response_language": response_language,
                 },
             }
             threading.Thread(
@@ -87,7 +116,14 @@ class ChatbotAgent(BaseAgent):
                         "avatar_id": avatar_id,
                         "agent_type": "chatbot",
                         "user_input": user_input,
-                        "context_snapshot": {"instant_greeting": True},
+                        "context_snapshot": {
+                            "instant_greeting": True,
+                            "response_language": response_language,
+                            "language_name": LANGUAGE_DISPLAY_NAMES.get(
+                                (response_language or "en").split("-")[0].lower(),
+                                "English",
+                            ),
+                        },
                         "raw_response": reply,
                         "parsed_output": {"text": reply},
                         "model_used": "instant",
@@ -120,5 +156,6 @@ class ChatbotAgent(BaseAgent):
             competitor_summaries=competitor_summaries,
             tagged_avatar_ids=tagged_avatar_ids,
             chat_history=chat_history,
+            response_language=response_language,
             stream=stream,
         )

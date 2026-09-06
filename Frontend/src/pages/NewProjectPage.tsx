@@ -41,6 +41,8 @@ function NewProjectProfiling({
     isLoading,
     isSaving,
     isSummarizing,
+    isTranslatingQuestions,
+    isLocalizingAnswers,
     setAnswer,
     goNext,
     goBack,
@@ -82,6 +84,7 @@ function NewProjectProfiling({
       fieldError={fieldError}
       isSaving={isSaving}
       isSummarizing={isSummarizing}
+      isTranslating={isTranslatingQuestions || isLocalizingAnswers}
       onAnswerChange={setAnswer}
       onNext={(answerOverride) => void handleNext(answerOverride)}
       onBack={handleBack}

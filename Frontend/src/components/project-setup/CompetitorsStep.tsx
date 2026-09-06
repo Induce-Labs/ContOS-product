@@ -1,4 +1,5 @@
 import type { FormEvent } from 'react'
+import { useTranslation } from 'react-i18next'
 import { AuthAlert, PrimaryButton } from '../auth/AuthButtons'
 import { AuthFormField } from '../auth/AuthFormField'
 import type { CompetitorDraft } from '../../hooks/useCompetitorIntake'
@@ -26,9 +27,10 @@ export type CompetitorsStepProps = {
 }
 
 export function CompetitorsStepLoading() {
+  const { t } = useTranslation()
   return (
     <div className="flex min-h-dvh items-center justify-center bg-canvas text-ink-muted">
-      Loading competitor setup…
+      {t('onboarding.competitors.loading')}
     </div>
   )
 }
@@ -42,6 +44,7 @@ export function CompetitorsStepUnavailable({
   onSignOut?: () => void
   isSigningOut?: boolean
 }) {
+  const { t } = useTranslation()
   return (
     <div className="flex min-h-dvh items-center justify-center bg-canvas px-4">
       <div className="max-w-md space-y-4 rounded-[2rem] border border-red-200 bg-red-50 p-6 text-center text-sm text-red-700">
@@ -53,7 +56,7 @@ export function CompetitorsStepUnavailable({
             disabled={isSigningOut}
             className="rounded-xl border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-700 transition hover:bg-red-100 disabled:opacity-60"
           >
-            {isSigningOut ? 'Signing out…' : 'Sign out'}
+            {isSigningOut ? t('common.signingOut') : t('common.signOut')}
           </button>
         ) : null}
       </div>
@@ -77,17 +80,23 @@ export function CompetitorsStep({
   onSignOut,
   isSigningOut = false,
 }: CompetitorsStepProps) {
+  const { t } = useTranslation()
+
   return (
     <div className="min-h-dvh overflow-y-auto bg-canvas px-4 py-10">
       <div className="mx-auto w-full max-w-2xl">
         <div className="mb-8 flex items-start justify-between gap-4">
           <div>
-            <p className="text-sm font-medium text-accent-primary">ContOS</p>
-            <h1 className="mt-1 text-2xl font-semibold text-ink">Know your competitive landscape</h1>
+            <p className="text-sm font-medium text-accent-primary">{t('layout.brandName')}</p>
+            <h1 className="mt-1 text-2xl font-semibold text-ink">
+              {t('onboarding.competitors.title')}
+            </h1>
             <p className="mt-2 text-sm text-ink-muted">
-              Add competitors to help ContOS understand what is happening in your space. Instagram
-              and LinkedIn profiles. Add {minCompetitors}–{maxCompetitors} (recommend{' '}
-              {RECOMMENDED_COMPETITORS_PER_AVATAR}).
+              {t('onboarding.competitors.body', {
+                min: minCompetitors,
+                max: maxCompetitors,
+                recommended: RECOMMENDED_COMPETITORS_PER_AVATAR,
+              })}
             </p>
           </div>
           {onSignOut ? (
@@ -97,7 +106,7 @@ export function CompetitorsStep({
               disabled={isSubmitting || isSigningOut}
               className="shrink-0 rounded-full border border-border-hairline bg-white px-4 py-2 text-sm text-ink transition hover:bg-accent-primary-soft disabled:opacity-60"
             >
-              {isSigningOut ? 'Signing out…' : 'Sign out'}
+              {isSigningOut ? t('common.signingOut') : t('common.signOut')}
             </button>
           ) : null}
         </div>
@@ -121,8 +130,8 @@ export function CompetitorsStep({
                       }
                       className="rounded-xl border border-border-hairline bg-canvas px-3 py-2 text-sm text-ink"
                     >
-                      <option value="instagram">Instagram</option>
-                      <option value="linkedin">LinkedIn</option>
+                      <option value="instagram">{t('onboarding.competitors.platformInstagram')}</option>
+                      <option value="linkedin">{t('onboarding.competitors.platformLinkedIn')}</option>
                     </select>
                     {competitorInputs.length > minCompetitors ? (
                       <button
@@ -130,17 +139,17 @@ export function CompetitorsStep({
                         onClick={() => onRemoveField(index)}
                         className="rounded-xl border border-border-hairline px-3 py-2 text-sm text-ink-muted hover:bg-accent-primary-soft"
                       >
-                        Remove
+                        {t('onboarding.competitors.remove')}
                       </button>
                     ) : null}
                   </div>
                   <AuthFormField
-                    label={`Competitor ${index + 1}`}
+                    label={t('onboarding.competitors.competitorLabel', { n: index + 1 })}
                     name={`competitor-${index}`}
                     placeholder={
                       entry.platform === 'linkedin'
-                        ? 'linkedin.com/in/competitor or slug'
-                        : '@competitor or https://instagram.com/competitor'
+                        ? t('onboarding.competitors.placeholderLinkedIn')
+                        : t('onboarding.competitors.placeholderInstagram')
                     }
                     value={entry.value}
                     onChange={(event) => onUpdateInput(index, event.target.value)}
@@ -156,11 +165,11 @@ export function CompetitorsStep({
                 onClick={onAddField}
                 className="rounded-xl border border-dashed border-border-hairline px-4 py-3 text-sm font-medium text-accent-primary hover:bg-accent-primary-soft"
               >
-                + Add Competitor
+                {t('onboarding.competitors.addCompetitor')}
               </button>
             ) : (
               <p className="text-sm text-ink-muted">
-                Maximum of {MAX_COMPETITORS_PER_AVATAR} competitors reached.
+                {t('onboarding.competitors.maxReached', { max: MAX_COMPETITORS_PER_AVATAR })}
               </p>
             )}
 
@@ -171,10 +180,12 @@ export function CompetitorsStep({
                 disabled={isSubmitting || isSigningOut}
                 className="rounded-xl border border-border-hairline px-4 py-3 text-sm font-medium text-ink transition hover:bg-accent-primary-soft disabled:opacity-60"
               >
-                Back
+                {t('onboarding.competitors.back')}
               </button>
               <PrimaryButton disabled={isSubmitting || isSigningOut}>
-                {isSubmitting ? 'Starting research…' : 'Research Competitors →'}
+                {isSubmitting
+                  ? t('onboarding.competitors.submitting')
+                  : t('onboarding.competitors.submit')}
               </PrimaryButton>
             </div>
           </form>

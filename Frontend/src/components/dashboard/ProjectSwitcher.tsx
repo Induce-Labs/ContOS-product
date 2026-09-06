@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import {
   MAX_AVATARS,
   avatarTypeLabel,
@@ -19,6 +20,7 @@ export function ProjectSwitcher({
   activeProject,
   onAvatarsChanged,
 }: ProjectSwitcherProps) {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const location = useLocation()
   const [open, setOpen] = useState(false)
@@ -65,18 +67,16 @@ export function ProjectSwitcher({
         })),
       )
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : 'Failed to set default avatar.')
+      setActionError(
+        error instanceof Error ? error.message : t('projectSwitcher.failedSetDefault'),
+      )
     } finally {
       setBusyAvatarId(null)
     }
   }
 
   async function handleDelete(avatarId: string) {
-    if (
-      !window.confirm(
-        'Delete this avatar? Profiling answers and competitors for it will be removed.',
-      )
-    ) {
+    if (!window.confirm(t('projectSwitcher.deleteConfirm'))) {
       return
     }
 
@@ -92,7 +92,9 @@ export function ProjectSwitcher({
         navigate(fallback ? `/dashboard/${fallback.id}` : '/dashboard')
       }
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : 'Failed to delete avatar.')
+      setActionError(
+        error instanceof Error ? error.message : t('projectSwitcher.failedDelete'),
+      )
     } finally {
       setBusyAvatarId(null)
     }
@@ -106,7 +108,9 @@ export function ProjectSwitcher({
         className="inline-flex max-w-[220px] items-center gap-2 rounded-full border border-border-hairline bg-white px-4 py-2 text-sm text-ink shadow-sm transition hover:border-accent-primary/40 sm:max-w-xs"
       >
         <span className="truncate">
-          Project: {activeProject?.name ?? 'Select project'}
+          {t('projectSwitcher.projectPrefix', {
+            name: activeProject?.name ?? t('projectSwitcher.selectProject'),
+          })}
         </span>
         <span aria-hidden="true" className="text-ink-muted">
           ▾
@@ -116,7 +120,7 @@ export function ProjectSwitcher({
       {open ? (
         <div className="absolute left-0 z-30 mt-2 w-72 rounded-2xl border border-border-hairline bg-white p-2 shadow-[0_18px_40px_rgba(28,27,41,0.12)]">
           {projects.length === 0 ? (
-            <p className="px-3 py-4 text-sm text-ink-muted">No projects yet.</p>
+            <p className="px-3 py-4 text-sm text-ink-muted">{t('projectSwitcher.noProjectsYet')}</p>
           ) : (
             <ul className="max-h-72 space-y-1 overflow-y-auto">
               {projects.map((project) => {
@@ -132,7 +136,7 @@ export function ProjectSwitcher({
                       }`}
                     >
                       {project.name}
-                      {project.is_default ? ' · Default' : ''}
+                      {project.is_default ? t('projectSwitcher.defaultSuffix') : ''}
                     </button>
                     <p className="text-xs text-ink-muted">{avatarTypeLabel(project.type)}</p>
                     <div className="mt-1 flex flex-wrap gap-1">
@@ -143,7 +147,7 @@ export function ProjectSwitcher({
                           onClick={() => void handleSetDefault(project.id)}
                           className="rounded-lg px-2 py-0.5 text-[11px] text-accent-primary hover:bg-accent-primary-soft"
                         >
-                          Set default
+                          {t('projectSwitcher.setDefault')}
                         </button>
                       ) : null}
                       <Link
@@ -151,7 +155,7 @@ export function ProjectSwitcher({
                         onClick={() => setOpen(false)}
                         className="rounded-lg px-2 py-0.5 text-[11px] text-ink-muted hover:bg-canvas hover:text-ink"
                       >
-                        Edit profile
+                        {t('projectSwitcher.editProfile')}
                       </Link>
                       <button
                         type="button"
@@ -159,7 +163,7 @@ export function ProjectSwitcher({
                         onClick={() => void handleDelete(project.id)}
                         className="rounded-lg px-2 py-0.5 text-[11px] text-red-600 hover:bg-red-50"
                       >
-                        Delete
+                        {t('projectSwitcher.delete')}
                       </button>
                     </div>
                   </li>
@@ -172,7 +176,7 @@ export function ProjectSwitcher({
 
           {atAvatarCap ? (
             <p className="px-2 pt-2 text-xs text-ink-muted">
-              Avatar limit reached ({MAX_AVATARS}). Upgrade to add more.
+              {t('projectSwitcher.avatarLimitReached', { max: MAX_AVATARS })}
             </p>
           ) : (
             <Link
@@ -180,7 +184,7 @@ export function ProjectSwitcher({
               onClick={() => setOpen(false)}
               className="mt-2 block rounded-xl px-3 py-2 text-sm font-medium text-accent-primary hover:bg-accent-primary-soft"
             >
-              + New project
+              {t('projectSwitcher.newProject')}
             </Link>
           )}
         </div>

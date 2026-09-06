@@ -1,5 +1,6 @@
 import type { FormEvent } from 'react'
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { AuthAlert, PrimaryButton } from '../auth/AuthButtons'
 import { AuthFormField } from '../auth/AuthFormField'
 import {
@@ -31,6 +32,7 @@ export function AddCompetitorPanel({
   onClose,
   onSuccess,
 }: AddCompetitorPanelProps) {
+  const { t } = useTranslation()
   const remainingSlots = MAX_COMPETITORS_PER_AVATAR - existingCompetitors.length
   const [inputs, setInputs] = useState<CompetitorDraft[]>([
     { value: '', platform: 'instagram' },
@@ -78,12 +80,12 @@ export function AddCompetitorPanel({
     const filled = inputs.filter((entry) => entry.value.trim())
 
     if (filled.length === 0) {
-      setErrorMessage('Enter at least one competitor.')
+      setErrorMessage(t('competitors.addPanel.enterAtLeastOne'))
       return
     }
 
     if (filled.length > remainingSlots) {
-      setErrorMessage(`You can add at most ${remainingSlots} more competitor(s).`)
+      setErrorMessage(t('competitors.addPanel.atMostMore', { count: remainingSlots }))
       return
     }
 
@@ -98,12 +100,12 @@ export function AddCompetitorPanel({
       if (entry.platform === 'linkedin') {
         const result = validateLinkedInInput(trimmed)
         if (!result.valid) {
-          errors[`competitor-${index}`] = result.message
+          errors[`competitor-${index}`] = t(result.message)
         }
       } else {
         const result = validateInstagramInput(trimmed)
         if (!result.valid) {
-          errors[`competitor-${index}`] = result.message
+          errors[`competitor-${index}`] = t(result.message)
         }
       }
     })
@@ -111,7 +113,7 @@ export function AddCompetitorPanel({
     setFieldErrors(errors)
 
     if (Object.keys(errors).length > 0) {
-      setErrorMessage('Fix the highlighted competitor entries before continuing.')
+      setErrorMessage(t('competitors.addPanel.fixHighlighted'))
       return
     }
 
@@ -144,7 +146,9 @@ export function AddCompetitorPanel({
       onClose()
     } catch (error) {
       setErrorMessage(
-        error instanceof Error ? error.message : 'Failed to add competitors unexpectedly.',
+        error instanceof Error
+          ? error.message
+          : t('competitors.addPanel.failedUnexpected'),
       )
       setIsSubmitting(false)
     }
@@ -154,10 +158,9 @@ export function AddCompetitorPanel({
     <section className="rounded-[2rem] border border-accent-primary/30 bg-canvas-raised p-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h2 className="text-lg font-semibold text-ink">Add competitors</h2>
+          <h2 className="text-lg font-semibold text-ink">{t('competitors.addPanel.title')}</h2>
           <p className="mt-1 text-sm text-ink-muted">
-            Instagram or LinkedIn. Up to {remainingSlots} more competitor
-            {remainingSlots === 1 ? '' : 's'} for this project.
+            {t('competitors.addPanel.subtitle', { count: remainingSlots })}
           </p>
         </div>
         <button
@@ -165,7 +168,7 @@ export function AddCompetitorPanel({
           onClick={onClose}
           className="rounded-xl border border-border-hairline px-3 py-1.5 text-sm text-ink-muted hover:bg-canvas"
         >
-          Close
+          {t('competitors.addPanel.close')}
         </button>
       </div>
 
@@ -186,8 +189,8 @@ export function AddCompetitorPanel({
                 }
                 className="rounded-xl border border-border-hairline bg-canvas px-3 py-2 text-sm text-ink"
               >
-                <option value="instagram">Instagram</option>
-                <option value="linkedin">LinkedIn</option>
+                <option value="instagram">{t('common.platforms.instagram')}</option>
+                <option value="linkedin">{t('common.platforms.linkedin')}</option>
               </select>
               {inputs.length > 1 ? (
                 <button
@@ -195,17 +198,17 @@ export function AddCompetitorPanel({
                   onClick={() => removeInputField(index)}
                   className="rounded-xl border border-border-hairline px-3 py-2 text-sm text-ink-muted hover:bg-accent-primary-soft"
                 >
-                  Remove
+                  {t('common.remove')}
                 </button>
               ) : null}
             </div>
             <AuthFormField
-              label={`Competitor ${index + 1}`}
+              label={t('onboarding.competitors.competitorLabel', { n: index + 1 })}
               name={`add-competitor-${index}`}
               placeholder={
                 entry.platform === 'linkedin'
-                  ? 'linkedin.com/in/competitor or slug'
-                  : '@competitor or https://instagram.com/competitor'
+                  ? t('onboarding.competitors.placeholderLinkedIn')
+                  : t('onboarding.competitors.placeholderInstagram')
               }
               value={entry.value}
               onChange={(event) => updateInput(index, event.target.value)}
@@ -220,12 +223,14 @@ export function AddCompetitorPanel({
             onClick={addInputField}
             className="rounded-xl border border-dashed border-border-hairline px-4 py-2 text-sm font-medium text-accent-primary hover:bg-accent-primary-soft"
           >
-            Add another
+            {t('competitors.addPanel.addAnother')}
           </button>
         ) : null}
 
         <PrimaryButton disabled={isSubmitting}>
-          {isSubmitting ? 'Starting research…' : 'Add and start research'}
+          {isSubmitting
+            ? t('competitors.addPanel.submitting')
+            : t('competitors.addPanel.submit')}
         </PrimaryButton>
       </form>
     </section>

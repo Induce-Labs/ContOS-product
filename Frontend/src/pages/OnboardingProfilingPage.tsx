@@ -63,6 +63,8 @@ function OnboardingProfilingContent() {
     isLoading,
     isSaving,
     isSummarizing,
+    isTranslatingQuestions,
+    isLocalizingAnswers,
     setAnswer,
     goNext,
     goBack,
@@ -107,6 +109,7 @@ function OnboardingProfilingContent() {
       fieldError={fieldError}
       isSaving={isSaving}
       isSummarizing={isSummarizing}
+      isTranslating={isTranslatingQuestions || isLocalizingAnswers}
       onAnswerChange={setAnswer}
       onNext={(answerOverride) => void handleNext(answerOverride)}
       onBack={handleBack}

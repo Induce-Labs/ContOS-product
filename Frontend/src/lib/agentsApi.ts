@@ -3,12 +3,28 @@ import { getApiBaseUrl } from './supabase'
 
 export class AgentsApiError extends Error {
   readonly statusCode: number | null
+  readonly errorCode: string | null
 
-  constructor(message: string, statusCode: number | null = null) {
+  constructor(
+    message: string,
+    statusCode: number | null = null,
+    errorCode: string | null = null,
+  ) {
     super(message)
     this.name = 'AgentsApiError'
     this.statusCode = statusCode
+    this.errorCode = errorCode
   }
+}
+
+/** True when Redis still holds a prior SSE inflight slot for this user. */
+export function isConcurrentLimitError(error: unknown): boolean {
+  return (
+    error instanceof AgentsApiError &&
+    (error.errorCode === 'concurrent_limit' ||
+      (error.statusCode === 429 &&
+        /already have an active agent stream/i.test(error.message)))
+  )
 }
 
 export type AgentType = 'chatbot' | 'linkedin' | 'instagram' | 'playbook' | 'twitter'
@@ -23,6 +39,8 @@ export type AgentsInvokeRequest = {
   tagged_avatar_ids?: string[]
   /** Prior turns in this thread (excludes the message about to be sent). */
   chat_history?: Array<{ role: 'user' | 'assistant'; content: string }>
+  /** UI locale; agent replies in this language (en/hi/zh/fr/es). */
+  response_language?: string
 }
 
 export type AgentsSseHandlers = {
@@ -156,6 +174,7 @@ export async function invokeAgentStream(
         body.chat_history && body.chat_history.length > 0
           ? body.chat_history
           : undefined,
+      response_language: body.response_language ?? 'en',
     }),
     signal,
   })
@@ -163,13 +182,17 @@ export async function invokeAgentStream(
   if (!response.ok) {
     const responseBody = await response.text()
     let message = `Agents invoke failed (status ${response.status}): ${responseBody || 'no response body'}`
+    let errorCode: string | null = null
     try {
       const payload = JSON.parse(responseBody) as Record<string, unknown>
       const detail = payload.detail
-      if (typeof detail === 'object' && detail && 'message' in detail) {
-        const detailMessage = (detail as { message: unknown }).message
-        if (typeof detailMessage === 'string' && detailMessage.trim()) {
-          message = detailMessage.trim()
+      if (typeof detail === 'object' && detail) {
+        const detailRecord = detail as { message?: unknown; error?: unknown }
+        if (typeof detailRecord.error === 'string' && detailRecord.error.trim()) {
+          errorCode = detailRecord.error.trim()
+        }
+        if (typeof detailRecord.message === 'string' && detailRecord.message.trim()) {
+          message = detailRecord.message.trim()
         }
       } else if (typeof detail === 'string' && detail.trim()) {
         message = detail.trim()
@@ -179,7 +202,7 @@ export async function invokeAgentStream(
     } catch {
       // keep fallback message from status + raw body
     }
-    throw new AgentsApiError(message, response.status)
+    throw new AgentsApiError(message, response.status, errorCode)
   }
 
   if (!response.body) {
@@ -210,6 +233,9 @@ export const AGENTS_WELCOME_MESSAGE =
 
 const WELCOME_GREETING_RE =
   /^Good (morning|afternoon|evening|Morning|Afternoon|Evening),\s+.+/
+
+/** Localized or English short greetings used as empty-state welcome bubbles. */
+const LOCALIZED_WELCOME_RE = /^[^,\n]{1,40},\s+\S.{0,40}$/
 
 export function timeOfDayGreeting(now: Date = new Date()): 'Good morning' | 'Good afternoon' | 'Good evening' {
   const hour = now.getHours()
@@ -269,6 +295,113 @@ export function isAgentsWelcomeMessage(content: string): boolean {
   if (text.includes(AGENTS_WELCOME_MESSAGE) && WELCOME_GREETING_RE.test(text)) {
     return true
   }
-  // Short Claude-style greeting only (no trailing pitch).
-  return WELCOME_GREETING_RE.test(text) && !text.includes('\n') && text.length < 80
+  // Short Claude-style greeting only (no trailing pitch) — English or localized.
+  if (text.includes('\n') || text.length >= 80) return false
+  return WELCOME_GREETING_RE.test(text) || LOCALIZED_WELCOME_RE.test(text)
+}
+
+export type TranslateTextsRequest = {
+  texts: string[]
+  target_lang: string
+  source_lang?: string
+}
+
+export type TranslateTextsResponse = {
+  translations: string[]
+  target_lang: string
+  source_lang: string
+}
+
+/** On-demand content translation via Agents API (cache-first OpenRouter). */
+export async function translateTexts(
+  request: TranslateTextsRequest,
+): Promise<string[]> {
+  const baseUrl = requireAgentApiBaseUrl()
+  const accessToken = await getAccessToken()
+  const response = await fetch(`${baseUrl}/api/translate`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      texts: request.texts,
+      target_lang: request.target_lang,
+      source_lang: request.source_lang ?? 'en',
+    }),
+  })
+
+  if (!response.ok) {
+    let detail = ''
+    try {
+      const payload = (await response.json()) as { detail?: unknown }
+      detail =
+        typeof payload.detail === 'string'
+          ? payload.detail
+          : payload.detail != null
+            ? JSON.stringify(payload.detail)
+            : ''
+    } catch {
+      detail = ''
+    }
+    throw new AgentsApiError(
+      detail || `Translation request failed (${response.status}).`,
+      response.status,
+    )
+  }
+
+  const payload = (await response.json()) as TranslateTextsResponse
+  if (!Array.isArray(payload.translations)) {
+    throw new AgentsApiError('Translation response missing translations array.')
+  }
+  if (payload.translations.length !== request.texts.length) {
+    throw new AgentsApiError(
+      `Translation count mismatch: expected ${request.texts.length}, got ${payload.translations.length}.`,
+    )
+  }
+  return payload.translations
+}
+
+export type AgentRunResult = {
+  run_id: string
+  status: string | null
+  agent: string | null
+  output: unknown
+  error: string | null
+}
+
+/** Catch-up after a backgrounded tab dropped the live SSE connection. */
+export async function fetchAgentRun(runId: string): Promise<AgentRunResult> {
+  const baseUrl = requireAgentApiBaseUrl()
+  const accessToken = await getAccessToken()
+  const response = await fetch(
+    `${baseUrl}/api/agents/runs/${encodeURIComponent(runId)}`,
+    {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: 'application/json',
+      },
+    },
+  )
+  if (!response.ok) {
+    let detail = ''
+    try {
+      const payload = (await response.json()) as { detail?: unknown }
+      detail =
+        typeof payload.detail === 'string'
+          ? payload.detail
+          : payload.detail != null
+            ? JSON.stringify(payload.detail)
+            : ''
+    } catch {
+      detail = ''
+    }
+    throw new AgentsApiError(
+      detail || `Agent run fetch failed (${response.status}).`,
+      response.status,
+    )
+  }
+  const payload = (await response.json()) as AgentRunResult
+  return payload
 }

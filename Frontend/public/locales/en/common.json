@@ -1,0 +1,502 @@
+{
+  "nav": {
+    "createProjectToUnlock": "Create a project to unlock navigation.",
+    "projects": "Projects",
+    "profiling": "Profiling",
+    "analytics": "Analytics",
+    "overview": "Overview",
+    "contentAgent": "Content Agent",
+    "chatbot": "Chatbot",
+    "chatHistory": "Chat History",
+    "calendar": "Calendar",
+    "insights": "Insights"
+  },
+  "topBar": {
+    "openNavigationAria": "Open navigation",
+    "signOut": "Sign out",
+    "signingOut": "Signing out…",
+    "language": "Language"
+  },
+  "layout": {
+    "brandName": "ContOS",
+    "brandTagline": "Fractional CMO",
+    "loadingWorkspace": "Loading workspace…",
+    "closeNavigationAria": "Close navigation",
+    "projectLimitReached": "Project limit reached ({{max}}).",
+    "newProject": "+ New Project",
+    "emptyProjects": {
+      "step": "Step 01",
+      "title": "Create your first project",
+      "body": "Projects organize the competitors you track and the intelligence ContOS generates for your brand or business.",
+      "cta": "New project"
+    }
+  },
+  "projectSwitcher": {
+    "projectPrefix": "Project: {{name}}",
+    "selectProject": "Select project",
+    "noProjectsYet": "No projects yet.",
+    "defaultSuffix": " · Default",
+    "setDefault": "Set default",
+    "editProfile": "Edit profile",
+    "delete": "Delete",
+    "deleteConfirm": "Delete this avatar? Profiling answers and competitors for it will be removed.",
+    "failedSetDefault": "Failed to set default avatar.",
+    "failedDelete": "Failed to delete avatar.",
+    "avatarLimitReached": "Avatar limit reached ({{max}}). Upgrade to add more.",
+    "newProject": "+ New project"
+  },
+  "incompleteProfilingBanner": {
+    "title": "Complete your profiling for better chat answers",
+    "body": "ContOS uses your profiling answers to personalize strategy and content. Finish the questionnaire so the chatbot has the context it needs.",
+    "progress": "{{progress}}% complete",
+    "cta": "Complete profiling"
+  },
+  "auth": {
+    "brandName": "ContOS",
+    "panelEyebrow": "Competitor Intelligence",
+    "panelHeadline": "Track market signals and stay ahead of the competition.",
+    "orContinueWith": "or continue with",
+    "email": "Email",
+    "password": "Password",
+    "login": {
+      "title": "Sign in",
+      "subtitle": "Access your competitor intelligence workspace.",
+      "footerNeedAccount": "Need an account?",
+      "footerSignUp": "Sign up",
+      "submit": "Sign in",
+      "submitting": "Signing in…",
+      "google": "Sign in with Google",
+      "failedUnexpected": "Sign in failed unexpectedly",
+      "googleFailedUnexpected": "Google sign in failed unexpectedly"
+    },
+    "signup": {
+      "title": "Create your account",
+      "subtitle": "Start tracking competitors and market signals.",
+      "footerHaveAccount": "Already have an account?",
+      "footerSignIn": "Sign in",
+      "submit": "Sign up",
+      "submitting": "Creating account…",
+      "google": "Sign up with Google",
+      "checkEmail": "Check your email to confirm your account, then sign in to continue.",
+      "failedUnexpected": "Sign up failed unexpectedly",
+      "googleFailedUnexpected": "Google sign up failed unexpectedly"
+    },
+    "callback": {
+      "completing": "Completing sign in…",
+      "failedTitle": "Sign in failed",
+      "backToSignIn": "Back to sign in",
+      "failedUnexpected": "Authentication callback failed unexpectedly"
+    },
+    "loadingSession": "Loading session…"
+  },
+  "onboarding": {
+    "preparingWorkspace": "Preparing your workspace…",
+    "welcome": {
+      "title": "Welcome to ContOS.",
+      "subtitle": "Your fractional CMO workspace. Let's set up your strategic foundation.",
+      "cta": "Let's go",
+      "starting": "Starting…",
+      "exploreModule": "Explore module →",
+      "modules": {
+        "01": {
+          "title": "Competitor Intelligence Engine",
+          "description": "Scrapes and analyzes competitor posts, hooks, and engagement so every strategy starts from real market data."
+        },
+        "02": {
+          "title": "Brand Avatar Profiling",
+          "description": "Captures your audience, tone, and goals once so every output sounds like you — not generic AI."
+        },
+        "03": {
+          "title": "AI Fractional CMO",
+          "description": "Chat with a context-aware strategist that answers using your brand profile and live competitor research."
+        },
+        "04": {
+          "title": "Platform-Native Content Agents",
+          "description": "Generates LinkedIn, Instagram, X, and playbook content in native formats with reasoning behind each idea."
+        }
+      },
+      "illustrationAiBadge": "AI",
+      "loadStateFailed": "Failed to load onboarding state unexpectedly",
+      "completeFailed": "Failed to complete onboarding unexpectedly"
+    },
+    "projectType": {
+      "stepLabel": "Workspace Setup · Step 2",
+      "newProjectStepLabel": "New Project",
+      "title": "Start a New Project",
+      "subtitle": "Select the primary focus for this workspace to tailor the insights and strategy.",
+      "backToOverview": "← Back to ContOS Overview",
+      "cancel": "← Cancel",
+      "continue": "Continue",
+      "creating": "Creating…",
+      "selectTypeError": "Select a workspace type to continue.",
+      "createAvatarFailed": "Failed to create avatar (max {{max}} on Basic plan).",
+      "options": {
+        "personalBrand": {
+          "title": "Personal Brand",
+          "description": "Tailor insights and strategy for your personal brand, audience, and content voice."
+        },
+        "business1": {
+          "title": "Business 1",
+          "description": "Tailor insights and strategy for your first business workspace and market positioning."
+        },
+        "business2": {
+          "title": "Business 2",
+          "description": "Tailor insights and strategy for your second business workspace and growth goals."
+        }
+      }
+    },
+    "competitors": {
+      "loading": "Loading competitor setup…",
+      "unavailable": "Competitor setup is unavailable.",
+      "title": "Know your competitive landscape",
+      "body": "Add competitors to help ContOS understand what is happening in your space. Instagram and LinkedIn profiles. Add {{min}}–{{max}} (recommend {{recommended}}).",
+      "addCompetitor": "+ Add Competitor",
+      "remove": "Remove",
+      "back": "Back",
+      "submit": "Research Competitors →",
+      "submitting": "Starting research…",
+      "maxReached": "Maximum of {{max}} competitors reached.",
+      "competitorLabel": "Competitor {{n}}",
+      "platformInstagram": "Instagram",
+      "platformLinkedIn": "LinkedIn",
+      "placeholderInstagram": "@competitor or https://instagram.com/competitor",
+      "placeholderLinkedIn": "linkedin.com/in/competitor or slug",
+      "missingAvatar": "Onboarding avatar is missing. Return to project setup and try again.",
+      "loadAvatarFailed": "Failed to load onboarding avatar."
+    },
+    "profiling": {
+      "questionsUnavailable": "Profiling questions are unavailable."
+    }
+  },
+  "pipeline": {
+    "labels": {
+      "queued": "Queued",
+      "scraping": "Researching competitors",
+      "transcribing": "Transcribing reels",
+      "analyzing": "Analyzing content",
+      "done": "Done",
+      "failed": "Failed"
+    },
+    "descriptions": {
+      "queued": "Waiting to start research…",
+      "scraping": "Researching your competitors…",
+      "transcribing": "Transcribing reel audio…",
+      "analyzing": "Analyzing top content…",
+      "done": "Intelligence report ready",
+      "failed": "Something went wrong during research"
+    },
+    "status": {
+      "stopping": "Stopping",
+      "failed": "Failed",
+      "done": "Done",
+      "inProgress": "In progress"
+    }
+  },
+  "dashboard": {
+    "workspaceTitle": "Workspace",
+    "workspaceSubtitle": "Track competitor research progress, then move into chat once scraping is complete.",
+    "projectStatus": "Project status: {{status}}",
+    "openChat": "Open chat",
+    "partialFailure": "Some competitors finished research, but {{count}} failed. Use Retry on failed cards, or open chat for completed competitors.",
+    "noCompetitors": "No competitors in this project yet. Use Add competitor to start research.",
+    "selectProject": "Select a project from the header switcher.",
+    "researchReadyEyebrow": "Research ready",
+    "researchFinishedTitle": "Competitor research finished",
+    "researchFinishedBody": "Open chat to ask for strategies, content ideas, or comparisons grounded in this competitor's data.",
+    "researchFinishedPartialSuffix": " Open chat to use that partial research.",
+    "retryFailed": "Failed to retry competitor research.",
+    "stopFailed": "Failed to stop competitor research."
+  },
+  "analytics": {
+    "title": "Analytics",
+    "subtitle": "Follow research progress live, then read competitor intelligence summaries when jobs finish.",
+    "tracked": "{{count}}/{{max}} tracked",
+    "slotsLeft": " · {{count}} slot left",
+    "slotsLeft_plural": " · {{count}} slots left",
+    "noCompetitors": "No competitors yet. Use Add competitor to start research — progress and summaries will show here.",
+    "researchFinishedEyebrow": "Research finished",
+    "summaryPending": "Pipeline completed. Summary is still generating or unavailable — this page refreshes automatically."
+  },
+  "competitors": {
+    "addCompetitor": "Add competitor",
+    "addingCompetitor": "Adding competitor…",
+    "limitReached": "Competitor limit reached ({{max}})",
+    "progressCard": {
+      "eyebrow": "Research in progress",
+      "stoppingHint": "Stopping… ContOS will keep scraped posts and summarize what it has so far.",
+      "startResearch": "Start research",
+      "retryResearch": "Retry research",
+      "starting": "Starting…",
+      "stop": "Stop",
+      "stopping": "Stopping…"
+    },
+    "workspacePanel": {
+      "heading": "Competitors",
+      "tracked": "{{count}}/{{max}} tracked"
+    },
+    "addPanel": {
+      "title": "Add competitors",
+      "subtitle": "Instagram or LinkedIn. Up to {{count}} more competitor for this project.",
+      "subtitle_plural": "Instagram or LinkedIn. Up to {{count}} more competitors for this project.",
+      "close": "Close",
+      "addAnother": "Add another",
+      "submit": "Add and start research",
+      "submitting": "Starting research…",
+      "enterAtLeastOne": "Enter at least one competitor.",
+      "atMostMore": "You can add at most {{count}} more competitor(s).",
+      "fixHighlighted": "Fix the highlighted competitor entries before continuing.",
+      "failedUnexpected": "Failed to add competitors unexpectedly."
+    },
+    "summaryCard": {
+      "unavailable": "Summary data is unavailable for this competitor.",
+      "intelligenceReport": "{{platform}} intelligence report",
+      "generated": "Generated {{datetime}} · {{model}}",
+      "metrics": {
+        "totalContent": "Total content",
+        "posts": "Posts",
+        "reels": "Reels",
+        "carousels": "Carousels",
+        "avgLikes": "Avg likes",
+        "avgComments": "Avg comments",
+        "avgViews": "Avg views",
+        "avgShares": "Avg shares",
+        "engagementRate": "Engagement rate"
+      },
+      "sections": {
+        "topPerforming": "Top performing content",
+        "hooksPatterns": "Recurring hooks & patterns",
+        "strategiesThemes": "Content strategies & themes",
+        "strategicSignals": "Strategic signals"
+      },
+      "likesComments": "{{likes}} likes · {{comments}} comments",
+      "viewsSuffix": " · {{views}} views",
+      "noItems": "No items reported.",
+      "emDash": "—",
+      "contentTypes": {
+        "post": "Post",
+        "carousel": "Carousel",
+        "reel": "Reel",
+        "video": "Video",
+        "story": "Story"
+      }
+    },
+    "validation": {
+      "instagramRequired": "Instagram handle or profile URL is required.",
+      "instagramNotPostOrExplore": "Enter an Instagram profile URL or handle, not a post or explore link.",
+      "instagramInvalid": "Enter a valid Instagram handle (e.g. @nike) or profile URL.",
+      "linkedinRequired": "LinkedIn profile URL or slug is required.",
+      "linkedinNotCompany": "Enter a personal LinkedIn profile (/in/...), not a company page.",
+      "linkedinInvalidUrl": "Enter a valid LinkedIn profile URL (e.g. https://www.linkedin.com/in/jane-doe).",
+      "linkedinInvalidSlug": "Enter a LinkedIn profile URL or slug (e.g. jane-doe).",
+      "addAtLeast": "Add at least {{min}} competitor.",
+      "addUpTo": "You can add up to {{max}} competitors per avatar.",
+      "validationFailed": "Competitor validation failed unexpectedly.",
+      "startResearchFailed": "Failed to start competitor research."
+    }
+  },
+  "agents": {
+    "pageSubtitle": "Ask for strategies and content ideas from your competitor research.",
+    "newChat": "New chat",
+    "researchInProgress": "Research is still in progress. Competitor-grounded answers work best after scraping finishes.",
+    "viewProgress": "View progress",
+    "placeholder": "Ask ContOS anything about your brand… Type @ to tag avatars",
+    "sendAria": "Send",
+    "sendingAria": "Sending",
+    "respondingAria": "ContOS is responding",
+    "chatSyncPrefix": "Chat sync: {{message}}",
+    "sorryPrefix": "Sorry — {{message}}",
+    "backToDashboard": "Back to dashboard",
+    "projectUnavailable": "Project unavailable.",
+    "missingProjectId": "Missing project id.",
+    "loadFailed": "Failed to load Agents.",
+    "reachFailed": "Failed to reach ContOS Agents.",
+    "openChatFailed": "Could not open that chat.",
+    "syncToFailed": "Failed to sync chat history to Supabase.",
+    "syncFromFailed": "Failed to sync chat history from Supabase.",
+    "agentTypes": {
+      "chat": "Chat",
+      "linkedin": "LinkedIn",
+      "instagram": "Instagram"
+    },
+    "history": {
+      "title": "Previous chats",
+      "close": "Close",
+      "currentSuffix": " · Current",
+      "empty": "No earlier chats yet. Start a conversation, then use New chat to begin another thread."
+    },
+    "sessionTitles": {
+      "newChat": "New chat",
+      "chatFallback": "Chat"
+    },
+    "welcome": {
+      "goodMorning": "Good morning",
+      "goodAfternoon": "Good afternoon",
+      "goodEvening": "Good evening",
+      "greeting": "{{greeting}}, {{name}}",
+      "fallbackName": "there",
+      "legacyWelcome": "Research for this avatar is ready. I can turn competitor data into strategies, content ideas, or comparisons. What do you want to focus on — LinkedIn, Instagram, or a growth playbook?"
+    },
+    "output": {
+      "noResponseYet": "No response yet.",
+      "noInstagramContent": "No Instagram strategy content returned.",
+      "strategy": "Strategy",
+      "comparisonSummary": "Comparison summary",
+      "competitorInsights": "Competitor insights",
+      "contentCalendar": "Content calendar",
+      "topHooks": "Top hooks",
+      "captionFormulas": "Caption formulas",
+      "postingCadence": "Posting cadence",
+      "howToDifferentiate": "How to differentiate",
+      "keySignals": "Key signals",
+      "hooksThemes": "Hooks & themes",
+      "strengths": "Strengths",
+      "weaknesses": "Weaknesses",
+      "cta": "CTA: {{value}}",
+      "day": "Day {{n}}",
+      "competitorN": "Competitor {{n}}",
+      "ideaN": "Idea {{n}}",
+      "postIdeas": "Post ideas",
+      "themes": "Themes",
+      "hookFormulas": "Hook formulas",
+      "linkedinIdeas": "LinkedIn ideas",
+      "tweetIdeas": "Tweet ideas",
+      "engagementTactics": "Engagement tactics",
+      "audit": "Audit",
+      "strategyFrameworks": "Strategy frameworks",
+      "frameworks": "Frameworks",
+      "guardrails": "Guardrails",
+      "recommendations": "Recommendations",
+      "brokenRules": "Broken rules",
+      "reasoning": "Reasoning",
+      "signal": "Signal: {{value}}",
+      "theme": "Theme: {{value}}",
+      "strength": "Strength: {{value}}",
+      "weakness": "Weakness: {{value}}"
+    },
+    "translating": "Translating…",
+    "translationFailed": "Translation failed. Showing original English."
+  },
+  "profiling": {
+    "loadingQuestions": "Loading profiling questions…",
+    "questionsUnavailable": "Profiling questions are unavailable.",
+    "answersUnavailable": "Profiling answers are unavailable.",
+    "projectMissing": "Project is missing. Return to the dashboard and try again.",
+    "avatarMissingSetup": "Avatar is missing. Return to project setup and try again.",
+    "avatarMissingType": "Avatar is missing. Return to project type selection.",
+    "workspaceLabel": "Workspace: {{label}}",
+    "optional": "Optional",
+    "ofTotal": "{{current}} of {{total}}",
+    "pressEnter": "Press Enter ↵ to continue",
+    "back": "← Back",
+    "next": "Next",
+    "saving": "Saving…",
+    "buildingSummary": "Building your profile summary…",
+    "defaultSection": "FOUNDATIONS",
+    "stepFoundations": "STEP {{n}} — FOUNDATIONS",
+    "review": {
+      "title": "Profiling",
+      "subtitle": "Your answers personalize the ContOS chatbot. Edit any response below and save when you're done.",
+      "unsaved": "You have unsaved changes.",
+      "allSaved": "All changes saved.",
+      "save": "Save changes",
+      "updatingSummary": "Updating summary…"
+    },
+    "field": {
+      "describeOwnWords": "Describe in your own words…",
+      "competitorPlaceholder": "Competitor",
+      "enterUpToNames": "Enter up to {{max}} competitor names."
+    },
+    "validation": {
+      "invalidWebsite": "Enter a valid website URL (e.g. https://example.com).",
+      "addCompetitorName": "Add at least one competitor name.",
+      "selectOption": "Select an option to continue.",
+      "describeOwnWords": "Please describe your answer in your own words.",
+      "answerRequired": "Please answer this question before continuing.",
+      "answerEmpty": "Answer cannot be empty.",
+      "fixBeforeSave": "Fix the highlighted answers before saving."
+    },
+    "errors": {
+      "loadQuestionnaire": "Failed to load profiling questionnaire.",
+      "saveAnswer": "Failed to save profiling answer.",
+      "loadAnswers": "Failed to load profiling answers.",
+      "saveAnswers": "Failed to save profiling answers.",
+      "summaryAfterSave": "Profiling saved, but profile summary could not be generated.",
+      "summaryAfterSaveWithDetail": "Profiling saved, but profile summary could not be generated: {{detail}}",
+      "summaryAfterReviewSave": "Answers saved, but profile summary could not be updated.",
+      "summaryAfterReviewSaveWithDetail": "Answers saved, but profile summary could not be updated: {{detail}}"
+    }
+  },
+  "placeholder": {
+    "comingSoon": "Coming soon",
+    "inDevelopment": "This module is in development",
+    "body": "The {{title}} experience will appear here without changing your existing projects, chat, or competitor research.",
+    "calendar": {
+      "title": "Calendar",
+      "subtitle": "Plan and review content timing for this project."
+    },
+    "insights": {
+      "title": "Insights",
+      "subtitle": "Surface strategic takeaways from competitor research and brand context."
+    }
+  },
+  "workspaceTypes": {
+    "personalBrand": "Personal Brand",
+    "business1": "Business 1",
+    "business2": "Business 2",
+    "business": "Business",
+    "workspace": "Workspace"
+  },
+  "common": {
+    "signOut": "Sign out",
+    "signingOut": "Signing out…",
+    "close": "Close",
+    "back": "Back",
+    "continue": "Continue",
+    "remove": "Remove",
+    "delete": "Delete",
+    "retry": "Retry",
+    "loading": "Loading…",
+    "platforms": {
+      "instagram": "Instagram",
+      "linkedin": "LinkedIn"
+    }
+  },
+  "errors": {
+    "profileSummary": {
+      "mustBeSignedIn": "You must be signed in to generate a profile summary.",
+      "generationFailed": "Profile summary generation failed.",
+      "timedOut": "Profile summary timed out after {{seconds}}s.",
+      "requestFailedStatus": "Profile summary request failed ({{status}}).",
+      "requestFailed": "Profile summary request failed."
+    },
+    "agentsApi": {
+      "missingBaseUrl": "Missing VITE_AGENT_API_BASE_URL. Set it to http://localhost:8001 for local Agents.",
+      "invalidBaseUrl": "Invalid VITE_AGENT_API_BASE_URL: \"{{url}}\"",
+      "mustBeSignedIn": "You must be signed in to use ContOS Agents.",
+      "streamFailed": "Agent stream failed unexpectedly.",
+      "invokeFailedStatus": "Agents invoke failed (status {{status}}): {{body}}",
+      "noResponseBody": "no response body",
+      "emptyStreamBody": "Agents invoke returned an empty stream body.",
+      "translateFailed": "Translation request failed ({{status}}).",
+      "translateFailedGeneric": "Translation request failed."
+    },
+    "avatars": {
+      "operationFailed": "Avatar operation failed",
+      "limitReached": "You've reached the maximum number of avatars on your current plan.",
+      "nameRequired": "Avatar name is required."
+    },
+    "dashboard": {
+      "projectNotFound": "Project not found or you do not have access to it.",
+      "loadFailed": "Failed to load dashboard",
+      "refreshFailed": "Failed to refresh dashboard data",
+      "signOutFailed": "Sign out failed",
+      "signOutFailedPeriod": "Sign out failed."
+    },
+    "onboarding": {
+      "verifyStepFailed": "Failed to verify onboarding step unexpectedly"
+    },
+    "chat": {
+      "sessionNotFound": "Chat session not found: {{sessionId}}"
+    }
+  }
+}

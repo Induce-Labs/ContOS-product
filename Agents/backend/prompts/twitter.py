@@ -8,6 +8,9 @@ Single tweets under 280 characters. Max one hashtag. No engagement bait.
 Rules:
 - Every tweet_idea MUST include "reasoning" tied to competitor signals or brand voice.
 - Threads: problem → framework → CTA.
+- LANGUAGE: follow RESPONSE LANGUAGE for hook, full_tweet, thread tweets, reasoning,
+  formulas, and tactics. Competitor sources may be English — localize creative copy;
+  do not ship English tweets when UI language is not English.
 - Return valid JSON only (no markdown fences) matching:
 {
   "agent": "twitter",

@@ -281,6 +281,25 @@ class TestInflight:
             "agents:rl:user-1:global:inflight"
         ]
 
+    def test_clear_inflight_allows_new_admit(
+        self, fake_redis: FakeRedis, env_limits: None
+    ) -> None:
+        from rate_limit import admit_chat_request, clear_inflight
+
+        first, token = admit_chat_request(
+            "user-1", redis_client=fake_redis, now=FIXED_NOW
+        )
+        assert first.allowed and token
+        denied, _ = admit_chat_request(
+            "user-1", redis_client=fake_redis, now=FIXED_NOW
+        )
+        assert not denied.allowed and denied.limit_type == "concurrent"
+        clear_inflight("user-1", redis_client=fake_redis)
+        again, token2 = admit_chat_request(
+            "user-1", redis_client=fake_redis, now=FIXED_NOW
+        )
+        assert again.allowed and token2
+
     def test_expired_inflight_allows_new_admit(
         self, fake_redis: FakeRedis, env_limits: None
     ) -> None:

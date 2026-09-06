@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Link, useNavigate } from 'react-router-dom'
 import { completeOAuthCallback } from '../lib/auth'
 import { resolvePostAuthPath } from '../lib/projects'
 
 export function AuthCallbackPage() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
@@ -23,7 +25,7 @@ export function AuthCallbackPage() {
           setErrorMessage(
             error instanceof Error
               ? error.message
-              : 'Authentication callback failed unexpectedly',
+              : t('auth.callback.failedUnexpected'),
           )
         }
       }
@@ -34,19 +36,19 @@ export function AuthCallbackPage() {
     return () => {
       isMounted = false
     }
-  }, [navigate])
+  }, [navigate, t])
 
   if (errorMessage) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-canvas px-4">
         <div className="w-full max-w-md rounded-[2rem] border border-border-hairline bg-canvas-raised p-8 text-center">
-          <h1 className="text-xl font-semibold text-ink">Sign in failed</h1>
+          <h1 className="text-xl font-semibold text-ink">{t('auth.callback.failedTitle')}</h1>
           <p className="mt-3 text-sm text-red-600">{errorMessage}</p>
           <Link
             to="/login"
             className="mt-6 inline-block text-sm font-medium text-accent-primary hover:text-accent-primary-deep"
           >
-            Back to sign in
+            {t('auth.callback.backToSignIn')}
           </Link>
         </div>
       </div>
@@ -55,7 +57,7 @@ export function AuthCallbackPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-canvas text-ink-muted">
-      Completing sign in…
+      {t('auth.callback.completing')}
     </div>
   )
 }

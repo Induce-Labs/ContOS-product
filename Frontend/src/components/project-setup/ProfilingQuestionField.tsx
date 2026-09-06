@@ -1,7 +1,8 @@
 import { useEffect, useState, type KeyboardEvent } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   findMatchingSelectOption,
-  isOtherSelectOption,
+  isOtherSelectOptionAt,
   parseCompetitorNames,
   type ProfilingQuestionDef,
 } from '../../config/onboardingProfilingQuestions'
@@ -17,6 +18,15 @@ export type ProfilingQuestionFieldProps = {
   autoAdvanceOnSelect?: boolean
 }
 
+type SingleSelectQuestion = ProfilingQuestionDef & {
+  input: {
+    kind: 'single_select'
+    options: string[]
+    allowOther?: boolean
+    englishOptions?: string[]
+  }
+}
+
 function SingleSelectControls({
   question,
   value,
@@ -25,21 +35,29 @@ function SingleSelectControls({
   disabled,
   autoAdvanceOnSelect,
 }: {
-  question: ProfilingQuestionDef & {
-    input: { kind: 'single_select'; options: string[]; allowOther?: boolean }
-  }
+  question: SingleSelectQuestion
   value: string
   onChange: (value: string) => void
   onSubmit?: (answerOverride?: string) => void
   disabled?: boolean
   autoAdvanceOnSelect: boolean
 }) {
-  const matched = findMatchingSelectOption(question.input.options, value)
+  const { t } = useTranslation()
+  const englishOptions = question.input.englishOptions
+  const matched = findMatchingSelectOption(
+    question.input.options,
+    value,
+    englishOptions,
+  )
   const [selectedOption, setSelectedOption] = useState<string | null>(matched.option)
   const [otherText, setOtherText] = useState(matched.otherText)
 
   useEffect(() => {
-    const next = findMatchingSelectOption(question.input.options, value)
+    const next = findMatchingSelectOption(
+      question.input.options,
+      value,
+      englishOptions,
+    )
     setSelectedOption(next.option)
     setOtherText(next.otherText)
     // Hydrate only when the active question changes so selecting "Other" with an empty
@@ -47,10 +65,15 @@ function SingleSelectControls({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally keyed by question
   }, [question.key])
 
+  const selectedIndex =
+    selectedOption === null
+      ? -1
+      : question.input.options.findIndex((option) => option === selectedOption)
   const showOther =
     Boolean(question.input.allowOther) &&
     selectedOption !== null &&
-    isOtherSelectOption(selectedOption)
+    selectedIndex >= 0 &&
+    isOtherSelectOptionAt(question.input.options, selectedIndex, englishOptions)
 
   function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
     if (event.key === 'Enter') {
@@ -62,8 +85,13 @@ function SingleSelectControls({
   return (
     <div className="space-y-3">
       <div className="space-y-2">
-        {question.input.options.map((option) => {
+        {question.input.options.map((option, index) => {
           const selected = selectedOption === option
+          const isOther = isOtherSelectOptionAt(
+            question.input.options,
+            index,
+            englishOptions,
+          )
           return (
             <button
               key={option}
@@ -71,7 +99,7 @@ function SingleSelectControls({
               disabled={disabled}
               onClick={() => {
                 setSelectedOption(option)
-                if (isOtherSelectOption(option)) {
+                if (isOther) {
                   onChange(otherText)
                   return
                 }
@@ -103,7 +131,7 @@ function SingleSelectControls({
             onChange(event.target.value)
           }}
           onKeyDown={handleKeyDown}
-          placeholder="Describe in your own words…"
+          placeholder={t('profiling.field.describeOwnWords')}
           className="w-full border-0 border-b border-ink/20 bg-transparent px-0 py-3 text-base text-ink outline-none placeholder:text-ink-muted/55 focus:border-ink disabled:opacity-60"
           autoFocus
         />
@@ -120,6 +148,8 @@ export function ProfilingQuestionField({
   disabled,
   autoAdvanceOnSelect = true,
 }: ProfilingQuestionFieldProps) {
+  const { t } = useTranslation()
+
   function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
     if (event.key === 'Enter') {
       event.preventDefault()
@@ -130,11 +160,7 @@ export function ProfilingQuestionField({
   if (question.input.kind === 'single_select') {
     return (
       <SingleSelectControls
-        question={
-          question as ProfilingQuestionDef & {
-            input: { kind: 'single_select'; options: string[]; allowOther?: boolean }
-          }
-        }
+        question={question as SingleSelectQuestion}
         value={value}
         onChange={onChange}
         onSubmit={onSubmit}
@@ -162,11 +188,13 @@ export function ProfilingQuestionField({
               onChange(next.join(' | '))
             }}
             onKeyDown={handleKeyDown}
-            placeholder={`${question.placeholder ?? 'Competitor'} ${index + 1}`}
+            placeholder={`${question.placeholder ?? t('profiling.field.competitorPlaceholder')} ${index + 1}`}
             className="w-full border-0 border-b border-ink/20 bg-transparent px-0 py-3 text-base text-ink outline-none placeholder:text-ink-muted/55 focus:border-ink disabled:opacity-60"
           />
         ))}
-        <p className="text-xs text-ink-muted">Enter up to {max} competitor names.</p>
+        <p className="text-xs text-ink-muted">
+          {t('profiling.field.enterUpToNames', { max })}
+        </p>
       </div>
     )
   }

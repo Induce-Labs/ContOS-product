@@ -1,6 +1,7 @@
 import type { FormEvent } from 'react'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { AuthLayout, AuthLink } from '../components/auth/AuthLayout'
 import { AuthAlert, GoogleSignInButton, PrimaryButton } from '../components/auth/AuthButtons'
 import { AuthFormField } from '../components/auth/AuthFormField'
@@ -8,6 +9,7 @@ import { signInWithOAuthProvider, signUpWithEmail } from '../lib/auth'
 import { resolvePostAuthPath } from '../lib/projects'
 
 export function SignUpPage() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -30,12 +32,10 @@ export function SignUpPage() {
         return
       }
 
-      setSuccessMessage(
-        'Check your email to confirm your account, then sign in to continue.',
-      )
+      setSuccessMessage(t('auth.signup.checkEmail'))
     } catch (error) {
       setErrorMessage(
-        error instanceof Error ? error.message : 'Sign up failed unexpectedly',
+        error instanceof Error ? error.message : t('auth.signup.failedUnexpected'),
       )
     } finally {
       setIsSubmitting(false)
@@ -51,7 +51,7 @@ export function SignUpPage() {
       await signInWithOAuthProvider('google')
     } catch (error) {
       setErrorMessage(
-        error instanceof Error ? error.message : 'Google sign up failed unexpectedly',
+        error instanceof Error ? error.message : t('auth.signup.googleFailedUnexpected'),
       )
       setIsSubmitting(false)
     }
@@ -59,11 +59,12 @@ export function SignUpPage() {
 
   return (
     <AuthLayout
-      title="Create your account"
-      subtitle="Start tracking competitors and market signals."
+      title={t('auth.signup.title')}
+      subtitle={t('auth.signup.subtitle')}
       footer={
         <>
-          Already have an account? <AuthLink to="/login">Sign in</AuthLink>
+          {t('auth.signup.footerHaveAccount')}{' '}
+          <AuthLink to="/login">{t('auth.signup.footerSignIn')}</AuthLink>
         </>
       }
     >
@@ -72,7 +73,7 @@ export function SignUpPage() {
         {successMessage ? <AuthAlert message={successMessage} tone="success" /> : null}
 
         <AuthFormField
-          label="Email"
+          label={t('auth.email')}
           name="email"
           type="email"
           autoComplete="email"
@@ -82,7 +83,7 @@ export function SignUpPage() {
         />
 
         <AuthFormField
-          label="Password"
+          label={t('auth.password')}
           name="password"
           type="password"
           autoComplete="new-password"
@@ -93,18 +94,18 @@ export function SignUpPage() {
         />
 
         <PrimaryButton disabled={isSubmitting}>
-          {isSubmitting ? 'Creating account…' : 'Sign up'}
+          {isSubmitting ? t('auth.signup.submitting') : t('auth.signup.submit')}
         </PrimaryButton>
       </form>
 
       <div className="my-5 flex items-center gap-3 sm:my-6">
         <div className="h-px flex-1 bg-border-hairline" />
-        <span className="text-[13px] font-medium text-ink-muted">or continue with</span>
+        <span className="text-[13px] font-medium text-ink-muted">{t('auth.orContinueWith')}</span>
         <div className="h-px flex-1 bg-border-hairline" />
       </div>
 
       <GoogleSignInButton
-        label="Sign up with Google"
+        label={t('auth.signup.google')}
         onClick={() => void handleGoogleSignUp()}
         disabled={isSubmitting}
       />

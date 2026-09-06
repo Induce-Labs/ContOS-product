@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link, useLocation, useSearchParams } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 
 type DashboardSidebarNavProps = {
   projectId: string | null
@@ -28,6 +29,7 @@ type NavSection =
     }
 
 export function DashboardSidebarNav({ projectId, onNavigate }: DashboardSidebarNavProps) {
+  const { t } = useTranslation()
   const location = useLocation()
   const [searchParams] = useSearchParams()
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
@@ -38,7 +40,7 @@ export function DashboardSidebarNav({ projectId, onNavigate }: DashboardSidebarN
   if (!projectId) {
     return (
       <nav className="flex-1 px-4 py-5">
-        <p className="text-sm text-ink-muted">Create a project to unlock navigation.</p>
+        <p className="text-sm text-ink-muted">{t('nav.createProjectToUnlock')}</p>
       </nav>
     )
   }
@@ -47,16 +49,16 @@ export function DashboardSidebarNav({ projectId, onNavigate }: DashboardSidebarN
   const sections: NavSection[] = [
     {
       id: 'projects',
-      label: 'Projects',
+      label: t('nav.projects'),
       kind: 'group',
       children: [
         {
-          label: 'Profiling',
+          label: t('nav.profiling'),
           href: `/dashboard/${projectId}/profiling`,
           isActive: (pathname) => pathname === `/dashboard/${projectId}/profiling`,
         },
         {
-          label: 'Analytics',
+          label: t('nav.analytics'),
           href: `/dashboard/${projectId}/analytics`,
           isActive: (pathname) => pathname === `/dashboard/${projectId}/analytics`,
         },
@@ -64,35 +66,35 @@ export function DashboardSidebarNav({ projectId, onNavigate }: DashboardSidebarN
     },
     {
       id: 'overview',
-      label: 'Overview',
+      label: t('nav.overview'),
       kind: 'link',
       href: `/dashboard/${projectId}`,
       isActive: (pathname) => pathname === `/dashboard/${projectId}`,
     },
     {
       id: 'content',
-      label: 'Content Agent',
+      label: t('nav.contentAgent'),
       kind: 'group',
       children: [
         {
-          label: 'Chatbot',
+          label: t('nav.chatbot'),
           href: `/dashboard/${projectId}/agents`,
           isActive: (pathname, currentPanel) =>
             pathname === `/dashboard/${projectId}/agents` && currentPanel !== 'history',
         },
         {
-          label: 'Chat History',
+          label: t('nav.chatHistory'),
           href: `/dashboard/${projectId}/agents?panel=history`,
           isActive: (pathname, currentPanel) =>
             pathname === `/dashboard/${projectId}/agents` && currentPanel === 'history',
         },
         {
-          label: 'Calendar',
+          label: t('nav.calendar'),
           href: `/dashboard/${projectId}/calendar`,
           isActive: (pathname) => pathname === `/dashboard/${projectId}/calendar`,
         },
         {
-          label: 'Insights',
+          label: t('nav.insights'),
           href: `/dashboard/${projectId}/insights`,
           isActive: (pathname) => pathname === `/dashboard/${projectId}/insights`,
         },
@@ -148,7 +150,7 @@ export function DashboardSidebarNav({ projectId, onNavigate }: DashboardSidebarN
 
                     return (
                       <Link
-                        key={child.label}
+                        key={child.href}
                         to={child.href}
                         onClick={onNavigate}
                         className={`block rounded-full px-4 py-2 text-sm transition ${

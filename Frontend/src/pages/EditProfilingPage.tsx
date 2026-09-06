@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useParams } from 'react-router-dom'
 import { DashboardLayout } from '../components/dashboard/DashboardLayout'
 import { ProfilingReviewPanel } from '../components/dashboard/ProfilingReviewPanel'
@@ -22,6 +23,7 @@ function EditProfilingWizard({
   avatarId: string
   onCompleted: () => void
 }) {
+  const { t } = useTranslation()
   const {
     avatar,
     questions,
@@ -32,6 +34,8 @@ function EditProfilingWizard({
     isLoading,
     isSaving,
     isSummarizing,
+    isTranslatingQuestions,
+    isLocalizingAnswers,
     setAnswer,
     goNext,
     goBack,
@@ -55,7 +59,7 @@ function EditProfilingWizard({
   if (!avatar || questions.length === 0) {
     return (
       <ProfilingStepUnavailable
-        message={errorMessage ?? 'Profiling questions are unavailable.'}
+        message={errorMessage ?? t('profiling.questionsUnavailable')}
       />
     )
   }
@@ -70,6 +74,7 @@ function EditProfilingWizard({
       fieldError={fieldError}
       isSaving={isSaving}
       isSummarizing={isSummarizing}
+      isTranslating={isTranslatingQuestions || isLocalizingAnswers}
       onAnswerChange={setAnswer}
       onNext={(answerOverride) => void handleNext(answerOverride)}
       onBack={handleBack}
@@ -78,6 +83,7 @@ function EditProfilingWizard({
 }
 
 function EditProfilingReview({ avatarId }: { avatarId: string }) {
+  const { t } = useTranslation()
   const {
     user,
     projects,
@@ -100,6 +106,8 @@ function EditProfilingReview({ avatarId }: { avatarId: string }) {
     isLoading,
     isSaving,
     isSummarizing,
+    isTranslatingQuestions,
+    isLocalizingAnswers,
     hasChanges,
     updateDraft,
     saveChanges,
@@ -126,7 +134,7 @@ function EditProfilingReview({ avatarId }: { avatarId: string }) {
 
       {!avatar ? (
         <ProfilingStepUnavailable
-          message={errorMessage ?? 'Profiling answers are unavailable.'}
+          message={errorMessage ?? t('profiling.answersUnavailable')}
         />
       ) : (
         <ProfilingReviewPanel
@@ -138,6 +146,7 @@ function EditProfilingReview({ avatarId }: { avatarId: string }) {
           hasChanges={hasChanges}
           isSaving={isSaving}
           isSummarizing={isSummarizing}
+          isTranslating={isTranslatingQuestions || isLocalizingAnswers}
           onDraftChange={updateDraft}
           onSave={() => void saveChanges()}
         />
@@ -147,6 +156,7 @@ function EditProfilingReview({ avatarId }: { avatarId: string }) {
 }
 
 export function EditProfilingPage() {
+  const { t } = useTranslation()
   const { projectId } = useParams()
   const [viewMode, setViewMode] = useState<ProfilingViewMode>('loading')
   const [reloadToken, setReloadToken] = useState(0)
@@ -187,9 +197,7 @@ export function EditProfilingPage() {
   }, [projectId, reloadToken])
 
   if (!projectId) {
-    return (
-      <ProfilingStepUnavailable message="Project is missing. Return to the dashboard and try again." />
-    )
+    return <ProfilingStepUnavailable message={t('profiling.projectMissing')} />
   }
 
   if (viewMode === 'loading') {

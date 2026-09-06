@@ -1,5 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { ProfilingQuestionDef } from '../config/onboardingProfilingQuestions'
+import { useLocalizedQuestionnaire } from './useLocalizedQuestionnaire'
 import { fetchAvatar, type Avatar } from '../lib/avatars'
 import {
   fetchProfilingQuestionnaire,
@@ -8,6 +10,11 @@ import {
   upsertProfilingAnswer,
   validateProfilingAnswer,
 } from '../lib/profiling'
+import {
+  answersToEnglishForSave,
+  answersToLocaleForDisplay,
+  resolveUiLanguage,
+} from '../lib/profilingLocale'
 import { summarizeProfiling } from '../lib/profileSummary'
 import type { ProjectType } from '../types/contos'
 
@@ -15,13 +22,23 @@ export type UseProfilingReviewOptions = {
   avatarId: string | null
 }
 
-function answersEqual(a: Record<string, string>, b: Record<string, string>, keys: string[]): boolean {
+function answersEqual(
+  a: Record<string, string>,
+  b: Record<string, string>,
+  keys: string[],
+): boolean {
   return keys.every((key) => (a[key] ?? '') === (b[key] ?? ''))
 }
 
 export function useProfilingReview({ avatarId }: UseProfilingReviewOptions) {
+  const { i18n, t } = useTranslation()
+  const locale = resolveUiLanguage(i18n.language)
+
   const [avatar, setAvatar] = useState<Avatar | null>(null)
-  const [questions, setQuestions] = useState<ProfilingQuestionDef[]>([])
+  const [canonicalQuestions, setCanonicalQuestions] = useState<ProfilingQuestionDef[]>(
+    [],
+  )
+  const englishSavedRef = useRef<Record<string, string>>({})
   const [savedAnswers, setSavedAnswers] = useState<Record<string, string>>({})
   const [draftAnswers, setDraftAnswers] = useState<Record<string, string>>({})
   const [dirtyKeys, setDirtyKeys] = useState<Set<string>>(() => new Set())
@@ -30,6 +47,17 @@ export function useProfilingReview({ avatarId }: UseProfilingReviewOptions) {
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [isSummarizing, setIsSummarizing] = useState(false)
+  const [isLocalizingAnswers, setIsLocalizingAnswers] = useState(false)
+
+  const {
+    displayQuestions,
+    optionMaps,
+    isTranslating: isTranslatingQuestions,
+    translationError: questionTranslationError,
+  } = useLocalizedQuestionnaire(canonicalQuestions)
+
+  const questions =
+    displayQuestions.length > 0 ? displayQuestions : canonicalQuestions
 
   const hasChanges = dirtyKeys.size > 0
 
@@ -40,7 +68,7 @@ export function useProfilingReview({ avatarId }: UseProfilingReviewOptions) {
       if (!avatarId) {
         if (isMounted) {
           setIsLoading(false)
-          setErrorMessage('Project is missing. Return to the dashboard and try again.')
+          setErrorMessage(t('profiling.projectMissing'))
         }
         return
       }
@@ -50,7 +78,9 @@ export function useProfilingReview({ avatarId }: UseProfilingReviewOptions) {
 
       try {
         const loaded = await fetchAvatar(avatarId)
-        const questionnaire = await fetchProfilingQuestionnaire(loaded.type as ProjectType)
+        const questionnaire = await fetchProfilingQuestionnaire(
+          loaded.type as ProjectType,
+        )
         const hydrated = profilingDataToAnswers(loaded.profiling_data, questionnaire)
 
         if (!isMounted) {
@@ -58,7 +88,8 @@ export function useProfilingReview({ avatarId }: UseProfilingReviewOptions) {
         }
 
         setAvatar(loaded)
-        setQuestions(questionnaire)
+        setCanonicalQuestions(questionnaire)
+        englishSavedRef.current = hydrated
         setSavedAnswers(hydrated)
         setDraftAnswers(hydrated)
         setDirtyKeys(new Set())
@@ -66,7 +97,9 @@ export function useProfilingReview({ avatarId }: UseProfilingReviewOptions) {
       } catch (error) {
         if (isMounted) {
           setErrorMessage(
-            error instanceof Error ? error.message : 'Failed to load profiling answers.',
+            error instanceof Error
+              ? error.message
+              : t('profiling.errors.loadAnswers'),
           )
         }
       } finally {
@@ -81,7 +114,67 @@ export function useProfilingReview({ avatarId }: UseProfilingReviewOptions) {
     return () => {
       isMounted = false
     }
-  }, [avatarId])
+  }, [avatarId, t])
+
+  useEffect(() => {
+    let cancelled = false
+    const english = englishSavedRef.current
+    if (Object.keys(english).length === 0 || canonicalQuestions.length === 0) {
+      return
+    }
+    if (dirtyKeys.size > 0) {
+      // Don't clobber in-progress edits when language changes mid-edit.
+      return
+    }
+    if (locale === 'en') {
+      setSavedAnswers({ ...english })
+      setDraftAnswers({ ...english })
+      setIsLocalizingAnswers(false)
+      return
+    }
+    if (isTranslatingQuestions) {
+      return
+    }
+
+    setIsLocalizingAnswers(true)
+    void (async () => {
+      try {
+        const localized = await answersToLocaleForDisplay({
+          englishAnswers: english,
+          canonicalQuestions,
+          optionMaps,
+          targetLang: locale,
+        })
+        if (!cancelled) {
+          setSavedAnswers(localized)
+          setDraftAnswers(localized)
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setSavedAnswers({ ...english })
+          setDraftAnswers({ ...english })
+          setErrorMessage(
+            error instanceof Error ? error.message : t('agents.translationFailed'),
+          )
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLocalizingAnswers(false)
+        }
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [
+    locale,
+    canonicalQuestions,
+    optionMaps,
+    isTranslatingQuestions,
+    dirtyKeys.size,
+    t,
+  ])
 
   const updateDraft = useCallback(
     (key: string, value: string) => {
@@ -113,13 +206,13 @@ export function useProfilingReview({ avatarId }: UseProfilingReviewOptions) {
   const sections = useMemo(() => {
     const grouped = new Map<string, ProfilingQuestionDef[]>()
     for (const question of questions) {
-      const label = question.sectionLabel || 'FOUNDATIONS'
+      const label = question.sectionLabel || t('profiling.defaultSection')
       const existing = grouped.get(label) ?? []
       existing.push(question)
       grouped.set(label, existing)
     }
     return Array.from(grouped.entries())
-  }, [questions])
+  }, [questions, t])
 
   async function saveChanges(): Promise<boolean> {
     if (!avatar || !avatarId || !hasChanges || isSaving || isSummarizing) {
@@ -127,51 +220,67 @@ export function useProfilingReview({ avatarId }: UseProfilingReviewOptions) {
     }
 
     const keysToSave = Array.from(dirtyKeys)
-    const nextFieldErrors: Record<string, string> = {}
-
-    for (const key of keysToSave) {
-      const question = questions.find((entry) => entry.key === key)
-      if (!question) {
-        continue
-      }
-      const raw = draftAnswers[key] ?? ''
-      const validationError = validateProfilingAnswer(question, raw)
-      if (validationError) {
-        nextFieldErrors[key] = validationError
-      }
-    }
-
-    if (Object.keys(nextFieldErrors).length > 0) {
-      setFieldErrors(nextFieldErrors)
-      setErrorMessage('Fix the highlighted answers before saving.')
-      return false
-    }
-
     setFieldErrors({})
     setErrorMessage(null)
     setIsSaving(true)
 
     let updatedAvatar = avatar
-    const nextSavedAnswers = { ...savedAnswers }
+    const nextEnglishSaved = { ...englishSavedRef.current }
 
     try {
+      const englishBatch = await answersToEnglishForSave({
+        answers: draftAnswers,
+        keys: keysToSave,
+        canonicalQuestions,
+        optionMaps,
+        sourceLang: locale,
+      })
+
+      const nextFieldErrors: Record<string, string> = {}
       for (const key of keysToSave) {
-        const question = questions.find((entry) => entry.key === key)
-        if (!question) {
-          continue
+        const question = canonicalQuestions.find((entry) => entry.key === key)
+        if (!question) continue
+        const englishRaw = englishBatch[key] ?? ''
+        const validationError = validateProfilingAnswer(question, englishRaw)
+        if (validationError) {
+          nextFieldErrors[key] = validationError.startsWith('profiling.')
+            ? t(validationError)
+            : validationError
         }
-        const raw = draftAnswers[key] ?? ''
-        const normalized = normalizeAnswerForSave(question, raw)
+      }
+      if (Object.keys(nextFieldErrors).length > 0) {
+        setFieldErrors(nextFieldErrors)
+        setErrorMessage(t('profiling.validation.fixBeforeSave'))
+        return false
+      }
+
+      for (const key of keysToSave) {
+        const question = canonicalQuestions.find((entry) => entry.key === key)
+        if (!question) continue
+        const englishRaw = englishBatch[key] ?? ''
+        const normalized = normalizeAnswerForSave(question, englishRaw)
         updatedAvatar = await upsertProfilingAnswer(avatarId, key, normalized, {
           optional: !question.required,
           questionText: question.question,
         })
-        nextSavedAnswers[key] = normalized
+        nextEnglishSaved[key] = normalized
       }
 
+      englishSavedRef.current = nextEnglishSaved
       setAvatar(updatedAvatar)
-      setSavedAnswers(nextSavedAnswers)
-      setDraftAnswers(nextSavedAnswers)
+
+      const localizedSaved =
+        locale === 'en'
+          ? { ...nextEnglishSaved }
+          : await answersToLocaleForDisplay({
+              englishAnswers: nextEnglishSaved,
+              canonicalQuestions,
+              optionMaps,
+              targetLang: locale,
+            })
+
+      setSavedAnswers(localizedSaved)
+      setDraftAnswers(localizedSaved)
       setDirtyKeys(new Set())
 
       setIsSummarizing(true)
@@ -181,8 +290,10 @@ export function useProfilingReview({ avatarId }: UseProfilingReviewOptions) {
         console.error('Profile summary generation failed:', error)
         setErrorMessage(
           error instanceof Error
-            ? `Answers saved, but profile summary could not be updated: ${error.message}`
-            : 'Answers saved, but profile summary could not be updated.',
+            ? t('profiling.errors.summaryAfterReviewSaveWithDetail', {
+                detail: error.message,
+              })
+            : t('profiling.errors.summaryAfterReviewSave'),
         )
       } finally {
         setIsSummarizing(false)
@@ -190,9 +301,11 @@ export function useProfilingReview({ avatarId }: UseProfilingReviewOptions) {
 
       return true
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Failed to save profiling answers.')
+      setErrorMessage(
+        error instanceof Error ? error.message : t('profiling.errors.saveAnswers'),
+      )
       if (!answersEqual(draftAnswers, savedAnswers, keysToSave)) {
-        setDraftAnswers((current) => ({ ...current, ...nextSavedAnswers }))
+        setDraftAnswers((current) => ({ ...current }))
       }
       return false
     } finally {
@@ -200,16 +313,22 @@ export function useProfilingReview({ avatarId }: UseProfilingReviewOptions) {
     }
   }
 
+  const combinedError =
+    errorMessage ??
+    (questionTranslationError ? t('agents.translationFailed') : null)
+
   return {
     avatar,
     questions,
     sections,
     draftAnswers,
     fieldErrors,
-    errorMessage,
-    isLoading,
+    errorMessage: combinedError,
+    isLoading: isLoading || isLocalizingAnswers,
     isSaving,
     isSummarizing,
+    isTranslatingQuestions,
+    isLocalizingAnswers,
     hasChanges,
     updateDraft,
     saveChanges,

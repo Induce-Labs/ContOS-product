@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import type { AgentType } from '../../lib/agentsApi'
 import type { ChatStore } from '../../lib/agentChatStorage'
 import { listChatSessions, sessionHasUserMessages } from '../../lib/agentChatStorage'
@@ -24,16 +25,18 @@ export function AgentChatHistoryPanel({
   onSelectSession,
   onClose,
 }: AgentChatHistoryPanelProps) {
+  const { t } = useTranslation()
+
   return (
     <div className="mb-4 rounded-2xl border border-white/80 bg-white/90 p-4 shadow-[0_12px_30px_rgba(28,27,41,0.05)]">
       <div className="mb-3 flex items-center justify-between gap-2">
-        <p className="text-sm font-medium text-ink">Previous chats</p>
+        <p className="text-sm font-medium text-ink">{t('agents.history.title')}</p>
         <button
           type="button"
           onClick={onClose}
           className="text-xs text-ink-muted hover:text-ink"
         >
-          Close
+          {t('agents.history.close')}
         </button>
       </div>
       {chatStore && listChatSessions(chatStore).length > 0 ? (
@@ -56,7 +59,7 @@ export function AgentChatHistoryPanel({
                     }`}
                   >
                     {formatSessionTime(session.updatedAt)}
-                    {isActive ? ' · Current' : ''}
+                    {isActive ? t('agents.history.currentSuffix') : ''}
                   </span>
                 </button>
               </li>
@@ -64,9 +67,7 @@ export function AgentChatHistoryPanel({
           })}
         </ul>
       ) : (
-        <p className="text-sm text-ink-muted">
-          No earlier chats yet. Start a conversation, then use New chat to begin another thread.
-        </p>
+        <p className="text-sm text-ink-muted">{t('agents.history.empty')}</p>
       )}
     </div>
   )
@@ -74,24 +75,25 @@ export function AgentChatHistoryPanel({
 
 type AgentTypePillsProps = {
   agentType: AgentType
-  streaming: boolean
+  /** Kept for callers; pills stay clickable so mid-stream tab switches do not block UX. */
+  streaming?: boolean
   options: Array<{ value: AgentType; label: string }>
   onChange: (value: AgentType) => void
 }
 
 export function AgentTypePills({
   agentType,
-  streaming,
+  streaming: _streaming = false,
   options,
   onChange,
 }: AgentTypePillsProps) {
+  void _streaming
   return (
     <div className="flex flex-wrap gap-2">
       {options.map((option) => (
         <button
           key={option.value}
           type="button"
-          disabled={streaming}
           onClick={() => onChange(option.value)}
           className={`rounded-full px-3 py-1.5 text-sm transition ${
             agentType === option.value

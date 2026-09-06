@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Link, useNavigate } from 'react-router-dom'
 import { useDashboardPolling } from '../hooks/useDashboardPolling'
 import { useDashboardShell } from '../hooks/useDashboardShell'
 import { updateProjectStatus } from '../lib/projects'
 import { enqueueCompetitorScrapeJobsOrThrow, stopCompetitorPipeline } from '../lib/api'
+import { requeueOrphanedCompetitorScrapes } from '../lib/requeueOrphanedScrapes'
 import { DashboardLayout, EmptyProjectsState } from '../components/dashboard/DashboardLayout'
 import { CompetitorProgressCard } from '../components/dashboard/CompetitorProgressCard'
 import { AddCompetitorPanel } from '../components/dashboard/AddCompetitorPanel'
@@ -12,6 +14,7 @@ import { CompetitorWorkspacePanel } from '../components/dashboard/CompetitorWork
 import type { Competitor } from '../lib/competitors'
 
 export function DashboardPage() {
+  const { t } = useTranslation()
   const {
     user,
     projects,
@@ -38,6 +41,15 @@ export function DashboardPage() {
     errorMessage: dashboardError,
     refresh,
   } = useDashboardPolling(activeProject?.id ?? null)
+
+  // Celery tasks are fire-and-forget in Redis. If the worker dies or Redis is
+  // flushed, rows stay pending/queued forever — re-publish once per session.
+  useEffect(() => {
+    if (!activeProject?.id || dashboardLoading || competitors.length === 0) {
+      return
+    }
+    void requeueOrphanedCompetitorScrapes(activeProject.id, competitors)
+  }, [activeProject?.id, competitors, dashboardLoading])
 
   useEffect(() => {
     if (!activeProject || dashboardLoading) {
@@ -81,7 +93,7 @@ export function DashboardPage() {
       await refresh()
     } catch (error) {
       setActionError(
-        error instanceof Error ? error.message : 'Failed to retry competitor research.',
+        error instanceof Error ? error.message : t('dashboard.retryFailed'),
       )
     } finally {
       setRetryingCompetitorId(null)
@@ -101,7 +113,7 @@ export function DashboardPage() {
       await refresh()
     } catch (error) {
       setActionError(
-        error instanceof Error ? error.message : 'Failed to stop competitor research.',
+        error instanceof Error ? error.message : t('dashboard.stopFailed'),
       )
     } finally {
       setStoppingCompetitorId(null)
@@ -168,8 +180,8 @@ export function DashboardPage() {
       {activeProject ? (
         <div className="space-y-6">
           <OverviewWorkspaceHeader
-            title="Workspace"
-            subtitle="Track competitor research progress, then move into chat once scraping is complete."
+            title={t('dashboard.workspaceTitle')}
+            subtitle={t('dashboard.workspaceSubtitle')}
           />
 
           <div className="flex flex-wrap items-start justify-between gap-4">
@@ -179,7 +191,7 @@ export function DashboardPage() {
               </p>
               <h2 className="text-xl font-semibold text-ink">{activeProject.name}</h2>
               <p className="mt-1 text-sm text-ink-muted">
-                Project status: <span className="capitalize">{activeProject.status}</span>
+                {t('dashboard.projectStatus', { status: activeProject.status })}
               </p>
             </div>
             {completedCompetitorCount > 0 ? (
@@ -187,7 +199,7 @@ export function DashboardPage() {
                 to={`/dashboard/${activeProject.id}/agents`}
                 className="rounded-full bg-accent-primary px-4 py-2.5 text-sm font-medium text-white hover:bg-accent-primary-deep"
               >
-                Open chat
+                {t('dashboard.openChat')}
               </Link>
             ) : null}
           </div>
@@ -202,8 +214,7 @@ export function DashboardPage() {
 
           {hasPartialFailure ? (
             <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-              Some competitors finished research, but {failedCompetitorCount} failed. Use Retry
-              on failed cards, or open chat for completed competitors.
+              {t('dashboard.partialFailure', { count: failedCompetitorCount })}
             </div>
           ) : null}
 
@@ -221,9 +232,7 @@ export function DashboardPage() {
 
           {competitors.length === 0 ? (
             <section className="rounded-[2rem] border border-dashed border-border-hairline bg-white/80 p-8 text-center">
-              <p className="text-sm text-ink-muted">
-                No competitors in this project yet. Use Add competitor to start research.
-              </p>
+              <p className="text-sm text-ink-muted">{t('dashboard.noCompetitors')}</p>
             </section>
           ) : (
             <div className="space-y-8">
@@ -243,7 +252,7 @@ export function DashboardPage() {
         </div>
       ) : (
         <section className="rounded-[2rem] border border-border-hairline bg-white p-8">
-          <p className="text-sm text-ink-muted">Select a project from the header switcher.</p>
+          <p className="text-sm text-ink-muted">{t('dashboard.selectProject')}</p>
         </section>
       )}
     </DashboardLayout>
@@ -267,23 +276,27 @@ function CompetitorDashboardSection({
   isRetrying = false,
   isStopping = false,
 }: CompetitorDashboardSectionProps) {
+  const { t } = useTranslation()
+
   if (competitor.pipeline_step === 'done') {
     return (
       <section className="rounded-[2rem] border border-white/80 bg-white p-6 shadow-[0_16px_40px_rgba(28,27,41,0.05)] sm:p-8">
         <p className="text-xs font-medium uppercase tracking-wide text-signal-positive">
-          Research ready
+          {t('dashboard.researchReadyEyebrow')}
         </p>
-        <h2 className="mt-2 font-serif text-2xl text-ink">Competitor research finished</h2>
+        <h2 className="mt-2 font-serif text-2xl text-ink">
+          {t('dashboard.researchFinishedTitle')}
+        </h2>
         <p className="mt-2 text-sm text-ink-muted">
           {competitor.error_message?.includes('stopped early')
-            ? `${competitor.error_message} Open chat to use that partial research.`
-            : "Open chat to ask for strategies, content ideas, or comparisons grounded in this competitor's data."}
+            ? `${competitor.error_message}${t('dashboard.researchFinishedPartialSuffix')}`
+            : t('dashboard.researchFinishedBody')}
         </p>
         <Link
           to={`/dashboard/${projectId}/agents`}
           className="mt-6 inline-block rounded-full bg-accent-primary px-4 py-2.5 text-sm font-medium text-white hover:bg-accent-primary-deep"
         >
-          Open chat
+          {t('dashboard.openChat')}
         </Link>
       </section>
     )

@@ -1,4 +1,7 @@
 import type { ReactNode } from 'react'
+import { useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
+import { useTranslatedTexts } from '../../hooks/useTranslatedTexts'
 import { parseCompetitorSummary, type DashboardSummary } from '../../lib/summaries'
 import type { Competitor } from '../../lib/competitors'
 import { displayCompetitorHandle } from '../../lib/instagram-display'
@@ -12,71 +15,148 @@ export function CompetitorSummaryCard({
   competitor,
   summaryRecord,
 }: CompetitorSummaryCardProps) {
+  const { t } = useTranslation()
   const summary = parseCompetitorSummary(summaryRecord.summary)
+
+  const dynamicInputs = useMemo(() => {
+    if (!summary) {
+      return [] as string[]
+    }
+    const captions = summary.top_performing_content.map((item) => item.caption_excerpt || '')
+    const whys = summary.top_performing_content.map((item) => item.why_it_performed || '')
+    return [
+      ...captions,
+      ...whys,
+      ...summary.recurring_hooks_patterns,
+      ...summary.content_strategies_themes,
+      ...summary.strategic_signals,
+    ]
+  }, [summary])
+
+  const { texts: translated, isTranslating, error: translationError } =
+    useTranslatedTexts(dynamicInputs)
 
   if (!summary) {
     return (
       <section className="rounded-[2rem] border border-border-hairline bg-canvas-raised p-6">
-        <p className="text-sm text-ink-muted">Summary data is unavailable for this competitor.</p>
+        <p className="text-sm text-ink-muted">{t('competitors.summaryCard.unavailable')}</p>
       </section>
     )
   }
 
   const metrics = summary.aggregated_engagement_metrics
   const isLinkedIn = competitor.platform === 'linkedin' || summaryRecord.source === 'linkedin'
-  const platformLabel = isLinkedIn ? 'LinkedIn' : 'Instagram'
+  const platformLabel = isLinkedIn
+    ? t('common.platforms.linkedin')
+    : t('common.platforms.instagram')
+
+  const topCount = summary.top_performing_content.length
+  const translatedCaptions = translated.slice(0, topCount)
+  const translatedWhys = translated.slice(topCount, topCount * 2)
+  let offset = topCount * 2
+  const translatedHooks = translated.slice(
+    offset,
+    offset + summary.recurring_hooks_patterns.length,
+  )
+  offset += summary.recurring_hooks_patterns.length
+  const translatedThemes = translated.slice(
+    offset,
+    offset + summary.content_strategies_themes.length,
+  )
+  offset += summary.content_strategies_themes.length
+  const translatedSignals = translated.slice(
+    offset,
+    offset + summary.strategic_signals.length,
+  )
 
   return (
     <section className="space-y-6">
+      {isTranslating || translationError ? (
+        <p className="text-xs text-ink-muted">
+          {translationError
+            ? t('agents.translationFailed')
+            : t('agents.translating')}
+        </p>
+      ) : null}
+
       <header className="rounded-[2rem] border border-border-hairline bg-canvas-raised p-6 sm:p-8">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <p className="text-xs font-medium uppercase tracking-wide text-signal-positive">
-              {platformLabel} intelligence report
+              {t('competitors.summaryCard.intelligenceReport', { platform: platformLabel })}
             </p>
             <h2 className="mt-1 text-xl font-semibold text-ink">
               {displayCompetitorHandle(competitor.handle_or_url, competitor.platform)}
             </h2>
             <p className="mt-2 text-sm text-ink-muted">
-              Generated {new Date(summaryRecord.generated_at).toLocaleString()} ·{' '}
-              {summaryRecord.model_used}
+              {t('competitors.summaryCard.generated', {
+                datetime: new Date(summaryRecord.generated_at).toLocaleString(),
+                model: summaryRecord.model_used,
+              })}
             </p>
           </div>
           <span className="rounded-full bg-signal-positive-soft px-3 py-1 text-xs font-medium text-signal-positive">
-            Done
+            {t('pipeline.labels.done')}
           </span>
         </div>
 
         <dl className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <MetricTile label="Total content" value={metrics.total_content_count} />
+          <MetricTile
+            label={t('competitors.summaryCard.metrics.totalContent')}
+            value={metrics.total_content_count}
+          />
           {isLinkedIn ? (
-            <MetricTile label="Posts" value={metrics.total_content_count} />
+            <MetricTile
+              label={t('competitors.summaryCard.metrics.posts')}
+              value={metrics.total_content_count}
+            />
           ) : (
             <>
-              <MetricTile label="Reels" value={metrics.reel_count} />
-              <MetricTile label="Posts" value={metrics.post_count} />
-              <MetricTile label="Carousels" value={metrics.carousel_count} />
+              <MetricTile
+                label={t('competitors.summaryCard.metrics.reels')}
+                value={metrics.reel_count}
+              />
+              <MetricTile
+                label={t('competitors.summaryCard.metrics.posts')}
+                value={metrics.post_count}
+              />
+              <MetricTile
+                label={t('competitors.summaryCard.metrics.carousels')}
+                value={metrics.carousel_count}
+              />
             </>
           )}
-          <MetricTile label="Avg likes" value={formatMetric(metrics.avg_likes)} />
-          <MetricTile label="Avg comments" value={formatMetric(metrics.avg_comments)} />
+          <MetricTile
+            label={t('competitors.summaryCard.metrics.avgLikes')}
+            value={formatMetric(metrics.avg_likes, t)}
+          />
+          <MetricTile
+            label={t('competitors.summaryCard.metrics.avgComments')}
+            value={formatMetric(metrics.avg_comments, t)}
+          />
           {!isLinkedIn ? (
-            <MetricTile label="Avg views" value={formatMetric(metrics.avg_views)} />
+            <MetricTile
+              label={t('competitors.summaryCard.metrics.avgViews')}
+              value={formatMetric(metrics.avg_views, t)}
+            />
           ) : (
-            <MetricTile label="Avg shares" value={formatMetric(metrics.avg_shares)} />
+            <MetricTile
+              label={t('competitors.summaryCard.metrics.avgShares')}
+              value={formatMetric(metrics.avg_shares, t)}
+            />
           )}
           <MetricTile
-            label="Engagement rate"
+            label={t('competitors.summaryCard.metrics.engagementRate')}
             value={
               metrics.engagement_rate !== null
                 ? `${(metrics.engagement_rate * 100).toFixed(1)}%`
-                : '—'
+                : t('competitors.summaryCard.emDash')
             }
           />
         </dl>
       </header>
 
-      <SummarySection title="Top performing content">
+      <SummarySection title={t('competitors.summaryCard.sections.topPerforming')}>
         <div className="space-y-3">
           {summary.top_performing_content.map((item, index) => (
             <article
@@ -87,15 +167,26 @@ export function CompetitorSummaryCard({
                 <span className="rounded-full bg-accent-primary-soft px-2 py-0.5 text-xs font-medium text-accent-primary-deep">
                   #{item.rank}
                 </span>
-                <span className="rounded-full border border-border-hairline px-2 py-0.5 text-xs capitalize text-ink-muted">
-                  {item.content_type}
+                <span className="rounded-full border border-border-hairline px-2 py-0.5 text-xs text-ink-muted">
+                  {contentTypeLabel(item.content_type, t)}
                 </span>
               </div>
-              <p className="mt-3 text-sm font-medium text-ink">{item.caption_excerpt}</p>
-              <p className="mt-2 text-sm text-ink-muted">{item.why_it_performed}</p>
+              <p className="mt-3 text-sm font-medium text-ink">
+                {translatedCaptions[index] ?? item.caption_excerpt}
+              </p>
+              <p className="mt-2 text-sm text-ink-muted">
+                {translatedWhys[index] ?? item.why_it_performed}
+              </p>
               <p className="mt-3 font-mono text-xs text-ink-muted">
-                {formatMetric(item.likes)} likes · {formatMetric(item.comments_count)} comments
-                {item.views !== null ? ` · ${formatMetric(item.views)} views` : ''}
+                {t('competitors.summaryCard.likesComments', {
+                  likes: formatMetric(item.likes, t),
+                  comments: formatMetric(item.comments_count, t),
+                })}
+                {item.views !== null
+                  ? t('competitors.summaryCard.viewsSuffix', {
+                      views: formatMetric(item.views, t),
+                    })
+                  : ''}
               </p>
             </article>
           ))}
@@ -103,16 +194,16 @@ export function CompetitorSummaryCard({
       </SummarySection>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <SummarySection title="Recurring hooks & patterns">
-          <BulletList items={summary.recurring_hooks_patterns} />
+        <SummarySection title={t('competitors.summaryCard.sections.hooksPatterns')}>
+          <BulletList items={translatedHooks} />
         </SummarySection>
-        <SummarySection title="Content strategies & themes">
-          <BulletList items={summary.content_strategies_themes} />
+        <SummarySection title={t('competitors.summaryCard.sections.strategiesThemes')}>
+          <BulletList items={translatedThemes} />
         </SummarySection>
       </div>
 
-      <SummarySection title="Strategic signals">
-        <BulletList items={summary.strategic_signals} emphasis />
+      <SummarySection title={t('competitors.summaryCard.sections.strategicSignals')}>
+        <BulletList items={translatedSignals} emphasis />
       </SummarySection>
     </section>
   )
@@ -138,8 +229,9 @@ type BulletListProps = {
 }
 
 function BulletList({ items, emphasis = false }: BulletListProps) {
+  const { t } = useTranslation()
   if (items.length === 0) {
-    return <p className="text-sm text-ink-muted">No items reported.</p>
+    return <p className="text-sm text-ink-muted">{t('competitors.summaryCard.noItems')}</p>
   }
 
   return (
@@ -170,9 +262,23 @@ function MetricTile({ label, value }: MetricTileProps) {
   )
 }
 
-function formatMetric(value: number | null | undefined): string {
+function contentTypeLabel(
+  contentType: string,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): string {
+  const normalized = contentType.trim().toLowerCase()
+  const key = `competitors.summaryCard.contentTypes.${normalized}`
+  const translated = t(key)
+  // i18next returns the key when missing
+  return translated === key ? contentType : translated
+}
+
+function formatMetric(
+  value: number | null | undefined,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): string {
   if (value === null || value === undefined) {
-    return '—'
+    return t('competitors.summaryCard.emDash')
   }
 
   return Number.isInteger(value) ? String(value) : value.toFixed(1)

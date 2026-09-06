@@ -50,7 +50,7 @@ HARD_LIMIT = int(os.getenv("CELERY_TASK_TIME_LIMIT", "360"))
 celery_app = Celery(
     "contos_agents",
     broker=REDIS_URL,
-    include=["tasks.profiling"],
+    include=["tasks.profiling", "tasks.translate"],
 )
 
 celery_app.conf.update(
@@ -62,11 +62,15 @@ celery_app.conf.update(
     task_reject_on_worker_lost=True,
     worker_prefetch_multiplier=1,
     broker_connection_retry_on_startup=True,
+    broker_transport_options={
+        "visibility_timeout": max(HARD_LIMIT + 60, 420),
+    },
     task_soft_time_limit=SOFT_LIMIT,
     task_time_limit=HARD_LIMIT,
     task_default_queue="website",
     task_routes={
         "profiling.run_summarize": {"queue": "website"},
+        "translate.translate_content": {"queue": "website"},
     },
 )
 

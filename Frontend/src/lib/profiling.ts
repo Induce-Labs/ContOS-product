@@ -3,6 +3,7 @@ import type { ProjectType } from '../types/contos'
 import {
   findMatchingSelectOption,
   isOtherSelectOption,
+  isOtherSelectOptionAt,
   parseCompetitorNames,
   serializeCompetitorNames,
   type ProfilingQuestionDef,
@@ -231,11 +232,21 @@ export function isAnswerComplete(question: ProfilingQuestionDef, raw: string): b
     if (!value) {
       return false
     }
-    const matched = findMatchingSelectOption(question.input.options, value)
+    const englishOptions = question.input.englishOptions
+    const matched = findMatchingSelectOption(
+      question.input.options,
+      value,
+      englishOptions,
+    )
     if (!matched.option) {
       return false
     }
-    if (isOtherSelectOption(matched.option)) {
+    const matchedIndex = question.input.options.indexOf(matched.option)
+    const matchedIsOther =
+      matchedIndex >= 0
+        ? isOtherSelectOptionAt(question.input.options, matchedIndex, englishOptions)
+        : isOtherSelectOption(matched.option)
+    if (matchedIsOther) {
       return value.length > 0 && !isOtherSelectOption(value)
     }
     return true
@@ -280,9 +291,21 @@ export function normalizeAnswerForSave(
   }
 
   if (question.input.kind === 'single_select') {
-    const matched = findMatchingSelectOption(question.input.options, trimmed)
-    if (matched.option && isOtherSelectOption(matched.option)) {
-      return matched.otherText.trim() || trimmed
+    const englishOptions = question.input.englishOptions
+    const matched = findMatchingSelectOption(
+      question.input.options,
+      trimmed,
+      englishOptions,
+    )
+    if (matched.option) {
+      const matchedIndex = question.input.options.indexOf(matched.option)
+      const matchedIsOther =
+        matchedIndex >= 0
+          ? isOtherSelectOptionAt(question.input.options, matchedIndex, englishOptions)
+          : isOtherSelectOption(matched.option)
+      if (matchedIsOther) {
+        return matched.otherText.trim() || trimmed
+      }
     }
     return matched.option ?? trimmed
   }
@@ -305,37 +328,47 @@ export function validateProfilingAnswer(
       return null
     }
     if (!isValidOptionalUrl(trimmed)) {
-      return 'Enter a valid website URL (e.g. https://example.com).'
+      return 'profiling.validation.invalidWebsite'
     }
     return null
   }
 
   if (question.input.kind === 'competitor_names') {
     if (!parseCompetitorNames(raw).some((name) => name.trim())) {
-      return 'Add at least one competitor name.'
+      return 'profiling.validation.addCompetitorName'
     }
     return null
   }
 
   if (question.input.kind === 'single_select') {
     if (!trimmed) {
-      return 'Select an option to continue.'
+      return 'profiling.validation.selectOption'
     }
-    const matched = findMatchingSelectOption(question.input.options, trimmed)
+    const englishOptions = question.input.englishOptions
+    const matched = findMatchingSelectOption(
+      question.input.options,
+      trimmed,
+      englishOptions,
+    )
     if (!matched.option) {
-      return 'Select an option to continue.'
+      return 'profiling.validation.selectOption'
     }
-    if (isOtherSelectOption(matched.option) && isOtherSelectOption(trimmed)) {
-      return 'Please describe your answer in your own words.'
+    const matchedIndex = question.input.options.indexOf(matched.option)
+    const matchedIsOther =
+      matchedIndex >= 0
+        ? isOtherSelectOptionAt(question.input.options, matchedIndex, englishOptions)
+        : isOtherSelectOption(matched.option)
+    if (matchedIsOther && isOtherSelectOption(trimmed)) {
+      return 'profiling.validation.describeOwnWords'
     }
-    if (isOtherSelectOption(matched.option) && !matched.otherText.trim() && !trimmed) {
-      return 'Please describe your answer in your own words.'
+    if (matchedIsOther && !matched.otherText.trim() && !trimmed) {
+      return 'profiling.validation.describeOwnWords'
     }
     return null
   }
 
   if (!trimmed) {
-    return 'Please answer this question before continuing.'
+    return 'profiling.validation.answerRequired'
   }
 
   return null

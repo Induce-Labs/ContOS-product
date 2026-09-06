@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { AuthAlert } from '../auth/AuthButtons'
 import type { ProfilingQuestionDef } from '../../config/onboardingProfilingQuestions'
 import { avatarTypeLabel } from '../../lib/avatars'
@@ -13,6 +14,7 @@ export type ProfilingReviewPanelProps = {
   hasChanges: boolean
   isSaving: boolean
   isSummarizing: boolean
+  isTranslating?: boolean
   onDraftChange: (key: string, value: string) => void
   onSave: () => void
 }
@@ -26,22 +28,27 @@ export function ProfilingReviewPanel({
   hasChanges,
   isSaving,
   isSummarizing,
+  isTranslating = false,
   onDraftChange,
   onSave,
 }: ProfilingReviewPanelProps) {
+  const { t } = useTranslation()
   const disabled = isSaving || isSummarizing
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <OverviewWorkspaceHeader
-        title="Profiling"
-        subtitle="Your answers personalize the ContOS chatbot. Edit any response below and save when you're done."
+        title={t('profiling.review.title')}
+        subtitle={t('profiling.review.subtitle')}
       />
 
       <p className="mb-6 text-sm text-ink-muted">
-        Workspace:{' '}
-        <span className="font-medium text-ink">{avatarTypeLabel(workspaceLabel)}</span>
+        {t('profiling.workspaceLabel', { label: avatarTypeLabel(workspaceLabel) })}
       </p>
+
+      {isTranslating ? (
+        <p className="mb-4 text-xs text-ink-muted">{t('agents.translating')}</p>
+      ) : null}
 
       {errorMessage ? (
         <div className="mb-6">
@@ -72,7 +79,7 @@ export function ProfilingReviewPanel({
                       </h2>
                       {!question.required ? (
                         <span className="rounded-full bg-[#f3f0eb] px-3 py-1 text-xs font-medium uppercase tracking-wide text-ink-muted">
-                          Optional
+                          {t('profiling.optional')}
                         </span>
                       ) : null}
                     </div>
@@ -102,10 +109,10 @@ export function ProfilingReviewPanel({
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-ink-muted">
             {isSummarizing
-              ? 'Building your profile summary…'
+              ? t('profiling.buildingSummary')
               : hasChanges
-                ? 'You have unsaved changes.'
-                : 'All changes saved.'}
+                ? t('profiling.review.unsaved')
+                : t('profiling.review.allSaved')}
           </p>
 
           <button
@@ -114,7 +121,11 @@ export function ProfilingReviewPanel({
             disabled={disabled || !hasChanges}
             className="inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-accent-primary to-[#8d67cf] px-8 py-3.5 text-sm font-semibold uppercase tracking-wide text-white shadow-[0_12px_28px_rgba(116,79,185,0.32)] transition hover:from-accent-primary-deep hover:to-accent-primary disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {isSummarizing ? 'Updating summary…' : isSaving ? 'Saving…' : 'Save changes'}
+            {isSummarizing
+              ? t('profiling.review.updatingSummary')
+              : isSaving
+                ? t('profiling.saving')
+                : t('profiling.review.save')}
           </button>
         </div>
       </div>

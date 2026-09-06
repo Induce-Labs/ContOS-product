@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import type { Project } from '../../lib/projects'
 import type { Competitor } from '../../lib/competitors'
 import { MAX_COMPETITORS_PER_AVATAR } from '../../lib/competitors'
@@ -40,6 +41,7 @@ export function DashboardSidebar({
   onAvatarsChanged,
   chatActions,
 }: DashboardSidebarProps) {
+  const { t } = useTranslation()
   const location = useLocation()
   const navigate = useNavigate()
   const atCompetitorCap = competitors.length >= MAX_COMPETITORS_PER_AVATAR
@@ -261,16 +263,20 @@ export function DashboardSidebar({
               disabled={atCompetitorCap}
               title={
                 atCompetitorCap
-                  ? `Maximum of ${MAX_COMPETITORS_PER_AVATAR} competitors per avatar`
-                  : 'Add another competitor'
+                  ? t('onboarding.competitors.maxReached', {
+                      max: MAX_COMPETITORS_PER_AVATAR,
+                    })
+                  : t('competitors.addCompetitor')
               }
               className="w-full rounded-xl bg-accent-primary px-3 py-2.5 text-sm font-medium text-white transition hover:bg-accent-primary-deep disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {isAddCompetitorOpen ? 'Adding competitor…' : 'Add competitor'}
+              {isAddCompetitorOpen
+                ? t('competitors.addingCompetitor')
+                : t('competitors.addCompetitor')}
             </button>
             {atCompetitorCap ? (
               <p className="mt-2 text-center text-xs text-ink-muted">
-                Competitor limit reached ({MAX_COMPETITORS_PER_AVATAR})
+                {t('competitors.limitReached', { max: MAX_COMPETITORS_PER_AVATAR })}
               </p>
             ) : null}
           </div>

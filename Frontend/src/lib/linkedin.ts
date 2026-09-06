@@ -11,13 +11,13 @@ export function validateLinkedInInput(rawValue: string): LinkedInValidationResul
   const value = rawValue.trim()
 
   if (!value) {
-    return { valid: false, message: 'LinkedIn profile URL or slug is required.' }
+    return { valid: false, message: 'competitors.validation.linkedinRequired' }
   }
 
   if (/linkedin\.com\/company\//i.test(value)) {
     return {
       valid: false,
-      message: 'Enter a personal LinkedIn profile (/in/...), not a company page.',
+      message: 'competitors.validation.linkedinNotCompany',
     }
   }
 
@@ -34,7 +34,7 @@ export function validateLinkedInInput(rawValue: string): LinkedInValidationResul
   if (value.includes('linkedin.com')) {
     return {
       valid: false,
-      message: 'Enter a valid LinkedIn profile URL (e.g. https://www.linkedin.com/in/jane-doe).',
+      message: 'competitors.validation.linkedinInvalidUrl',
     }
   }
 
@@ -50,7 +50,7 @@ export function validateLinkedInInput(rawValue: string): LinkedInValidationResul
 
   return {
     valid: false,
-    message: 'Enter a LinkedIn profile URL or slug (e.g. jane-doe).',
+    message: 'competitors.validation.linkedinInvalidSlug',
   }
 }
 

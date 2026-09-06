@@ -11,7 +11,7 @@ export function validateInstagramInput(rawValue: string): InstagramValidationRes
   const value = rawValue.trim()
 
   if (!value) {
-    return { valid: false, message: 'Instagram handle or profile URL is required.' }
+    return { valid: false, message: 'competitors.validation.instagramRequired' }
   }
 
   const profileMatch = value.match(INSTAGRAM_PROFILE_PATTERN)
@@ -22,7 +22,7 @@ export function validateInstagramInput(rawValue: string): InstagramValidationRes
     if (['p', 'reel', 'reels', 'stories', 'explore'].includes(handle.toLowerCase())) {
       return {
         valid: false,
-        message: 'Enter an Instagram profile URL or handle, not a post or explore link.',
+        message: 'competitors.validation.instagramNotPostOrExplore',
       }
     }
 
@@ -46,7 +46,7 @@ export function validateInstagramInput(rawValue: string): InstagramValidationRes
 
   return {
     valid: false,
-    message: 'Enter a valid Instagram handle (e.g. @nike) or profile URL.',
+    message: 'competitors.validation.instagramInvalid',
   }
 }
 

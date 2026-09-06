@@ -1,47 +1,28 @@
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { isOnboardingComplete, advanceOnboardingStep, getOnboardingStep, resolveOnboardingPath } from '../lib/onboarding'
 import { resolveDashboardPath } from '../lib/projects'
 
 type OnboardingModule = {
-  number: string
-  title: string
-  description: string
+  number: '01' | '02' | '03' | '04'
   illustration: 'intelligence' | 'profiling' | 'cmo' | 'agents'
 }
 
 const ONBOARDING_MODULES: OnboardingModule[] = [
-  {
-    number: '01',
-    title: 'Competitor Intelligence Engine',
-    description:
-      'Scrapes and analyzes competitor posts, hooks, and engagement so every strategy starts from real market data.',
-    illustration: 'intelligence',
-  },
-  {
-    number: '02',
-    title: 'Brand Avatar Profiling',
-    description:
-      'Captures your audience, tone, and goals once so every output sounds like you — not generic AI.',
-    illustration: 'profiling',
-  },
-  {
-    number: '03',
-    title: 'AI Fractional CMO',
-    description:
-      'Chat with a context-aware strategist that answers using your brand profile and live competitor research.',
-    illustration: 'cmo',
-  },
-  {
-    number: '04',
-    title: 'Platform-Native Content Agents',
-    description:
-      'Generates LinkedIn, Instagram, X, and playbook content in native formats with reasoning behind each idea.',
-    illustration: 'agents',
-  },
+  { number: '01', illustration: 'intelligence' },
+  { number: '02', illustration: 'profiling' },
+  { number: '03', illustration: 'cmo' },
+  { number: '04', illustration: 'agents' },
 ]
 
-function ModuleIllustration({ type }: { type: OnboardingModule['illustration'] }) {
+function ModuleIllustration({
+  type,
+  aiBadgeLabel,
+}: {
+  type: OnboardingModule['illustration']
+  aiBadgeLabel: string
+}) {
   if (type === 'intelligence') {
     return (
       <div className="relative flex h-full min-h-[88px] items-center justify-center overflow-hidden rounded-xl bg-[#e8dfd2] sm:min-h-[100px] lg:min-h-[92px]">
@@ -91,7 +72,7 @@ function ModuleIllustration({ type }: { type: OnboardingModule['illustration'] }
         <div className="mb-1.5 flex items-center justify-between">
           <div className="h-1.5 w-12 rounded-full bg-ink/10" />
           <div className="rounded-full bg-accent-primary/15 px-1.5 py-0.5 text-[9px] font-medium text-accent-primary">
-            AI
+            {aiBadgeLabel}
           </div>
         </div>
         <div className="space-y-1.5">
@@ -109,23 +90,28 @@ function ModuleIllustration({ type }: { type: OnboardingModule['illustration'] }
 }
 
 function OnboardingModuleCard({ module }: { module: OnboardingModule }) {
+  const { t } = useTranslation()
+
   return (
     <article className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-[1.25rem] border border-white/70 bg-white/95 p-3 shadow-[0_12px_32px_rgba(28,27,41,0.06)] backdrop-blur-sm sm:rounded-[1.5rem] sm:p-4 lg:p-3.5 xl:p-4">
       <p className="text-xs font-medium text-ink-muted/70 sm:text-sm">{module.number}</p>
 
       <div className="my-3 min-h-0 flex-1 sm:my-4">
-        <ModuleIllustration type={module.illustration} />
+        <ModuleIllustration
+          type={module.illustration}
+          aiBadgeLabel={t('onboarding.welcome.illustrationAiBadge')}
+        />
       </div>
 
       <div className="space-y-1.5 sm:space-y-2">
         <h2 className="font-serif text-base leading-tight text-ink sm:text-lg lg:text-[1.05rem] xl:text-xl">
-          {module.title}
+          {t(`onboarding.welcome.modules.${module.number}.title`)}
         </h2>
         <p className="text-xs leading-relaxed text-ink-muted sm:text-sm lg:text-[0.8rem] lg:leading-snug xl:text-sm">
-          {module.description}
+          {t(`onboarding.welcome.modules.${module.number}.description`)}
         </p>
         <p className="pt-0.5 text-xs text-ink-muted/80 sm:text-sm">
-          Explore module <span aria-hidden="true">→</span>
+          {t('onboarding.welcome.exploreModule')}
         </p>
       </div>
     </article>
@@ -133,6 +119,7 @@ function OnboardingModuleCard({ module }: { module: OnboardingModule }) {
 }
 
 export function WelcomeOnboardingPage() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -168,7 +155,7 @@ export function WelcomeOnboardingPage() {
           setErrorMessage(
             error instanceof Error
               ? error.message
-              : 'Failed to load onboarding state unexpectedly',
+              : t('onboarding.welcome.loadStateFailed'),
           )
           setIsLoading(false)
         }
@@ -180,7 +167,7 @@ export function WelcomeOnboardingPage() {
     return () => {
       isMounted = false
     }
-  }, [navigate])
+  }, [navigate, t])
 
   async function handleContinue() {
     setErrorMessage(null)
@@ -191,7 +178,7 @@ export function WelcomeOnboardingPage() {
       navigate('/onboarding/project', { replace: true })
     } catch (error) {
       setErrorMessage(
-        error instanceof Error ? error.message : 'Failed to complete onboarding unexpectedly',
+        error instanceof Error ? error.message : t('onboarding.welcome.completeFailed'),
       )
       setIsSubmitting(false)
     }
@@ -200,7 +187,7 @@ export function WelcomeOnboardingPage() {
   if (isLoading) {
     return (
       <div className="flex min-h-dvh items-center justify-center bg-canvas text-ink-muted">
-        Preparing your workspace…
+        {t('onboarding.preparingWorkspace')}
       </div>
     )
   }
@@ -210,10 +197,10 @@ export function WelcomeOnboardingPage() {
       <div className="mx-auto flex h-full w-full max-w-[1280px] min-w-0 flex-col">
         <header className="shrink-0 text-center">
           <h1 className="font-serif text-3xl leading-tight text-ink sm:text-4xl lg:text-[2.75rem]">
-            Welcome to ContOS.
+            {t('onboarding.welcome.title')}
           </h1>
           <p className="mx-auto mt-2 max-w-2xl text-sm text-ink-muted sm:mt-3 sm:text-base">
-            Your fractional CMO workspace. Let&apos;s set up your strategic foundation.
+            {t('onboarding.welcome.subtitle')}
           </p>
         </header>
 
@@ -239,7 +226,7 @@ export function WelcomeOnboardingPage() {
             disabled={isSubmitting}
             className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-accent-primary to-[#8d67cf] px-8 py-3 text-sm font-semibold text-white shadow-[0_12px_28px_rgba(116,79,185,0.3)] transition hover:from-accent-primary-deep hover:to-accent-primary disabled:cursor-not-allowed disabled:opacity-60 sm:px-10 sm:py-3.5 sm:text-base"
           >
-            {isSubmitting ? 'Starting…' : "Let's go"}
+            {isSubmitting ? t('onboarding.welcome.starting') : t('onboarding.welcome.cta')}
             <span aria-hidden="true">→</span>
           </button>
         </div>

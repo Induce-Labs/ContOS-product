@@ -21,6 +21,10 @@ celery_app.conf.update(
     task_reject_on_worker_lost=True,
     worker_prefetch_multiplier=1,
     broker_connection_retry_on_startup=True,
+    # Restore unacked messages if a worker dies mid-task (default 1h is too long).
+    broker_transport_options={
+        "visibility_timeout": max(settings.celery_task_time_limit + 60, 960),
+    },
     task_soft_time_limit=settings.celery_task_soft_time_limit,
     task_time_limit=settings.celery_task_time_limit,
     task_default_queue="scrape",

@@ -1,0 +1,502 @@
+{
+  "nav": {
+    "createProjectToUnlock": "नेविगेशन अनलॉक करने के लिए एक प्रोजेक्ट बनाएं।",
+    "projects": "प्रोजेक्ट्स",
+    "profiling": "प्रोफाइलिंग",
+    "analytics": "विश्लेषण",
+    "overview": "सारांश",
+    "contentAgent": "सामग्री एजेंट",
+    "chatbot": "चैटबॉट",
+    "chatHistory": "चैट इतिहास",
+    "calendar": "कैलेंडर",
+    "insights": "अंतर्दृष्टि"
+  },
+  "topBar": {
+    "openNavigationAria": "नेविगेशन खोलें",
+    "signOut": "साइन आउट",
+    "signingOut": "साइन आउट हो रहा है…",
+    "language": "भाषा"
+  },
+  "layout": {
+    "brandName": "ContOS",
+    "brandTagline": "फ्रैक्शनल CMO",
+    "loadingWorkspace": "कार्यक्षेत्र लोड हो रहा है…",
+    "closeNavigationAria": "नेविगेशन बंद करें",
+    "projectLimitReached": "प्रोजेक्ट सीमा तक पहुँच गई ({{max}})।",
+    "newProject": "+ नया प्रोजेक्ट",
+    "emptyProjects": {
+      "step": "चरण 01",
+      "title": "अपना पहला प्रोजेक्ट बनाएं",
+      "body": "प्रोजेक्ट्स उन प्रतियोगियों को व्यवस्थित करते हैं जिनका आप ट्रैक रखते हैं और जो बुद्धिमत्ता ContOS आपके ब्रांड या व्यवसाय के लिए उत्पन्न करता है।",
+      "cta": "नया प्रोजेक्ट"
+    }
+  },
+  "projectSwitcher": {
+    "projectPrefix": "प्रोजेक्ट: {{name}}",
+    "selectProject": "प्रोजेक्ट चुनें",
+    "noProjectsYet": "अभी तक कोई प्रोजेक्ट नहीं।",
+    "defaultSuffix": " · डिफ़ॉल्ट",
+    "setDefault": "डिफ़ॉल्ट सेट करें",
+    "editProfile": "प्रोफ़ाइल संपादित करें",
+    "delete": "हटाएं",
+    "deleteConfirm": "क्या आप इस अवतार को हटाना चाहते हैं? इसके लिए प्रोफाइलिंग उत्तर और प्रतियोगी हटा दिए जाएंगे।",
+    "failedSetDefault": "डिफ़ॉल्ट अवतार सेट करने में विफल।",
+    "failedDelete": "अवतार हटाने में विफल।",
+    "avatarLimitReached": "अवतार सीमा तक पहुँच गई ({{max}})। अधिक जोड़ने के लिए अपग्रेड करें।",
+    "newProject": "+ नया प्रोजेक्ट"
+  },
+  "incompleteProfilingBanner": {
+    "title": "बेहतर चैट उत्तरों के लिए अपनी प्रोफाइलिंग पूरी करें",
+    "body": "ContOS आपकी प्रोफाइलिंग उत्तरों का उपयोग रणनीति और सामग्री को व्यक्तिगत बनाने के लिए करता है। प्रश्नावली को पूरा करें ताकि चैटबॉट को आवश्यक संदर्भ मिल सके।",
+    "progress": "{{progress}}% पूरा",
+    "cta": "प्रोफाइलिंग पूरी करें"
+  },
+  "auth": {
+    "brandName": "ContOS",
+    "panelEyebrow": "प्रतियोगी बुद्धिमत्ता",
+    "panelHeadline": "बाजार के संकेतों को ट्रैक करें और प्रतिस्पर्धा से आगे रहें।",
+    "orContinueWith": "या के साथ जारी रखें",
+    "email": "ईमेल",
+    "password": "पासवर्ड",
+    "login": {
+      "title": "साइन इन करें",
+      "subtitle": "अपने प्रतियोगी बुद्धिमत्ता कार्यक्षेत्र तक पहुँचें।",
+      "footerNeedAccount": "क्या आपको एक खाता चाहिए?",
+      "footerSignUp": "साइन अप करें",
+      "submit": "साइन इन करें",
+      "submitting": "साइन इन हो रहा है…",
+      "google": "गूगल के साथ साइन इन करें",
+      "failedUnexpected": "साइन इन करने में अप्रत्याशित रूप से विफल",
+      "googleFailedUnexpected": "गूगल साइन इन करने में अप्रत्याशित रूप से विफल"
+    },
+    "signup": {
+      "title": "अपना खाता बनाएं",
+      "subtitle": "प्रतियोगियों और बाजार के संकेतों को ट्रैक करना शुरू करें।",
+      "footerHaveAccount": "क्या आपके पास पहले से एक खाता है?",
+      "footerSignIn": "साइन इन करें",
+      "submit": "साइन अप करें",
+      "submitting": "खाता बना रहे हैं…",
+      "google": "गूगल के साथ साइन अप करें",
+      "checkEmail": "अपने खाते की पुष्टि करने के लिए अपने ईमेल की जांच करें, फिर जारी रखने के लिए साइन इन करें।",
+      "failedUnexpected": "साइन अप करने में अप्रत्याशित रूप से विफल",
+      "googleFailedUnexpected": "गूगल साइन अप करने में अप्रत्याशित रूप से विफल"
+    },
+    "callback": {
+      "completing": "साइन इन पूरा कर रहा है…",
+      "failedTitle": "साइन इन विफल",
+      "backToSignIn": "साइन इन पर वापस जाएं",
+      "failedUnexpected": "प्रमाणीकरण कॉलबैक अप्रत्याशित रूप से विफल"
+    },
+    "loadingSession": "सत्र लोड हो रहा है…"
+  },
+  "onboarding": {
+    "preparingWorkspace": "आपका कार्यक्षेत्र तैयार किया जा रहा है…",
+    "welcome": {
+      "title": "ContOS में आपका स्वागत है।",
+      "subtitle": "आपका फ्रैक्शनल CMO कार्यक्षेत्र। चलिए आपकी रणनीतिक नींव स्थापित करते हैं।",
+      "cta": "चलो चलते हैं",
+      "starting": "शुरू हो रहा है…",
+      "exploreModule": "मॉड्यूल का अन्वेषण करें →",
+      "modules": {
+        "01": {
+          "title": "प्रतियोगी बुद्धिमत्ता इंजन",
+          "description": "प्रतियोगी पोस्ट, हुक और जुड़ाव को स्क्रैप और विश्लेषण करता है ताकि हर रणनीति वास्तविक बाजार डेटा से शुरू हो सके।"
+        },
+        "02": {
+          "title": "ब्रांड अवतार प्रोफाइलिंग",
+          "description": "आपके दर्शकों, स्वर और लक्ष्यों को एक बार कैप्चर करता है ताकि हर आउटपुट आपकी तरह लगे — सामान्य AI नहीं।"
+        },
+        "03": {
+          "title": "AI फ्रैक्शनल CMO",
+          "description": "एक संदर्भ-सचेत रणनीतिकार के साथ चैट करें जो आपके ब्रांड प्रोफाइल और लाइव प्रतियोगी अनुसंधान का उपयोग करके उत्तर देता है।"
+        },
+        "04": {
+          "title": "प्लेटफ़ॉर्म-नेटिव सामग्री एजेंट",
+          "description": "लिंक्डइन, इंस्टाग्राम, एक्स, और प्लेबुक सामग्री को मूल प्रारूपों में उत्पन्न करता है, प्रत्येक विचार के पीछे तर्क के साथ।"
+        }
+      },
+      "illustrationAiBadge": "AI",
+      "loadStateFailed": "ऑनबोर्डिंग स्थिति लोड करने में विफल",
+      "completeFailed": "ऑनबोर्डिंग पूरी करने में विफल"
+    },
+    "projectType": {
+      "stepLabel": "कार्यक्षेत्र सेटअप · चरण 2",
+      "newProjectStepLabel": "नया प्रोजेक्ट",
+      "title": "एक नया प्रोजेक्ट शुरू करें",
+      "subtitle": "इस कार्यक्षेत्र के लिए प्राथमिक ध्यान चुनें ताकि अंतर्दृष्टि और रणनीति को अनुकूलित किया जा सके।",
+      "backToOverview": "← ContOS सारांश पर वापस जाएं",
+      "cancel": "← रद्द करें",
+      "continue": "जारी रखें",
+      "creating": "बना रहा है…",
+      "selectTypeError": "जारी रखने के लिए एक कार्यक्षेत्र प्रकार चुनें।",
+      "createAvatarFailed": "अवतार बनाने में विफल (बुनियादी योजना पर अधिकतम {{max}})।",
+      "options": {
+        "personalBrand": {
+          "title": "व्यक्तिगत ब्रांड",
+          "description": "अपने व्यक्तिगत ब्रांड, दर्शकों और सामग्री की आवाज़ के लिए अंतर्दृष्टि और रणनीति को अनुकूलित करें।"
+        },
+        "business1": {
+          "title": "व्यापार 1",
+          "description": "अपने पहले व्यवसाय कार्यक्षेत्र और बाजार की स्थिति के लिए अंतर्दृष्टि और रणनीति को अनुकूलित करें।"
+        },
+        "business2": {
+          "title": "व्यापार 2",
+          "description": "अपने दूसरे व्यवसाय कार्यक्षेत्र और विकास लक्ष्यों के लिए अंतर्दृष्टि और रणनीति को अनुकूलित करें।"
+        }
+      }
+    },
+    "competitors": {
+      "loading": "प्रतियोगी सेटअप लोड हो रहा है…",
+      "unavailable": "प्रतियोगी सेटअप उपलब्ध नहीं है।",
+      "title": "अपने प्रतिस्पर्धात्मक परिदृश्य को जानें",
+      "body": "ContOS को समझने में मदद करने के लिए प्रतियोगियों को जोड़ें कि आपके क्षेत्र में क्या हो रहा है। इंस्टाग्राम और लिंक्डइन प्रोफाइल। {{min}}–{{max}} जोड़ें (अनुशंसित {{recommended}})।",
+      "addCompetitor": "+ प्रतियोगी जोड़ें",
+      "remove": "हटाएं",
+      "back": "पीछे",
+      "submit": "प्रतियोगियों का शोध करें →",
+      "submitting": "शोध शुरू हो रहा है…",
+      "maxReached": "अधिकतम {{max}} प्रतियोगियों तक पहुँच गया।",
+      "competitorLabel": "प्रतियोगी {{n}}",
+      "platformInstagram": "इंस्टाग्राम",
+      "platformLinkedIn": "लिंक्डइन",
+      "placeholderInstagram": "@competitor या https://instagram.com/competitor",
+      "placeholderLinkedIn": "linkedin.com/in/competitor या स्लग",
+      "missingAvatar": "ऑनबोर्डिंग अवतार गायब है। प्रोजेक्ट सेटअप पर वापस जाएं और फिर से प्रयास करें।",
+      "loadAvatarFailed": "ऑनबोर्डिंग अवतार लोड करने में विफल।"
+    },
+    "profiling": {
+      "questionsUnavailable": "प्रोफाइलिंग प्रश्न उपलब्ध नहीं हैं।"
+    }
+  },
+  "pipeline": {
+    "labels": {
+      "queued": "क्यू में",
+      "scraping": "प्रतियोगियों का शोध कर रहा है",
+      "transcribing": "रील ट्रांसक्राइब कर रहा है",
+      "analyzing": "सामग्री का विश्लेषण कर रहा है",
+      "done": "पूर्ण",
+      "failed": "विफल"
+    },
+    "descriptions": {
+      "queued": "शोध शुरू करने की प्रतीक्षा कर रहा है…",
+      "scraping": "आपके प्रतियोगियों का शोध कर रहा है…",
+      "transcribing": "रील ऑडियो ट्रांसक्राइब कर रहा है…",
+      "analyzing": "शीर्ष सामग्री का विश्लेषण कर रहा है…",
+      "done": "बुद्धिमत्ता रिपोर्ट तैयार है",
+      "failed": "शोध के दौरान कुछ गलत हो गया"
+    },
+    "status": {
+      "stopping": "रोकना",
+      "failed": "विफल",
+      "done": "पूर्ण",
+      "inProgress": "प्रगति में"
+    }
+  },
+  "dashboard": {
+    "workspaceTitle": "कार्यक्षेत्र",
+    "workspaceSubtitle": "प्रतियोगी शोध प्रगति को ट्रैक करें, फिर स्क्रैपिंग पूरी होने पर चैट में जाएं।",
+    "projectStatus": "प्रोजेक्ट स्थिति: {{status}}",
+    "openChat": "चैट खोलें",
+    "partialFailure": "कुछ प्रतियोगियों ने शोध पूरा किया, लेकिन {{count}} विफल रहे। विफल कार्ड पर पुनः प्रयास करें, या पूर्ण प्रतियोगियों के लिए चैट खोलें।",
+    "noCompetitors": "इस प्रोजेक्ट में अभी तक कोई प्रतियोगी नहीं हैं। शोध शुरू करने के लिए प्रतियोगी जोड़ें का उपयोग करें।",
+    "selectProject": "हेडर स्विचर से एक प्रोजेक्ट चुनें।",
+    "researchReadyEyebrow": "शोध तैयार",
+    "researchFinishedTitle": "प्रतियोगी शोध समाप्त",
+    "researchFinishedBody": "चैट खोलें ताकि इस प्रतियोगी के डेटा पर आधारित रणनीतियों, सामग्री विचारों, या तुलना के लिए पूछ सकें।",
+    "researchFinishedPartialSuffix": " उस आंशिक शोध का उपयोग करने के लिए चैट खोलें।",
+    "retryFailed": "प्रतियोगी शोध को पुनः प्रयास करने में विफल।",
+    "stopFailed": "प्रतियोगी शोध को रोकने में विफल।"
+  },
+  "analytics": {
+    "title": "विश्लेषण",
+    "subtitle": "शोध प्रगति को लाइव फॉलो करें, फिर जब कार्य समाप्त हों तो प्रतियोगी बुद्धिमत्ता सारांश पढ़ें।",
+    "tracked": "{{count}}/{{max}} ट्रैक किए गए",
+    "slotsLeft": " · {{count}} स्लॉट बचे हैं",
+    "slotsLeft_plural": " · {{count}} स्लॉट बचे हैं",
+    "noCompetitors": "अभी तक कोई प्रतियोगी नहीं हैं। शोध शुरू करने के लिए प्रतियोगी जोड़ें — प्रगति और सारांश यहाँ दिखेंगे।",
+    "researchFinishedEyebrow": "शोध समाप्त",
+    "summaryPending": "पाइपलाइन पूरी हो गई। सारांश अभी भी उत्पन्न हो रहा है या उपलब्ध नहीं है — यह पृष्ठ स्वचालित रूप से ताज़ा होता है।"
+  },
+  "competitors": {
+    "addCompetitor": "प्रतियोगी जोड़ें",
+    "addingCompetitor": "प्रतियोगी जोड़ा जा रहा है…",
+    "progressCard": {
+      "eyebrow": "शोध प्रगति में है",
+      "stoppingHint": "रोकना… ContOS स्क्रैप की गई पोस्ट को रखेगा और अब तक जो कुछ भी है उसका सारांश देगा।",
+      "startResearch": "शोध शुरू करें",
+      "retryResearch": "शोध को पुनः प्रयास करें",
+      "starting": "शुरू हो रहा है…",
+      "stop": "रोकें",
+      "stopping": "रोकना…"
+    },
+    "workspacePanel": {
+      "heading": "प्रतियोगी",
+      "tracked": "{{count}}/{{max}} ट्रैक किए गए"
+    },
+    "addPanel": {
+      "title": "प्रतियोगियों को जोड़ें",
+      "subtitle": "इंस्टाग्राम या लिंक्डइन। इस प्रोजेक्ट के लिए अधिकतम {{count}} और प्रतियोगी।",
+      "subtitle_plural": "इंस्टाग्राम या लिंक्डइन। इस प्रोजेक्ट के लिए अधिकतम {{count}} और प्रतियोगी।",
+      "close": "बंद करें",
+      "addAnother": "एक और जोड़ें",
+      "submit": "जोड़ें और शोध शुरू करें",
+      "submitting": "शोध शुरू हो रहा है…",
+      "enterAtLeastOne": "कम से कम एक प्रतियोगी दर्ज करें।",
+      "atMostMore": "आप अधिकतम {{count}} और प्रतियोगी जोड़ सकते हैं।",
+      "fixHighlighted": "जारी रखने से पहले हाइलाइट किए गए प्रतियोगी प्रविष्टियों को ठीक करें।",
+      "failedUnexpected": "प्रतियोगियों को अप्रत्याशित रूप से जोड़ने में विफल।"
+    },
+    "summaryCard": {
+      "unavailable": "इस प्रतियोगी के लिए सारांश डेटा उपलब्ध नहीं है।",
+      "intelligenceReport": "{{platform}} बुद्धिमत्ता रिपोर्ट",
+      "generated": "उत्पन्न {{datetime}} · {{model}}",
+      "metrics": {
+        "totalContent": "कुल सामग्री",
+        "posts": "पोस्ट",
+        "reels": "रील",
+        "carousels": "कैरोसेल",
+        "avgLikes": "औसत लाइक्स",
+        "avgComments": "औसत टिप्पणियाँ",
+        "avgViews": "औसत दृश्य",
+        "avgShares": "औसत शेयर",
+        "engagementRate": "संलग्नता दर"
+      },
+      "sections": {
+        "topPerforming": "शीर्ष प्रदर्शन करने वाली सामग्री",
+        "hooksPatterns": "दोहराने वाले हुक और पैटर्न",
+        "strategiesThemes": "सामग्री रणनीतियाँ और विषय",
+        "strategicSignals": "स्ट्रैटेजिक सिग्नल"
+      },
+      "likesComments": "{{likes}} लाइक्स · {{comments}} टिप्पणियाँ",
+      "viewsSuffix": " · {{views}} दृश्य",
+      "noItems": "कोई आइटम रिपोर्ट नहीं किया गया।",
+      "emDash": "—",
+      "contentTypes": {
+        "post": "पोस्ट",
+        "carousel": "कैरसेल",
+        "reel": "रील",
+        "video": "वीडियो",
+        "story": "स्टोरी"
+      }
+    },
+    "validation": {
+      "instagramRequired": "इंस्टाग्राम हैंडल या प्रोफ़ाइल URL आवश्यक है।",
+      "instagramNotPostOrExplore": "इंस्टाग्राम प्रोफ़ाइल URL या हैंडल दर्ज करें, न कि पोस्ट या एक्सप्लोर लिंक।",
+      "instagramInvalid": "एक मान्य इंस्टाग्राम हैंडल (जैसे @nike) या प्रोफ़ाइल URL दर्ज करें।",
+      "linkedinRequired": "लिंक्डइन प्रोफ़ाइल URL या स्लग आवश्यक है।",
+      "linkedinNotCompany": "एक व्यक्तिगत लिंक्डइन प्रोफ़ाइल (/in/...) दर्ज करें, न कि कंपनी पृष्ठ।",
+      "linkedinInvalidUrl": "एक मान्य लिंक्डइन प्रोफ़ाइल URL (जैसे https://www.linkedin.com/in/jane-doe) दर्ज करें।",
+      "linkedinInvalidSlug": "एक लिंक्डइन प्रोफ़ाइल URL या स्लग (जैसे jane-doe) दर्ज करें।",
+      "addAtLeast": "कम से कम {{min}} प्रतियोगी जोड़ें।",
+      "addUpTo": "आप प्रति अवतार अधिकतम {{max}} प्रतियोगियों को जोड़ सकते हैं।",
+      "validationFailed": "प्रतियोगी मान्यता अप्रत्याशित रूप से विफल।",
+      "startResearchFailed": "प्रतियोगी शोध शुरू करने में विफल।"
+    },
+    "limitReached": "प्रतियोगी सीमा पहुँच गई ({{max}})"
+  },
+  "agents": {
+    "pageSubtitle": "अपने प्रतियोगी शोध से रणनीतियों और सामग्री विचारों के लिए पूछें।",
+    "newChat": "नया चैट",
+    "researchInProgress": "शोध अभी भी प्रगति में है। प्रतियोगी-आधारित उत्तर स्क्रैपिंग समाप्त होने के बाद सबसे अच्छे होते हैं।",
+    "viewProgress": "प्रगति देखें",
+    "placeholder": "अपने ब्रांड के बारे में ContOS से कुछ भी पूछें… अवतार को टैग करने के लिए @ टाइप करें",
+    "sendAria": "भेजें",
+    "sendingAria": "भेजा जा रहा है",
+    "respondingAria": "ContOS उत्तर दे रहा है",
+    "chatSyncPrefix": "चैट सिंक: {{message}}",
+    "sorryPrefix": "क्षमा करें — {{message}}",
+    "backToDashboard": "डैशबोर्ड पर वापस जाएं",
+    "projectUnavailable": "प्रोजेक्ट उपलब्ध नहीं है।",
+    "missingProjectId": "प्रोजेक्ट आईडी गायब है।",
+    "loadFailed": "एजेंट लोड करने में विफल।",
+    "reachFailed": "ContOS एजेंटों तक पहुँचने में विफल।",
+    "openChatFailed": "उस चैट को खोलने में असमर्थ।",
+    "syncToFailed": "चैट इतिहास को Supabase पर सिंक करने में विफल।",
+    "syncFromFailed": "चैट इतिहास को Supabase से सिंक करने में विफल।",
+    "agentTypes": {
+      "chat": "चैट",
+      "linkedin": "लिंक्डइन",
+      "instagram": "इंस्टाग्राम"
+    },
+    "history": {
+      "title": "पिछले चैट",
+      "close": "बंद करें",
+      "currentSuffix": " · वर्तमान",
+      "empty": "अभी तक कोई पहले का चैट नहीं है। एक बातचीत शुरू करें, फिर एक और थ्रेड शुरू करने के लिए नया चैट का उपयोग करें।"
+    },
+    "sessionTitles": {
+      "newChat": "नया चैट",
+      "chatFallback": "चैट"
+    },
+    "welcome": {
+      "goodMorning": "शुभ प्रभात",
+      "goodAfternoon": "शुभ अपराह्न",
+      "goodEvening": "शुभ संध्या",
+      "greeting": "{{greeting}}, {{name}}",
+      "fallbackName": "वहाँ",
+      "legacyWelcome": "इस अवतार के लिए शोध तैयार है। मैं प्रतियोगी डेटा को रणनीतियों, सामग्री विचारों, या तुलना में बदल सकता हूँ। आप किस पर ध्यान केंद्रित करना चाहते हैं — लिंक्डइन, इंस्टाग्राम, या एक विकास प्लेबुक?"
+    },
+    "output": {
+      "noResponseYet": "अभी तक कोई उत्तर नहीं।",
+      "noInstagramContent": "कोई इंस्टाग्राम रणनीति सामग्री वापस नहीं आई।",
+      "strategy": "रणनीति",
+      "comparisonSummary": "तुलना सारांश",
+      "competitorInsights": "प्रतियोगी अंतर्दृष्टि",
+      "contentCalendar": "सामग्री कैलेंडर",
+      "topHooks": "शीर्ष हुक",
+      "captionFormulas": "कैप्शन सूत्र",
+      "postingCadence": "पोस्टिंग ताल",
+      "howToDifferentiate": "कैसे भिन्नता करें",
+      "keySignals": "मुख्य संकेत",
+      "hooksThemes": "हुक और विषय",
+      "strengths": "ताकत",
+      "weaknesses": "कमजोरियाँ",
+      "cta": "CTA: {{value}}",
+      "day": "दिन {{n}}",
+      "competitorN": "प्रतियोगी {{n}}",
+      "ideaN": "विचार {{n}}",
+      "postIdeas": "पोस्ट विचार",
+      "themes": "विषय",
+      "hookFormulas": "हुक सूत्र",
+      "linkedinIdeas": "लिंक्डइन विचार",
+      "tweetIdeas": "ट्वीट विचार",
+      "engagementTactics": "संलग्नता रणनीतियाँ",
+      "audit": "ऑडिट",
+      "strategyFrameworks": "रणनीति ढांचे",
+      "frameworks": "ढांचे",
+      "guardrails": "गार्डरेल",
+      "recommendations": "सिफारिशें",
+      "brokenRules": "टूटे हुए नियम",
+      "reasoning": "तर्क",
+      "signal": "संकेत: {{value}}",
+      "theme": "विषय: {{value}}",
+      "strength": "ताकत: {{value}}",
+      "weakness": "कमजोरी: {{value}}"
+    },
+    "translating": "अनुवाद कर रहा है…",
+    "translationFailed": "अनुवाद विफल। मूल अंग्रेजी दिखा रहा है।"
+  },
+  "profiling": {
+    "loadingQuestions": "प्रोफाइलिंग प्रश्न लोड हो रहे हैं…",
+    "questionsUnavailable": "प्रोफाइलिंग प्रश्न उपलब्ध नहीं हैं।",
+    "answersUnavailable": "प्रोफाइलिंग उत्तर उपलब्ध नहीं हैं।",
+    "projectMissing": "प्रोजेक्ट गायब है। डैशबोर्ड पर वापस जाएं और फिर से प्रयास करें।",
+    "avatarMissingSetup": "अवतार गायब है। प्रोजेक्ट सेटअप पर वापस जाएं और फिर से प्रयास करें।",
+    "avatarMissingType": "अवतार गायब है। प्रोजेक्ट प्रकार चयन पर वापस जाएं।",
+    "workspaceLabel": "कार्यक्षेत्र: {{label}}",
+    "optional": "वैकल्पिक",
+    "ofTotal": "{{current}} में से {{total}}",
+    "pressEnter": "जारी रखने के लिए Enter दबाएं ↵",
+    "back": "← पीछे",
+    "next": "अगला",
+    "saving": "सहेजना…",
+    "buildingSummary": "आपका प्रोफ़ाइल सारांश बना रहा है…",
+    "defaultSection": "नींव",
+    "stepFoundations": "चरण {{n}} — नींव",
+    "review": {
+      "title": "प्रोफाइलिंग",
+      "subtitle": "आपके उत्तर ContOS चैटबॉट को व्यक्तिगत बनाते हैं। नीचे किसी भी उत्तर को संपादित करें और जब आप समाप्त करें तो सहेजें।",
+      "unsaved": "आपके पास असहेजे गए परिवर्तन हैं।",
+      "allSaved": "सभी परिवर्तन सहेजे गए।",
+      "save": "परिवर्तन सहेजें",
+      "updatingSummary": "सारांश अपडेट कर रहा है…"
+    },
+    "field": {
+      "describeOwnWords": "अपने शब्दों में वर्णन करें…",
+      "competitorPlaceholder": "प्रतियोगी",
+      "enterUpToNames": "अधिकतम {{max}} प्रतियोगी नाम दर्ज करें।"
+    },
+    "validation": {
+      "invalidWebsite": "एक मान्य वेबसाइट URL दर्ज करें (जैसे https://example.com)।",
+      "addCompetitorName": "कम से कम एक प्रतियोगी नाम जोड़ें।",
+      "selectOption": "जारी रखने के लिए एक विकल्प चुनें।",
+      "describeOwnWords": "कृपया अपने उत्तर को अपने शब्दों में वर्णन करें।",
+      "answerRequired": "जारी रखने से पहले कृपया इस प्रश्न का उत्तर दें।",
+      "answerEmpty": "उत्तर खाली नहीं हो सकता।",
+      "fixBeforeSave": "सहेजने से पहले हाइलाइट किए गए उत्तरों को ठीक करें।"
+    },
+    "errors": {
+      "loadQuestionnaire": "प्रोफाइलिंग प्रश्नावली लोड करने में विफल।",
+      "saveAnswer": "प्रोफाइलिंग उत्तर सहेजने में विफल।",
+      "loadAnswers": "प्रोफाइलिंग उत्तर लोड करने में विफल।",
+      "saveAnswers": "प्रोफाइलिंग उत्तर सहेजने में विफल।",
+      "summaryAfterSave": "प्रोफाइलिंग सहेजी गई, लेकिन प्रोफ़ाइल सारांश उत्पन्न नहीं किया जा सका।",
+      "summaryAfterSaveWithDetail": "प्रोफाइलिंग सहेजी गई, लेकिन प्रोफ़ाइल सारांश उत्पन्न नहीं किया जा सका: {{detail}}",
+      "summaryAfterReviewSave": "उत्तर सहेजे गए, लेकिन प्रोफ़ाइल सारांश अपडेट नहीं किया जा सका।",
+      "summaryAfterReviewSaveWithDetail": "उत्तर सहेजे गए, लेकिन प्रोफ़ाइल सारांश अपडेट नहीं किया जा सका: {{detail}}"
+    }
+  },
+  "placeholder": {
+    "comingSoon": "जल्द आ रहा है",
+    "inDevelopment": "यह मॉड्यूल विकास में है",
+    "body": "{{title}} अनुभव यहाँ दिखाई देगा बिना आपके मौजूदा प्रोजेक्ट्स, चैट, या प्रतियोगी शोध को बदले।",
+    "calendar": {
+      "title": "कैलेंडर",
+      "subtitle": "इस प्रोजेक्ट के लिए सामग्री समय की योजना बनाएं और समीक्षा करें।"
+    },
+    "insights": {
+      "title": "अंतर्दृष्टि",
+      "subtitle": "प्रतियोगी शोध और ब्रांड संदर्भ से रणनीतिक निष्कर्ष निकालें।"
+    }
+  },
+  "workspaceTypes": {
+    "personalBrand": "व्यक्तिगत ब्रांड",
+    "business1": "व्यापार 1",
+    "business2": "व्यापार 2",
+    "business": "व्यापार",
+    "workspace": "कार्यक्षेत्र"
+  },
+  "common": {
+    "signOut": "साइन आउट",
+    "signingOut": "साइन आउट हो रहा है…",
+    "close": "बंद करें",
+    "back": "पीछे",
+    "continue": "जारी रखें",
+    "remove": "हटाएं",
+    "delete": "हटाएं",
+    "retry": "पुनः प्रयास करें",
+    "loading": "लोड हो रहा है…",
+    "platforms": {
+      "instagram": "इंस्टाग्राम",
+      "linkedin": "लिंक्डइन"
+    }
+  },
+  "errors": {
+    "profileSummary": {
+      "mustBeSignedIn": "आपको प्रोफ़ाइल सारांश उत्पन्न करने के लिए साइन इन होना चाहिए।",
+      "generationFailed": "प्रोफ़ाइल सारांश उत्पन्न करने में विफल।",
+      "timedOut": "प्रोफ़ाइल सारांश {{seconds}} सेकंड के बाद समय समाप्त हो गया।",
+      "requestFailedStatus": "प्रोफ़ाइल सारांश अनुरोध विफल ({{status}})।",
+      "requestFailed": "प्रोफ़ाइल सारांश अनुरोध विफल।"
+    },
+    "agentsApi": {
+      "missingBaseUrl": "VITE_AGENT_API_BASE_URL गायब है। स्थानीय एजेंटों के लिए इसे http://localhost:8001 पर सेट करें।",
+      "invalidBaseUrl": "अमान्य VITE_AGENT_API_BASE_URL: \"{{url}}\"",
+      "mustBeSignedIn": "आपको ContOS एजेंटों का उपयोग करने के लिए साइन इन होना चाहिए।",
+      "streamFailed": "एजेंट स्ट्रीम अप्रत्याशित रूप से विफल।",
+      "invokeFailedStatus": "एजेंट्स इनवोक विफल (स्थिति {{status}}): {{body}}",
+      "noResponseBody": "कोई प्रतिक्रिया शरीर नहीं",
+      "emptyStreamBody": "एजेंट्स इनवोक ने एक खाली स्ट्रीम शरीर लौटाया।",
+      "translateFailed": "अनुवाद अनुरोध विफल ({{status}})।",
+      "translateFailedGeneric": "अनुवाद अनुरोध विफल।"
+    },
+    "avatars": {
+      "operationFailed": "अवतार संचालन विफल",
+      "limitReached": "आपने अपने वर्तमान योजना पर अवतार की अधिकतम संख्या तक पहुँच गई है।",
+      "nameRequired": "अवतार नाम आवश्यक है।"
+    },
+    "dashboard": {
+      "projectNotFound": "प्रोजेक्ट नहीं मिला या आपके पास इसका उपयोग करने का अधिकार नहीं है।",
+      "loadFailed": "डैशबोर्ड लोड करने में विफल।",
+      "refreshFailed": "डैशबोर्ड डेटा को ताज़ा करने में विफल।",
+      "signOutFailed": "साइन आउट करने में विफल।",
+      "signOutFailedPeriod": "साइन आउट करने में विफल।"
+    },
+    "onboarding": {
+      "verifyStepFailed": "ऑनबोर्डिंग चरण को अप्रत्याशित रूप से सत्यापित करने में विफल।"
+    },
+    "chat": {
+      "sessionNotFound": "चैट सत्र नहीं मिला: {{sessionId}}"
+    }
+  }
+}

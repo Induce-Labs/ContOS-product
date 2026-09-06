@@ -1,3 +1,4 @@
+import i18n from '../i18n'
 import { supabase } from './supabase'
 import type { Tables } from '../types/database'
 import type { ProjectType } from '../types/contos'
@@ -40,15 +41,15 @@ function mapAvatarError(error: { message: string; code?: string }): AvatarsServi
 export function avatarTypeLabel(type: ProjectType | string): string {
   switch (type) {
     case 'personal_branding':
-      return 'Personal Brand'
+      return i18n.t('workspaceTypes.personalBrand')
     case 'business_1':
-      return 'Business 1'
+      return i18n.t('workspaceTypes.business1')
     case 'business_2':
-      return 'Business 2'
+      return i18n.t('workspaceTypes.business2')
     case 'business':
-      return 'Business'
+      return i18n.t('workspaceTypes.business')
     default:
-      return 'Workspace'
+      return i18n.t('workspaceTypes.workspace')
   }
 }
 

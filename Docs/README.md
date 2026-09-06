@@ -13,3 +13,4 @@
 | LinkedIn | [phase-linkedin.md](./phase-linkedin.md) |
 | Agents | [phase-agents.md](./phase-agents.md) |
 | Celery / Redis | [phase-celery.md](./phase-celery.md) |
+| i18n / translation | [phase-i18n.md](./phase-i18n.md) |

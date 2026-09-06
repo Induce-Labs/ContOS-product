@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { avatarTypeLabel } from '../lib/avatars'
 import { fetchCompetitorsForProject, type Competitor } from '../lib/competitors'
@@ -11,19 +12,27 @@ import {
 } from '../components/agents/AgentChatHistoryPanel'
 import { useDashboardShell } from '../hooks/useDashboardShell'
 import {
-  buildAgentsWelcomeMessage,
+  AgentsApiError,
   getUserFirstName,
-  invokeAgentStream,
   isAgentsWelcomeMessage,
   type AgentType,
 } from '../lib/agentsApi'
-import contosMark from '../assets/contos-mark.png'
-import { AgentOutputRenderer } from '../components/agents/AgentOutputRenderer'
+import {
+  abortActiveAgentStream,
+  getActiveAgentStream,
+  getPendingAgentCatchUp,
+  runAgentStream,
+  startAgentStreamCatchUpListeners,
+  subscribeActiveAgentStream,
+} from '../lib/agentStreamRuntime'
 import {
   formatStructuredAgentOutput,
   isStructuredAgentOutput,
 } from '../lib/agentOutputDisplay'
+import contosMark from '../assets/contos-mark.png'
+import { AgentOutputRenderer } from '../components/agents/AgentOutputRenderer'
 import { buildChatHistoryForInvoke } from '../lib/agentChatMemory'
+import { resolveUiLanguage } from '../lib/profilingLocaleCore'
 import {
   fetchRemoteChatStore,
   upsertRemoteChatStore,
@@ -55,12 +64,6 @@ type ChatMessage = {
   taggedAvatarNames?: string[]
 }
 
-const AGENT_OPTIONS: Array<{ value: AgentType; label: string }> = [
-  { value: 'chatbot', label: 'Chat' },
-  { value: 'linkedin', label: 'LinkedIn' },
-  { value: 'instagram', label: 'Instagram' },
-]
-
 function newId(): string {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
     return crypto.randomUUID()
@@ -68,11 +71,25 @@ function newId(): string {
   return `msg-${Date.now()}-${Math.random().toString(16).slice(2)}`
 }
 
-function makeWelcomeMessage(firstName: string): ChatMessage {
+function makeWelcomeMessage(
+  firstName: string,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): ChatMessage {
+  const hour = new Date().getHours()
+  const greetingKey =
+    hour >= 5 && hour < 12
+      ? 'agents.welcome.goodMorning'
+      : hour >= 12 && hour < 17
+        ? 'agents.welcome.goodAfternoon'
+        : 'agents.welcome.goodEvening'
+  const name = firstName.trim() || t('agents.welcome.fallbackName')
   return {
     id: newId(),
     role: 'assistant',
-    content: buildAgentsWelcomeMessage(firstName),
+    content: t('agents.welcome.greeting', {
+      greeting: t(greetingKey),
+      name,
+    }),
     agentType: 'chatbot',
   }
 }
@@ -110,6 +127,7 @@ function resolveAssistantOutput(message: ChatMessage): unknown | null {
 }
 
 export function AgentsPage() {
+  const { t, i18n } = useTranslation()
   const { projectId } = useParams()
   const [searchParams, setSearchParams] = useSearchParams()
   const {
@@ -128,23 +146,61 @@ export function AgentsPage() {
   const [competitors, setCompetitors] = useState<Competitor[]>([])
   const [loadError, setLoadError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
-  const [agentType, setAgentType] = useState<AgentType>('chatbot')
+  const [agentType, setAgentType] = useState<AgentType>(() => {
+    try {
+      const pending = getPendingAgentCatchUp()
+      if (pending?.agentType === 'linkedin' || pending?.agentType === 'instagram' || pending?.agentType === 'chatbot') {
+        return pending.agentType
+      }
+      const stored = sessionStorage.getItem('contos_agents_agent_type')
+      if (stored === 'linkedin' || stored === 'instagram' || stored === 'chatbot') {
+        return stored
+      }
+    } catch {
+      // ignore
+    }
+    return 'chatbot'
+  })
   const [input, setInput] = useState('')
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [chatStore, setChatStore] = useState<ChatStore | null>(null)
   const [historyOpen, setHistoryOpen] = useState(false)
   const [streaming, setStreaming] = useState(false)
+  const [awaitingCatchUp, setAwaitingCatchUp] = useState(() => {
+    const pending = getPendingAgentCatchUp()
+    return Boolean(pending)
+  })
   const [sendError, setSendError] = useState<string | null>(null)
   const [syncError, setSyncError] = useState<string | null>(null)
   const [taggedAvatarIds, setTaggedAvatarIds] = useState<string[]>([])
   const [mentionOpen, setMentionOpen] = useState(false)
   const [mentionQuery, setMentionQuery] = useState('')
   const bottomRef = useRef<HTMLDivElement | null>(null)
-  const abortRef = useRef<AbortController | null>(null)
   const chatStoreRef = useRef<ChatStore | null>(null)
   const skipPersistRef = useRef(false)
   const remoteSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const inputRef = useRef<HTMLInputElement | null>(null)
+  const tRef = useRef(t)
+  tRef.current = t
+
+  const showResponding = streaming || awaitingCatchUp
+  const pendingCatchUp = getPendingAgentCatchUp()
+  const pendingAssistantId =
+    pendingCatchUp?.projectId === projectId ? pendingCatchUp.assistantId : null
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem('contos_agents_agent_type', agentType)
+    } catch {
+      // ignore
+    }
+  }, [agentType])
+
+  const agentOptions: Array<{ value: AgentType; label: string }> = [
+    { value: 'chatbot', label: t('agents.agentTypes.chat') },
+    { value: 'linkedin', label: t('agents.agentTypes.linkedin') },
+    { value: 'instagram', label: t('agents.agentTypes.instagram') },
+  ]
 
   function queueRemoteSave(userId: string, avatarId: string, store: ChatStore) {
     if (remoteSaveTimerRef.current) {
@@ -159,7 +215,7 @@ export function AgentsPage() {
           setSyncError(
             error instanceof Error
               ? error.message
-              : 'Failed to sync chat history to Supabase.',
+              : t('agents.syncToFailed'),
           )
         })
     }, 600)
@@ -173,8 +229,9 @@ export function AgentsPage() {
     let mounted = true
 
     async function load() {
+      const translate = tRef.current
       if (!projectId) {
-        setLoadError('Missing project id.')
+        setLoadError(translate('agents.missingProjectId'))
         setIsLoading(false)
         return
       }
@@ -191,7 +248,7 @@ export function AgentsPage() {
         setCompetitors(projectCompetitors)
 
         const firstName = getUserFirstName(user)
-        const welcome = makeWelcomeMessage(firstName) as StoredChatMessage
+        const welcome = makeWelcomeMessage(firstName, translate) as StoredChatMessage
         let store = user?.id
           ? loadChatStore(user.id, projectId, welcome)
           : createEmptyStore(welcome)
@@ -203,7 +260,37 @@ export function AgentsPage() {
         skipPersistRef.current = true
         chatStoreRef.current = store
         setChatStore(store)
-        setMessages(getActiveSession(store).messages as ChatMessage[])
+        const storedMessages = getActiveSession(store).messages as ChatMessage[]
+        const live = getActiveAgentStream()
+        if (live && live.projectId === projectId) {
+          // Remount mid-stream: keep the live assistant bubble instead of
+          // clobbering it with a stale localStorage snapshot.
+          const hasAssistant = storedMessages.some((m) => m.id === live.assistantId)
+          setMessages(
+            hasAssistant
+              ? storedMessages.map((m) =>
+                  m.id === live.assistantId
+                    ? {
+                        ...m,
+                        content: live.content || m.content,
+                        agentType: live.agentType as AgentType,
+                      }
+                    : m,
+                )
+              : [
+                  ...storedMessages,
+                  {
+                    id: live.assistantId,
+                    role: 'assistant' as const,
+                    content: live.content,
+                    agentType: live.agentType as AgentType,
+                  },
+                ],
+          )
+          setStreaming(live.streaming)
+        } else {
+          setMessages(storedMessages)
+        }
         setHistoryPanel(searchParams.get('panel') === 'history')
         setIsLoading(false)
 
@@ -223,12 +310,17 @@ export function AgentsPage() {
             // Prefer cloud when local is welcome-only (e.g. post-logout), even if
             // a local welcome refresh made updatedAt look newer.
             if ((localEmpty && remoteHasHistory) || remoteTs >= localTs) {
-              store = remote.store
-              skipPersistRef.current = true
-              chatStoreRef.current = store
-              setChatStore(store)
-              setMessages(getActiveSession(store).messages as ChatMessage[])
-              saveChatStore(user.id, projectId, store)
+              const liveAfterRemote = getActiveAgentStream()
+              if (liveAfterRemote?.projectId === projectId && liveAfterRemote.streaming) {
+                // Keep local in-memory thread while SSE is still running.
+              } else {
+                store = remote.store
+                skipPersistRef.current = true
+                chatStoreRef.current = store
+                setChatStore(store)
+                setMessages(getActiveSession(store).messages as ChatMessage[])
+                saveChatStore(user.id, projectId, store)
+              }
             } else if (storeHasUserMessages(store)) {
               await upsertRemoteChatStore(user.id, projectId, store)
             }
@@ -252,7 +344,7 @@ export function AgentsPage() {
             setSyncError(
               error instanceof Error
                 ? error.message
-                : 'Failed to sync chat history from Supabase.',
+                : translate('agents.syncFromFailed'),
             )
           }
           // Still refresh empty greeting when remote sync fails.
@@ -266,7 +358,11 @@ export function AgentsPage() {
         }
       } catch (error) {
         if (mounted) {
-          setLoadError(error instanceof Error ? error.message : 'Failed to load Agents.')
+          setLoadError(
+            error instanceof Error
+              ? error.message
+              : tRef.current('agents.loadFailed'),
+          )
           setIsLoading(false)
         }
       }
@@ -275,16 +371,134 @@ export function AgentsPage() {
     void load()
     return () => {
       mounted = false
-      abortRef.current?.abort()
       if (remoteSaveTimerRef.current) {
         clearTimeout(remoteSaveTimerRef.current)
       }
     }
+    // Omit `t`: i18n identity churn must not reload chats mid-stream.
   }, [projectId, user?.id])
+
+  // Re-attach to an in-flight module-level SSE after remount (tab focus / auth).
+  // Never abort here — aborting on unmount is what orphaned Redis inflight locks.
+  useEffect(() => {
+    return subscribeActiveAgentStream((snapshot) => {
+      if (!snapshot || snapshot.projectId !== projectId) {
+        if (!snapshot) {
+          const pending = getPendingAgentCatchUp()
+          if (pending && pending.projectId === projectId) {
+            setAwaitingCatchUp(true)
+            setStreaming(false)
+            if (
+              pending.agentType === 'linkedin' ||
+              pending.agentType === 'instagram' ||
+              pending.agentType === 'chatbot'
+            ) {
+              setAgentType(pending.agentType)
+            }
+          } else {
+            setAwaitingCatchUp(false)
+            setStreaming(false)
+          }
+        }
+        return
+      }
+      setStreaming(snapshot.streaming)
+      setAwaitingCatchUp(Boolean(snapshot.streaming || snapshot.runId))
+      if (
+        snapshot.agentType === 'linkedin' ||
+        snapshot.agentType === 'instagram' ||
+        snapshot.agentType === 'chatbot'
+      ) {
+        setAgentType(snapshot.agentType)
+      }
+      setMessages((current) => {
+        const hasAssistant = current.some((m) => m.id === snapshot.assistantId)
+        const formatted =
+          snapshot.output != null && isStructuredAgentOutput(snapshot.output)
+            ? formatStructuredAgentOutput(snapshot.output)
+            : ''
+        const apply = (message: ChatMessage): ChatMessage => {
+          if (message.id !== snapshot.assistantId) return message
+          const nextContent =
+            typeof snapshot.output === 'string' && snapshot.output.trim()
+              ? snapshot.output
+              : formatted.trim()
+                ? formatted
+                : snapshot.content || message.content
+          const next: ChatMessage = {
+            ...message,
+            content: nextContent,
+            agentType: snapshot.agentType as AgentType,
+          }
+          if (snapshot.output != null && isStructuredAgentOutput(snapshot.output)) {
+            next.output = snapshot.output
+          }
+          return next
+        }
+        if (hasAssistant) {
+          return current.map(apply)
+        }
+        return [
+          ...current,
+          {
+            id: snapshot.assistantId,
+            role: 'assistant',
+            content:
+              typeof snapshot.output === 'string' && snapshot.output.trim()
+                ? snapshot.output
+                : formatted.trim()
+                  ? formatted
+                  : snapshot.content,
+            agentType: snapshot.agentType as AgentType,
+            ...(snapshot.output != null && isStructuredAgentOutput(snapshot.output)
+              ? { output: snapshot.output }
+              : {}),
+          },
+        ]
+      })
+      if (snapshot.error) {
+        setSendError(snapshot.error)
+        setAwaitingCatchUp(false)
+        setMessages((current) =>
+          current.map((entry) =>
+            entry.id === snapshot.assistantId && !entry.content.trim()
+              ? {
+                  ...entry,
+                  content: tRef.current('agents.sorryPrefix', {
+                    message: snapshot.error,
+                  }),
+                }
+              : entry,
+          ),
+        )
+      }
+      if (!snapshot.streaming && (snapshot.output != null || snapshot.content.trim())) {
+        setAwaitingCatchUp(false)
+      }
+    })
+  }, [projectId])
+
+  // Durable catch-up: visibility, window focus, and 2s polling (sessionStorage).
+  useEffect(() => startAgentStreamCatchUpListeners(), [])
+
+  // If we reloaded mid-run, keep logo + agent pill until catch-up fills the bubble.
+  useEffect(() => {
+    const pending = getPendingAgentCatchUp()
+    if (pending && pending.projectId === projectId) {
+      setAwaitingCatchUp(true)
+      if (
+        pending.agentType === 'linkedin' ||
+        pending.agentType === 'instagram' ||
+        pending.agentType === 'chatbot'
+      ) {
+        setAgentType(pending.agentType)
+      }
+    }
+  }, [projectId])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, streaming])
+  }, [messages, showResponding])
 
   useEffect(() => {
     if (!user?.id || !projectId || !chatStoreRef.current) {
@@ -299,10 +513,10 @@ export function AgentsPage() {
     setChatStore(next)
     saveChatStore(user.id, projectId, next)
     // Avoid writing every SSE token to Supabase — sync when stream settles.
-    if (!streaming) {
+    if (!showResponding) {
       queueRemoteSave(user.id, projectId, next)
     }
-  }, [messages, user?.id, projectId, streaming])
+  }, [messages, user?.id, projectId, showResponding])
 
   useEffect(() => {
     setHistoryOpen(searchParams.get('panel') === 'history')
@@ -319,10 +533,10 @@ export function AgentsPage() {
 
   function handleNewChat() {
     if (streaming) {
-      abortRef.current?.abort()
+      abortActiveAgentStream()
       setStreaming(false)
     }
-    const welcome = makeWelcomeMessage(getUserFirstName(user)) as StoredChatMessage
+    const welcome = makeWelcomeMessage(getUserFirstName(user), t) as StoredChatMessage
     const base = chatStoreRef.current ?? createEmptyStore(welcome)
     const next = startNewChatSession(base, welcome)
     skipPersistRef.current = true
@@ -337,12 +551,27 @@ export function AgentsPage() {
     }
   }
 
+  // Refresh empty-state welcome when the UI language changes.
+  useEffect(() => {
+    if (streaming) return
+    setMessages((current) => {
+      const hasUser = current.some((message) => message.role === 'user')
+      if (hasUser) return current
+      const welcome = makeWelcomeMessage(getUserFirstName(user), t)
+      const withoutWelcome = current.filter(
+        (message) =>
+          !(message.role === 'assistant' && isAgentsWelcomeMessage(message.content)),
+      )
+      return [welcome, ...withoutWelcome]
+    })
+  }, [i18n.language, t, user, streaming])
+
   function handleSelectSession(sessionId: string) {
     if (!chatStoreRef.current) {
       return
     }
     if (streaming) {
-      abortRef.current?.abort()
+      abortActiveAgentStream()
       setStreaming(false)
     }
     try {
@@ -358,7 +587,7 @@ export function AgentsPage() {
         queueRemoteSave(user.id, projectId, next)
       }
     } catch (error) {
-      setSendError(error instanceof Error ? error.message : 'Could not open that chat.')
+      setSendError(error instanceof Error ? error.message : t('agents.openChatFailed'))
     }
   }
 
@@ -412,7 +641,7 @@ export function AgentsPage() {
 
   async function handleSend(event: FormEvent) {
     event.preventDefault()
-    if (!projectId || streaming) {
+    if (!projectId || showResponding) {
       return
     }
 
@@ -441,38 +670,23 @@ export function AgentsPage() {
       { id: assistantId, role: 'assistant', content: '', agentType },
     ])
     setStreaming(true)
-
-    abortRef.current?.abort()
-    const controller = new AbortController()
-    abortRef.current = controller
+    setAwaitingCatchUp(true)
 
     try {
-      await invokeAgentStream(
-        {
+      await runAgentStream({
+        projectId,
+        assistantId,
+        agentType,
+        body: {
           avatar_id: projectId,
           agent_type: agentType,
           user_input: text,
           chatbot_context_on: true,
           tagged_avatar_ids: taggedAvatarIds.length > 0 ? taggedAvatarIds : undefined,
           chat_history: chatHistory.length > 0 ? chatHistory : undefined,
+          response_language: resolveUiLanguage(i18n.language),
         },
-        {
-          onStatus: () => {
-            // Pipeline stages stay internal; UI shows the ContOS loading mark instead.
-          },
-          onToken: (token) => {
-            // Structured agents return JSON — don't stream partial JSON into the bubble.
-            if (agentType !== 'chatbot') {
-              return
-            }
-            setMessages((current) =>
-              current.map((message) =>
-                message.id === assistantId
-                  ? { ...message, content: `${message.content}${token}` }
-                  : message,
-              ),
-            )
-          },
+        handlers: {
           onComplete: (data) => {
             const output = data.output
             const formatted = formatAgentOutput(output)
@@ -489,10 +703,19 @@ export function AgentsPage() {
                     agentType,
                   }
                 }
+                // Prefer the full complete payload over partial streamed tokens
+                // (tokens may be dropped when the tab was backgrounded).
+                if (typeof output === 'string' && output.trim()) {
+                  return {
+                    ...message,
+                    content: output,
+                    agentType,
+                  }
+                }
                 if (formatted) {
                   return {
                     ...message,
-                    content: message.content.trim() ? message.content : formatted,
+                    content: formatted,
                     agentType,
                   }
                 }
@@ -505,30 +728,40 @@ export function AgentsPage() {
             setMessages((current) =>
               current.map((entry) =>
                 entry.id === assistantId && !entry.content.trim()
-                  ? { ...entry, content: `Sorry — ${message}` }
+                  ? { ...entry, content: t('agents.sorryPrefix', { message }) }
                   : entry,
               ),
             )
           },
         },
-        controller.signal,
-      )
+      })
     } catch (error) {
       if ((error as Error).name === 'AbortError') {
         return
       }
       const message =
-        error instanceof Error ? error.message : 'Failed to reach ContOS Agents.'
+        error instanceof AgentsApiError
+          ? error.message
+          : error instanceof Error
+            ? error.message
+            : t('agents.reachFailed')
       setSendError(message)
       setMessages((current) =>
         current.map((entry) =>
           entry.id === assistantId && !entry.content.trim()
-            ? { ...entry, content: `Sorry — ${message}` }
+            ? { ...entry, content: t('agents.sorryPrefix', { message }) }
             : entry,
         ),
       )
     } finally {
-      setStreaming(false)
+      const pending = getPendingAgentCatchUp()
+      if (pending && pending.projectId === projectId) {
+        setStreaming(false)
+        setAwaitingCatchUp(true)
+      } else {
+        setStreaming(false)
+        setAwaitingCatchUp(false)
+      }
     }
   }
 
@@ -563,9 +796,9 @@ export function AgentsPage() {
         onSidebarOpenChange={setSidebarOpen}
         mainClassName="overflow-y-auto px-6 py-10"
       >
-        <p className="text-sm text-red-700">{loadError ?? 'Project unavailable.'}</p>
+        <p className="text-sm text-red-700">{loadError ?? t('agents.projectUnavailable')}</p>
         <Link to="/dashboard" className="mt-4 inline-block text-sm text-accent-primary">
-          Back to dashboard
+          {t('agents.backToDashboard')}
         </Link>
       </DashboardLayout>
     )
@@ -577,7 +810,7 @@ export function AgentsPage() {
   const welcomeGreeting =
     messages.find(
       (message) => message.role === 'assistant' && isAgentsWelcomeMessage(message.content),
-    )?.content ?? buildAgentsWelcomeMessage(getUserFirstName(user))
+    )?.content ?? makeWelcomeMessage(getUserFirstName(user), t).content
   const showClaudeStyleGreeting = conversationMessages.length === 0
 
   return (
@@ -601,7 +834,7 @@ export function AgentsPage() {
         <div className="min-w-0">
           <h1 className="font-serif text-2xl leading-tight text-ink sm:text-3xl">{project.name}</h1>
           <p className="mt-0.5 truncate text-xs text-ink-muted sm:text-sm">
-            Ask for strategies and content ideas from your competitor research.
+            {t('agents.pageSubtitle')}
           </p>
         </div>
         <button
@@ -609,7 +842,7 @@ export function AgentsPage() {
           onClick={handleNewChat}
           className="shrink-0 rounded-full bg-accent-primary px-4 py-2 text-sm font-medium text-white transition hover:bg-accent-primary-deep"
         >
-          New chat
+          {t('agents.newChat')}
         </button>
       </div>
 
@@ -623,10 +856,9 @@ export function AgentsPage() {
 
       {!researchReady ? (
         <div className="mb-2 shrink-0 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-900">
-          Research is still in progress. Competitor-grounded answers work best after scraping
-          finishes.{' '}
+          {t('agents.researchInProgress')}{' '}
           <Link className="font-medium underline" to={`/dashboard/${projectId}`}>
-            View progress
+            {t('agents.viewProgress')}
           </Link>
         </div>
       ) : null}
@@ -634,8 +866,8 @@ export function AgentsPage() {
       <div className="mb-2 shrink-0">
         <AgentTypePills
           agentType={agentType}
-          streaming={streaming}
-          options={AGENT_OPTIONS}
+          streaming={showResponding}
+          options={agentOptions}
           onChange={setAgentType}
         />
       </div>
@@ -658,6 +890,12 @@ export function AgentsPage() {
             conversationMessages
               .filter((message) => {
                 if (message.role === 'user') return true
+                // Keep the placeholder assistant bubble while we wait / catch up,
+                // otherwise the thread looks blank and the logo has nowhere to sit.
+                if (pendingAssistantId && message.id === pendingAssistantId) return true
+                if (showResponding && message.role === 'assistant' && !message.content.trim()) {
+                  return true
+                }
                 if (resolveAssistantOutput(message)) return true
                 return message.content.trim().length > 0
               })
@@ -709,8 +947,12 @@ export function AgentsPage() {
                 )
               })
           )}
-          {streaming ? (
-            <div className="flex items-center gap-2 py-1" aria-live="polite" aria-label="ContOS is responding">
+          {showResponding ? (
+            <div
+              className="flex items-center gap-2 py-1"
+              aria-live="polite"
+              aria-label={t('agents.respondingAria')}
+            >
               <img
                 src={contosMark}
                 alt=""
@@ -729,7 +971,7 @@ export function AgentsPage() {
         ) : null}
         {syncError ? (
           <p className="border-t border-amber-100 bg-amber-50 px-4 py-2 text-sm text-amber-800">
-            Chat sync: {syncError}
+            {t('agents.chatSyncPrefix', { message: syncError })}
           </p>
         ) : null}
 
@@ -778,15 +1020,15 @@ export function AgentsPage() {
                 ref={inputRef}
                 value={input}
                 onChange={(event) => handleInputChange(event.target.value)}
-                disabled={streaming}
-                placeholder="Ask ContOS anything about your brand… Type @ to tag avatars"
+                disabled={showResponding}
+                placeholder={t('agents.placeholder')}
                 className="min-w-0 flex-1 bg-transparent px-2 py-2 text-sm text-ink outline-none"
               />
               <button
                 type="submit"
-                disabled={streaming || !input.trim()}
+                disabled={showResponding || !input.trim()}
                 className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent-primary text-white transition hover:bg-accent-primary-deep disabled:opacity-60"
-                aria-label={streaming ? 'Sending' : 'Send'}
+                aria-label={showResponding ? t('agents.sendingAria') : t('agents.sendAria')}
               >
                 ↑
               </button>
@@ -797,4 +1039,3 @@ export function AgentsPage() {
     </DashboardLayout>
   )
 }
-

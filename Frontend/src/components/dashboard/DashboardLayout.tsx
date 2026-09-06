@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { MAX_AVATARS } from '../../lib/avatars'
 import { DashboardSidebarNav } from './DashboardSidebarNav'
 import { DashboardTopBar } from './DashboardTopBar'
@@ -32,13 +33,14 @@ export function DashboardLayout({
   mainClassName = '',
   isLoading = false,
 }: DashboardLayoutProps) {
+  const { t } = useTranslation()
   const projectId = activeProject?.id ?? null
   const atAvatarCap = projects.length >= MAX_AVATARS
 
   if (isLoading) {
     return (
       <div className="flex min-h-dvh items-center justify-center bg-canvas text-ink-muted">
-        Loading workspace…
+        {t('layout.loadingWorkspace')}
       </div>
     )
   }
@@ -49,7 +51,7 @@ export function DashboardLayout({
         <button
           type="button"
           className="fixed inset-0 z-30 bg-ink/20 lg:hidden"
-          aria-label="Close navigation"
+          aria-label={t('layout.closeNavigationAria')}
           onClick={() => onSidebarOpenChange(false)}
         />
       ) : null}
@@ -60,8 +62,8 @@ export function DashboardLayout({
         }`}
       >
         <div className="px-6 pb-2 pt-7">
-          <p className="font-serif text-2xl leading-none text-ink">ContOS</p>
-          <p className="mt-2 text-xs tracking-wide text-ink-muted">Fractional CMO</p>
+          <p className="font-serif text-2xl leading-none text-ink">{t('layout.brandName')}</p>
+          <p className="mt-2 text-xs tracking-wide text-ink-muted">{t('layout.brandTagline')}</p>
         </div>
 
         <DashboardSidebarNav
@@ -72,7 +74,7 @@ export function DashboardLayout({
         <div className="px-4 pb-6">
           {atAvatarCap ? (
             <p className="mb-3 text-center text-xs text-ink-muted">
-              Project limit reached ({MAX_AVATARS}).
+              {t('layout.projectLimitReached', { max: MAX_AVATARS })}
             </p>
           ) : (
             <Link
@@ -80,7 +82,7 @@ export function DashboardLayout({
               onClick={() => onSidebarOpenChange(false)}
               className="flex w-full items-center justify-center gap-2 rounded-full bg-accent-primary px-4 py-3 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(116,79,185,0.28)] transition hover:bg-accent-primary-deep"
             >
-              + New Project
+              {t('layout.newProject')}
             </Link>
           )}
         </div>
@@ -103,19 +105,21 @@ export function DashboardLayout({
 }
 
 export function EmptyProjectsState() {
+  const { t } = useTranslation()
   return (
     <section className="mx-auto max-w-xl rounded-[2rem] border border-border-hairline bg-white p-10 text-center shadow-[0_18px_40px_rgba(28,27,41,0.06)]">
-      <p className="text-sm font-medium uppercase tracking-wide text-accent-primary">Step 01</p>
-      <h2 className="mt-3 font-serif text-3xl text-ink">Create your first project</h2>
+      <p className="text-sm font-medium uppercase tracking-wide text-accent-primary">
+        {t('layout.emptyProjects.step')}
+      </p>
+      <h2 className="mt-3 font-serif text-3xl text-ink">{t('layout.emptyProjects.title')}</h2>
       <p className="mx-auto mt-3 max-w-lg text-sm text-ink-muted">
-        Projects organize the competitors you track and the intelligence ContOS generates for your
-        brand or business.
+        {t('layout.emptyProjects.body')}
       </p>
       <Link
         to="/projects/new"
         className="mt-8 inline-block rounded-full bg-accent-primary px-6 py-3 text-sm font-semibold text-white transition hover:bg-accent-primary-deep"
       >
-        New project
+        {t('layout.emptyProjects.cta')}
       </Link>
     </section>
   )

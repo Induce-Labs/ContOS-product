@@ -1,6 +1,7 @@
 import type { FormEvent } from 'react'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { AuthLayout, AuthLink } from '../components/auth/AuthLayout'
 import { AuthAlert, GoogleSignInButton, PrimaryButton } from '../components/auth/AuthButtons'
 import { AuthFormField } from '../components/auth/AuthFormField'
@@ -8,6 +9,7 @@ import { signInWithEmail, signInWithOAuthProvider } from '../lib/auth'
 import { resolvePostAuthPath } from '../lib/projects'
 
 export function LoginPage() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -25,7 +27,7 @@ export function LoginPage() {
       navigate(nextPath, { replace: true })
     } catch (error) {
       setErrorMessage(
-        error instanceof Error ? error.message : 'Sign in failed unexpectedly',
+        error instanceof Error ? error.message : t('auth.login.failedUnexpected'),
       )
     } finally {
       setIsSubmitting(false)
@@ -40,7 +42,7 @@ export function LoginPage() {
       await signInWithOAuthProvider('google')
     } catch (error) {
       setErrorMessage(
-        error instanceof Error ? error.message : 'Google sign in failed unexpectedly',
+        error instanceof Error ? error.message : t('auth.login.googleFailedUnexpected'),
       )
       setIsSubmitting(false)
     }
@@ -48,11 +50,12 @@ export function LoginPage() {
 
   return (
     <AuthLayout
-      title="Sign in"
-      subtitle="Access your competitor intelligence workspace."
+      title={t('auth.login.title')}
+      subtitle={t('auth.login.subtitle')}
       footer={
         <>
-          Need an account? <AuthLink to="/signup">Sign up</AuthLink>
+          {t('auth.login.footerNeedAccount')}{' '}
+          <AuthLink to="/signup">{t('auth.login.footerSignUp')}</AuthLink>
         </>
       }
     >
@@ -60,7 +63,7 @@ export function LoginPage() {
         {errorMessage ? <AuthAlert message={errorMessage} /> : null}
 
         <AuthFormField
-          label="Email"
+          label={t('auth.email')}
           name="email"
           type="email"
           autoComplete="email"
@@ -70,7 +73,7 @@ export function LoginPage() {
         />
 
         <AuthFormField
-          label="Password"
+          label={t('auth.password')}
           name="password"
           type="password"
           autoComplete="current-password"
@@ -80,18 +83,18 @@ export function LoginPage() {
         />
 
         <PrimaryButton disabled={isSubmitting}>
-          {isSubmitting ? 'Signing in…' : 'Sign in'}
+          {isSubmitting ? t('auth.login.submitting') : t('auth.login.submit')}
         </PrimaryButton>
       </form>
 
       <div className="my-5 flex items-center gap-3 sm:my-6">
         <div className="h-px flex-1 bg-border-hairline" />
-        <span className="text-[13px] font-medium text-ink-muted">or continue with</span>
+        <span className="text-[13px] font-medium text-ink-muted">{t('auth.orContinueWith')}</span>
         <div className="h-px flex-1 bg-border-hairline" />
       </div>
 
       <GoogleSignInButton
-        label="Sign in with Google"
+        label={t('auth.login.google')}
         onClick={() => void handleGoogleSignIn()}
         disabled={isSubmitting}
       />

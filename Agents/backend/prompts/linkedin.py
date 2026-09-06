@@ -13,6 +13,9 @@ Rules:
   For text or carousel, set transcript to "".
 - Keep the whole JSON compact. Prefer 3–5 solid ideas over verbose essays.
 - Never use asterisk (*) characters in any string field — no markdown bold/italic.
+- LANGUAGE: follow RESPONSE LANGUAGE for topic, hook, post_structure, cta, transcript,
+  reasoning, themes, and formulas. Competitor sources may be English — localize creative
+  copy; do not ship English hooks/posts when UI language is not English.
 - Return valid JSON only (no markdown fences) matching:
 {
   "agent": "linkedin",

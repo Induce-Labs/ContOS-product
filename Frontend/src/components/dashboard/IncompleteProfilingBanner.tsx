@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { isRequiredProfilingComplete } from '../../lib/profiling'
 
 type IncompleteProfilingBannerProps = {
@@ -10,6 +11,8 @@ export function IncompleteProfilingBanner({
   projectId,
   profilingCompleteness,
 }: IncompleteProfilingBannerProps) {
+  const { t } = useTranslation()
+
   if (isRequiredProfilingComplete(profilingCompleteness)) {
     return null
   }
@@ -24,14 +27,11 @@ export function IncompleteProfilingBanner({
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <p className="text-sm font-semibold text-ink">
-            Complete your profiling for better chat answers
+            {t('incompleteProfilingBanner.title')}
           </p>
-          <p className="mt-1 text-sm text-ink-muted">
-            ContOS uses your profiling answers to personalize strategy and content. Finish the
-            questionnaire so the chatbot has the context it needs.
-          </p>
+          <p className="mt-1 text-sm text-ink-muted">{t('incompleteProfilingBanner.body')}</p>
           <p className="mt-2 text-xs font-medium uppercase tracking-wide text-accent-primary">
-            {progress}% complete
+            {t('incompleteProfilingBanner.progress', { progress })}
           </p>
         </div>
 
@@ -39,7 +39,7 @@ export function IncompleteProfilingBanner({
           to={`/dashboard/${projectId}/profiling`}
           className="inline-flex shrink-0 items-center justify-center rounded-full bg-accent-primary px-5 py-2.5 text-sm font-semibold text-white shadow-[0_8px_20px_rgba(116,79,185,0.24)] transition hover:bg-accent-primary-deep"
         >
-          Complete profiling
+          {t('incompleteProfilingBanner.cta')}
         </Link>
       </div>
     </div>

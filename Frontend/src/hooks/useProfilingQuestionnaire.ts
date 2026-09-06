@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useState } from "react";
-import type { ProfilingQuestionDef } from "../config/onboardingProfilingQuestions";
-import { fetchAvatar, type Avatar } from "../lib/avatars";
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import type { ProfilingQuestionDef } from '../config/onboardingProfilingQuestions'
+import { useLocalizedQuestionnaire } from './useLocalizedQuestionnaire'
+import { fetchAvatar, type Avatar } from '../lib/avatars'
 import {
   fetchProfilingQuestionnaire,
   firstUnansweredQuestionIndex,
@@ -8,212 +10,312 @@ import {
   profilingDataToAnswers,
   upsertProfilingAnswer,
   validateProfilingAnswer,
-} from "../lib/profiling";
-import { summarizeProfiling } from "../lib/profileSummary";
-import type { ProjectType } from "../types/contos";
+} from '../lib/profiling'
+import {
+  answersToEnglishForSave,
+  answersToLocaleForDisplay,
+  resolveUiLanguage,
+} from '../lib/profilingLocale'
+import { summarizeProfiling } from '../lib/profileSummary'
+import type { ProjectType } from '../types/contos'
 
 export type UseProfilingQuestionnaireOptions = {
-  avatarId: string | null;
+  avatarId: string | null
   /** When set, use this type instead of loading from avatar (e.g. new project wizard). */
-  projectType?: ProjectType | null;
+  projectType?: ProjectType | null
   /** Start at question 0 even if answers exist (e.g. edit flow). */
-  startAtBeginning?: boolean;
-};
+  startAtBeginning?: boolean
+}
 
 export function useProfilingQuestionnaire({
   avatarId,
   projectType = null,
   startAtBeginning = false,
 }: UseProfilingQuestionnaireOptions) {
-  const [avatar, setAvatar] = useState<Avatar | null>(null);
-  const [questions, setQuestions] = useState<ProfilingQuestionDef[]>([]);
-  const [questionIndex, setQuestionIndex] = useState(0);
-  const [answers, setAnswers] = useState<Record<string, string>>({});
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [fieldError, setFieldError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
-  const [isSummarizing, setIsSummarizing] = useState(false);
+  const { i18n, t } = useTranslation()
+  const locale = resolveUiLanguage(i18n.language)
 
-  const currentQuestion = questions[questionIndex] ?? null;
+  const [avatar, setAvatar] = useState<Avatar | null>(null)
+  const [canonicalQuestions, setCanonicalQuestions] = useState<ProfilingQuestionDef[]>(
+    [],
+  )
+  const [questionIndex, setQuestionIndex] = useState(0)
+  const [answers, setAnswers] = useState<Record<string, string>>({})
+  const englishAnswersRef = useRef<Record<string, string>>({})
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [fieldError, setFieldError] = useState<string | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [isSaving, setIsSaving] = useState(false)
+  const [isSummarizing, setIsSummarizing] = useState(false)
+  const [isLocalizingAnswers, setIsLocalizingAnswers] = useState(false)
+
+  const {
+    displayQuestions,
+    optionMaps,
+    isTranslating: isTranslatingQuestions,
+    translationError: questionTranslationError,
+  } = useLocalizedQuestionnaire(canonicalQuestions)
+
+  const questions = displayQuestions.length > 0 ? displayQuestions : canonicalQuestions
+  const currentQuestion = questions[questionIndex] ?? null
+  const currentCanonical = canonicalQuestions[questionIndex] ?? null
 
   useEffect(() => {
-    let isMounted = true;
+    let isMounted = true
 
     async function load() {
       if (!avatarId) {
         if (isMounted) {
-          setIsLoading(false);
-          setErrorMessage(
-            "Avatar is missing. Return to project setup and try again.",
-          );
+          setIsLoading(false)
+          setErrorMessage(t('profiling.avatarMissingSetup'))
         }
-        return;
+        return
       }
 
-      setIsLoading(true);
-      setErrorMessage(null);
+      setIsLoading(true)
+      setErrorMessage(null)
 
       try {
-        const loaded = await fetchAvatar(avatarId);
-        const type = (projectType ?? loaded.type) as ProjectType;
-        const questionnaire = await fetchProfilingQuestionnaire(type);
-        const hydrated = profilingDataToAnswers(
-          loaded.profiling_data,
-          questionnaire,
-        );
+        const loaded = await fetchAvatar(avatarId)
+        const type = (projectType ?? loaded.type) as ProjectType
+        const questionnaire = await fetchProfilingQuestionnaire(type)
+        const hydrated = profilingDataToAnswers(loaded.profiling_data, questionnaire)
         const resumeIndex = startAtBeginning
           ? 0
-          : firstUnansweredQuestionIndex(questionnaire, hydrated);
+          : firstUnansweredQuestionIndex(questionnaire, hydrated)
 
         if (!isMounted) {
-          return;
+          return
         }
 
-        setAvatar(loaded);
-        setQuestions(questionnaire);
-        setAnswers(hydrated);
-        setQuestionIndex(resumeIndex);
+        setAvatar(loaded)
+        setCanonicalQuestions(questionnaire)
+        englishAnswersRef.current = hydrated
+        setAnswers(hydrated)
+        setQuestionIndex(resumeIndex)
       } catch (error) {
         if (isMounted) {
           setErrorMessage(
             error instanceof Error
               ? error.message
-              : "Failed to load profiling questionnaire.",
-          );
+              : t('profiling.errors.loadQuestionnaire'),
+          )
         }
       } finally {
         if (isMounted) {
-          setIsLoading(false);
+          setIsLoading(false)
         }
       }
     }
 
-    void load();
+    void load()
 
     return () => {
-      isMounted = false;
-    };
-  }, [avatarId, projectType, startAtBeginning]);
+      isMounted = false
+    }
+  }, [avatarId, projectType, startAtBeginning, t])
+
+  // Re-localize stored English answers when locale or option maps change.
+  useEffect(() => {
+    let cancelled = false
+    const english = englishAnswersRef.current
+    if (Object.keys(english).length === 0 || canonicalQuestions.length === 0) {
+      return
+    }
+
+    if (locale === 'en') {
+      setAnswers({ ...english })
+      setIsLocalizingAnswers(false)
+      return
+    }
+
+    // Wait until question option maps are ready (or failed → still map what we can).
+    if (isTranslatingQuestions) {
+      return
+    }
+
+    setIsLocalizingAnswers(true)
+    void (async () => {
+      try {
+        const localized = await answersToLocaleForDisplay({
+          englishAnswers: english,
+          canonicalQuestions,
+          optionMaps,
+          targetLang: locale,
+        })
+        if (!cancelled) {
+          setAnswers(localized)
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setAnswers({ ...english })
+          setErrorMessage(
+            error instanceof Error ? error.message : t('agents.translationFailed'),
+          )
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLocalizingAnswers(false)
+        }
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [
+    locale,
+    canonicalQuestions,
+    optionMaps,
+    isTranslatingQuestions,
+    t,
+  ])
 
   const setAnswer = useCallback((key: string, value: string) => {
-    setAnswers((current) => ({ ...current, [key]: value }));
-    setFieldError(null);
-  }, []);
+    setAnswers((current) => ({ ...current, [key]: value }))
+    setFieldError(null)
+  }, [])
 
   async function saveCurrentAnswer(answerOverride?: string): Promise<boolean> {
-    if (!avatar || !currentQuestion) {
-      return false;
+    if (!avatar || !currentCanonical) {
+      return false
     }
 
-    const raw = answerOverride ?? answers[currentQuestion.key] ?? "";
-    const validationError = validateProfilingAnswer(currentQuestion, raw);
-    if (validationError) {
-      setFieldError(validationError);
-      return false;
-    }
+    const raw = answerOverride ?? answers[currentCanonical.key] ?? ''
 
-    setFieldError(null);
-    setIsSaving(true);
+    setFieldError(null)
+    setIsSaving(true)
 
     try {
-      const normalized = normalizeAnswerForSave(currentQuestion, raw);
+      const englishMapped = await answersToEnglishForSave({
+        answers: { [currentCanonical.key]: raw },
+        keys: [currentCanonical.key],
+        canonicalQuestions,
+        optionMaps,
+        sourceLang: locale,
+      })
+      const englishRaw = englishMapped[currentCanonical.key] ?? ''
+      const validationError = validateProfilingAnswer(currentCanonical, englishRaw)
+      if (validationError) {
+        setFieldError(
+          validationError.startsWith('profiling.')
+            ? t(validationError)
+            : validationError,
+        )
+        return false
+      }
+
+      const normalized = normalizeAnswerForSave(currentCanonical, englishRaw)
       const updated = await upsertProfilingAnswer(
         avatar.id,
-        currentQuestion.key,
+        currentCanonical.key,
         normalized,
         {
-          optional: !currentQuestion.required,
-          questionText: currentQuestion.question,
+          optional: !currentCanonical.required,
+          questionText: currentCanonical.question,
         },
-      );
-      setAvatar(updated);
+      )
+      setAvatar(updated)
+      englishAnswersRef.current = {
+        ...englishAnswersRef.current,
+        [currentCanonical.key]: normalized,
+      }
+      // Keep UI draft as user typed (locale); English snapshot updated for language switches.
       setAnswers((current) => ({
         ...current,
-        [currentQuestion.key]: normalized,
-      }));
-      return true;
+        [currentCanonical.key]: answerOverride ?? current[currentCanonical.key] ?? raw,
+      }))
+      return true
     } catch (error) {
       setErrorMessage(
-        error instanceof Error
-          ? error.message
-          : "Failed to save profiling answer.",
-      );
-      return false;
+        error instanceof Error ? error.message : t('profiling.errors.saveAnswer'),
+      )
+      return false
     } finally {
-      setIsSaving(false);
+      setIsSaving(false)
     }
   }
 
   async function goNext(
     answerOverride?: string,
-  ): Promise<"advanced" | "finished" | "blocked"> {
-    if (!currentQuestion || isSaving) {
-      return "blocked";
+  ): Promise<'advanced' | 'finished' | 'blocked'> {
+    if (!currentCanonical || isSaving) {
+      return 'blocked'
     }
 
-    setErrorMessage(null);
+    setErrorMessage(null)
     if (answerOverride !== undefined) {
       setAnswers((current) => ({
         ...current,
-        [currentQuestion.key]: answerOverride,
-      }));
+        [currentCanonical.key]: answerOverride,
+      }))
     }
-    const saved = await saveCurrentAnswer(answerOverride);
+    const saved = await saveCurrentAnswer(answerOverride)
     if (!saved) {
-      return "blocked";
+      return 'blocked'
     }
 
-    if (questionIndex < questions.length - 1) {
-      setQuestionIndex((index) => index + 1);
-      return "advanced";
+    if (questionIndex < canonicalQuestions.length - 1) {
+      setQuestionIndex((index) => index + 1)
+      return 'advanced'
     }
 
     if (avatarId) {
-      setIsSummarizing(true);
+      setIsSummarizing(true)
       try {
-        await summarizeProfiling(avatarId);
+        await summarizeProfiling(avatarId)
       } catch (error) {
-        console.error("Profile summary generation failed:", error);
+        console.error('Profile summary generation failed:', error)
         setErrorMessage(
           error instanceof Error
-            ? `Profiling saved, but profile summary could not be generated: ${error.message}`
-            : "Profiling saved, but profile summary could not be generated.",
-        );
+            ? t('profiling.errors.summaryAfterSaveWithDetail', {
+                detail: error.message,
+              })
+            : t('profiling.errors.summaryAfterSave'),
+        )
       } finally {
-        setIsSummarizing(false);
+        setIsSummarizing(false)
       }
     }
 
-    return "finished";
+    return 'finished'
   }
 
-  function goBack(): "previous-question" | "exit" {
-    setErrorMessage(null);
-    setFieldError(null);
+  function goBack(): 'previous-question' | 'exit' {
+    setErrorMessage(null)
+    setFieldError(null)
 
     if (questionIndex > 0) {
-      setQuestionIndex((index) => index - 1);
-      return "previous-question";
+      setQuestionIndex((index) => index - 1)
+      return 'previous-question'
     }
 
-    return "exit";
+    return 'exit'
   }
+
+  const combinedError =
+    errorMessage ??
+    (questionTranslationError
+      ? t('agents.translationFailed')
+      : null)
 
   return {
     avatar,
     questions,
+    canonicalQuestions,
     questionIndex,
     answers,
     currentQuestion,
-    errorMessage,
+    errorMessage: combinedError,
     fieldError,
-    isLoading,
+    isLoading: isLoading || isLocalizingAnswers,
     isSaving,
     isSummarizing,
+    isTranslatingQuestions,
+    isLocalizingAnswers,
     setAnswer,
     goNext,
     goBack,
     setErrorMessage,
-  };
+  }
 }

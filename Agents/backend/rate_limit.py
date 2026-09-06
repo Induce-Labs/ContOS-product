@@ -418,6 +418,34 @@ def release_inflight(
         )
 
 
+def clear_inflight(
+    user_id: str,
+    *,
+    scope: str = DEFAULT_SCOPE,
+    redis_client: redis.Redis | None = None,
+) -> None:
+    """Delete the whole inflight SET for a user/scope (preempt zombie streams)."""
+    if not user_id:
+        return
+    uid = str(user_id).strip()
+    scope_value = scope if scope else DEFAULT_SCOPE
+    try:
+        client = redis_client or _redis_client()
+        client.delete(inflight_key(uid, scope_value))
+    except Exception as error:
+        logger.warning(
+            "agents_rate_limit_clear_error",
+            extra={
+                "event": "agents_rate_limit_clear_error",
+                "user_id": uid,
+                "scope": scope_value,
+                "limit_type": None,
+                "retry_after_seconds": None,
+                "error": str(error),
+            },
+        )
+
+
 def refresh_inflight_ttl(
     user_id: str,
     token: str,

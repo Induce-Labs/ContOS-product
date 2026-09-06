@@ -1,4 +1,6 @@
-import type { ReactNode } from 'react'
+import { useMemo, type ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import type { AgentType } from '../../lib/agentsApi'
 import {
   buildInstagramDisplaySections,
@@ -54,33 +56,71 @@ function BulletList({ items }: { items: string[] }) {
   )
 }
 
-function InstagramOutputView({ output }: { output: UnknownRecord }) {
-  const sections = buildInstagramDisplaySections(output)
+function translateKnownSectionTitle(title: string, t: TFunction): string {
+  const known: Record<string, string> = {
+    Strategy: t('agents.output.strategy'),
+    'Comparison summary': t('agents.output.comparisonSummary'),
+    'Top hooks': t('agents.output.topHooks'),
+    'Caption formulas': t('agents.output.captionFormulas'),
+    'Posting cadence': t('agents.output.postingCadence'),
+    'How to differentiate': t('agents.output.howToDifferentiate'),
+    'Post ideas': t('agents.output.postIdeas'),
+    Themes: t('agents.output.themes'),
+    'Hook formulas': t('agents.output.hookFormulas'),
+    'LinkedIn ideas': t('agents.output.linkedinIdeas'),
+    'Tweet ideas': t('agents.output.tweetIdeas'),
+    'Engagement tactics': t('agents.output.engagementTactics'),
+    'Strategy frameworks': t('agents.output.strategyFrameworks'),
+    Frameworks: t('agents.output.frameworks'),
+    Guardrails: t('agents.output.guardrails'),
+    Recommendations: t('agents.output.recommendations'),
+    'Broken rules': t('agents.output.brokenRules'),
+    Reasoning: t('agents.output.reasoning'),
+    'Competitor insights': t('agents.output.competitorInsights'),
+    'Content calendar': t('agents.output.contentCalendar'),
+    'Key signals': t('agents.output.keySignals'),
+    'Hooks & themes': t('agents.output.hooksThemes'),
+    Strengths: t('agents.output.strengths'),
+    Weaknesses: t('agents.output.weaknesses'),
+  }
+  if (known[title]) return known[title]
+  const dayMatch = /^Day (\d+)$/.exec(title)
+  if (dayMatch) return t('agents.output.day', { n: dayMatch[1] })
+  return title
+}
+
+function InstagramSectionsView({ output }: { output: UnknownRecord }) {
+  const { t } = useTranslation()
+  const sections = useMemo(() => buildInstagramDisplaySections(output), [output])
+
+  return (
+    <div className="space-y-4">
+      {sections.map((section, index) => (
+        <Section
+          key={`${section.title}-${index}`}
+          title={translateKnownSectionTitle(section.title, t)}
+        >
+          {section.body ? (
+            <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink">
+              {section.body}
+            </p>
+          ) : null}
+          {section.items?.length ? <BulletList items={section.items} /> : null}
+        </Section>
+      ))}
+      {!sections.length ? (
+        <p className="text-sm text-ink-muted">{t('agents.output.noInstagramContent')}</p>
+      ) : null}
+    </div>
+  )
+}
+
+function InstagramRichOutputView({ output }: { output: UnknownRecord }) {
+  const { t } = useTranslation()
   const calendar = Array.isArray(output.content_calendar) ? output.content_calendar : []
   const competitors = Array.isArray(output.competitor_comparison)
     ? output.competitor_comparison
     : []
-
-  // Prefer richer card UI when calendar/competitor rows exist; otherwise section list.
-  if (calendar.length === 0 && competitors.length === 0) {
-    return (
-      <div className="space-y-4">
-        {sections.map((section) => (
-          <Section key={section.title} title={section.title}>
-            {section.body ? (
-              <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink">
-                {section.body}
-              </p>
-            ) : null}
-            {section.items?.length ? <BulletList items={section.items} /> : null}
-          </Section>
-        ))}
-        {!sections.length ? (
-          <p className="text-sm text-ink-muted">No Instagram strategy content returned.</p>
-        ) : null}
-      </div>
-    )
-  }
 
   const analysis = asString(output.analysis)
   const comparisonSummary = asString(output.comparison_summary)
@@ -89,128 +129,151 @@ function InstagramOutputView({ output }: { output: UnknownRecord }) {
   const postingFrequency = asString(output.posting_frequency)
   const differentiation = asStringList(output.differentiation_angles)
 
+  const competitorCards = competitors.map((raw, index) => {
+    const card = asRecord(raw) ?? {}
+    return {
+      handle: asString(card.competitor_handle) || t('agents.output.competitorN', { n: index + 1 }),
+      platform: asString(card.platform) || 'instagram',
+      keySignals: asStringList(card.key_signals),
+      hooksThemes: asStringList(card.hooks_and_themes),
+      strengths: asStringList(card.strengths),
+      weaknesses: asStringList(card.weaknesses),
+    }
+  })
+
+  const calendarRows = calendar.map((raw, index) => {
+    const row = asRecord(raw) ?? {}
+    return {
+      day: typeof row.day === 'number' ? row.day : index + 1,
+      date: asString(row.date),
+      contentType: asString(row.content_type) || 'Post',
+      hook: asString(row.hook),
+      caption: asString(row.caption),
+      hashtags: asStringList(row.hashtags),
+      cta: asString(row.cta),
+      reasoning: asString(row.reasoning),
+    }
+  })
+
   return (
     <div className="space-y-4">
       {analysis ? (
-        <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink">{analysis}</p>
+        <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink">
+          {analysis}
+        </p>
       ) : null}
       {comparisonSummary ? (
         <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink">
           {comparisonSummary}
         </p>
       ) : null}
-      {competitors.length > 0 ? (
-        <Section title="Competitor insights">
+      {competitorCards.length > 0 ? (
+        <Section title={t('agents.output.competitorInsights')}>
           <div className="space-y-3">
-            {competitors.map((raw, index) => {
-              const card = asRecord(raw) ?? {}
-              const handle = asString(card.competitor_handle) || `Competitor ${index + 1}`
-              return (
-                <article
-                  key={`${handle}-${index}`}
-                  className="rounded-xl border border-border-hairline bg-canvas-raised px-3 py-3"
-                >
-                  <p className="text-xs uppercase tracking-wide text-ink-muted">
-                    {asString(card.platform) || 'instagram'}
-                  </p>
-                  <h5 className="mt-1 font-medium text-ink">{handle}</h5>
-                  <div className="mt-2 space-y-2">
-                    {asStringList(card.key_signals).length > 0 ? (
-                      <div>
-                        <p className="text-xs font-medium text-ink-muted">Key signals</p>
-                        <BulletList items={asStringList(card.key_signals)} />
-                      </div>
-                    ) : null}
-                    {asStringList(card.hooks_and_themes).length > 0 ? (
-                      <div>
-                        <p className="text-xs font-medium text-ink-muted">Hooks & themes</p>
-                        <BulletList items={asStringList(card.hooks_and_themes)} />
-                      </div>
-                    ) : null}
-                    {asStringList(card.strengths).length > 0 ? (
-                      <div>
-                        <p className="text-xs font-medium text-ink-muted">Strengths</p>
-                        <BulletList items={asStringList(card.strengths)} />
-                      </div>
-                    ) : null}
-                    {asStringList(card.weaknesses).length > 0 ? (
-                      <div>
-                        <p className="text-xs font-medium text-ink-muted">Weaknesses</p>
-                        <BulletList items={asStringList(card.weaknesses)} />
-                      </div>
-                    ) : null}
-                  </div>
-                </article>
-              )
-            })}
+            {competitorCards.map((card, index) => (
+              <article
+                key={`${card.handle}-${index}`}
+                className="rounded-xl border border-border-hairline bg-canvas-raised px-3 py-3"
+              >
+                <p className="text-xs uppercase tracking-wide text-ink-muted">{card.platform}</p>
+                <h5 className="mt-1 font-medium text-ink">{card.handle}</h5>
+                <div className="mt-2 space-y-2">
+                  {card.keySignals.length > 0 ? (
+                    <div>
+                      <p className="text-xs font-medium text-ink-muted">
+                        {t('agents.output.keySignals')}
+                      </p>
+                      <BulletList items={card.keySignals} />
+                    </div>
+                  ) : null}
+                  {card.hooksThemes.length > 0 ? (
+                    <div>
+                      <p className="text-xs font-medium text-ink-muted">
+                        {t('agents.output.hooksThemes')}
+                      </p>
+                      <BulletList items={card.hooksThemes} />
+                    </div>
+                  ) : null}
+                  {card.strengths.length > 0 ? (
+                    <div>
+                      <p className="text-xs font-medium text-ink-muted">
+                        {t('agents.output.strengths')}
+                      </p>
+                      <BulletList items={card.strengths} />
+                    </div>
+                  ) : null}
+                  {card.weaknesses.length > 0 ? (
+                    <div>
+                      <p className="text-xs font-medium text-ink-muted">
+                        {t('agents.output.weaknesses')}
+                      </p>
+                      <BulletList items={card.weaknesses} />
+                    </div>
+                  ) : null}
+                </div>
+              </article>
+            ))}
           </div>
         </Section>
       ) : null}
-      {calendar.length > 0 ? (
-        <Section title="Content calendar">
+      {calendarRows.length > 0 ? (
+        <Section title={t('agents.output.contentCalendar')}>
           <div className="space-y-3">
-            {calendar.map((raw, index) => {
-              const row = asRecord(raw) ?? {}
-              const contentType = asString(row.content_type) || 'Post'
-              const day = typeof row.day === 'number' ? row.day : index + 1
-              return (
-                <article
-                  key={`day-${day}-${index}`}
-                  className="rounded-xl border border-border-hairline bg-canvas-raised px-3 py-3"
-                >
-                  <div className="flex flex-wrap items-center gap-2 text-xs text-ink-muted">
-                    <span>Day {day}</span>
-                    {asString(row.date) ? <span>· {asString(row.date)}</span> : null}
-                    <span className="rounded-md bg-accent-primary-soft px-2 py-0.5 font-medium text-accent-primary">
-                      {contentType}
-                    </span>
-                  </div>
-                  {asString(row.hook) ? (
-                    <p className="mt-2 font-medium text-ink">{asString(row.hook)}</p>
-                  ) : null}
-                  {asString(row.caption) ? (
-                    <p className="mt-2 whitespace-pre-wrap text-sm text-ink-muted">
-                      {asString(row.caption)}
-                    </p>
-                  ) : null}
-                  {asStringList(row.hashtags).length > 0 ? (
-                    <p className="mt-2 text-xs text-accent-primary">
-                      {asStringList(row.hashtags)
-                        .map((tag) => (tag.startsWith('#') ? tag : `#${tag}`))
-                        .join(' ')}
-                    </p>
-                  ) : null}
-                  {asString(row.cta) ? (
-                    <p className="mt-2 text-sm text-ink">CTA: {asString(row.cta)}</p>
-                  ) : null}
-                  {asString(row.reasoning) ? (
-                    <p className="mt-2 border-t border-border-hairline pt-2 text-xs text-ink-muted">
-                      Why: {asString(row.reasoning)}
-                    </p>
-                  ) : null}
-                </article>
-              )
-            })}
+            {calendarRows.map((row, index) => (
+              <article
+                key={`day-${row.day}-${index}`}
+                className="rounded-xl border border-border-hairline bg-canvas-raised px-3 py-3"
+              >
+                <div className="flex flex-wrap items-center gap-2 text-xs text-ink-muted">
+                  <span>{t('agents.output.day', { n: row.day })}</span>
+                  {row.date ? <span>· {row.date}</span> : null}
+                  <span className="rounded-md bg-accent-primary-soft px-2 py-0.5 font-medium text-accent-primary">
+                    {row.contentType}
+                  </span>
+                </div>
+                {row.hook ? <p className="mt-2 font-medium text-ink">{row.hook}</p> : null}
+                {row.caption ? (
+                  <p className="mt-2 whitespace-pre-wrap text-sm text-ink-muted">{row.caption}</p>
+                ) : null}
+                {row.hashtags.length > 0 ? (
+                  <p className="mt-2 text-xs text-accent-primary">
+                    {row.hashtags
+                      .map((tag) => (tag.startsWith('#') ? tag : `#${tag}`))
+                      .join(' ')}
+                  </p>
+                ) : null}
+                {row.cta ? (
+                  <p className="mt-2 text-sm text-ink">
+                    {t('agents.output.cta', { value: row.cta })}
+                  </p>
+                ) : null}
+                {row.reasoning ? (
+                  <p className="mt-2 border-t border-border-hairline pt-2 text-xs text-ink-muted">
+                    {t('agents.output.reasoning')}: {row.reasoning}
+                  </p>
+                ) : null}
+              </article>
+            ))}
           </div>
         </Section>
       ) : null}
       {topHooks.length > 0 ? (
-        <Section title="Top hooks">
+        <Section title={t('agents.output.topHooks')}>
           <BulletList items={topHooks} />
         </Section>
       ) : null}
       {captionFormulas.length > 0 ? (
-        <Section title="Caption formulas">
+        <Section title={t('agents.output.captionFormulas')}>
           <BulletList items={captionFormulas} />
         </Section>
       ) : null}
       {postingFrequency ? (
-        <Section title="Posting cadence">
+        <Section title={t('agents.output.postingCadence')}>
           <p className="text-sm text-ink">{postingFrequency}</p>
         </Section>
       ) : null}
       {differentiation.length > 0 ? (
-        <Section title="How to differentiate">
+        <Section title={t('agents.output.howToDifferentiate')}>
           <BulletList items={differentiation} />
         </Section>
       ) : null}
@@ -218,64 +281,85 @@ function InstagramOutputView({ output }: { output: UnknownRecord }) {
   )
 }
 
+function InstagramOutputView({ output }: { output: UnknownRecord }) {
+  const calendar = Array.isArray(output.content_calendar) ? output.content_calendar : []
+  const competitors = Array.isArray(output.competitor_comparison)
+    ? output.competitor_comparison
+    : []
+
+  if (calendar.length === 0 && competitors.length === 0) {
+    return <InstagramSectionsView output={output} />
+  }
+
+  return <InstagramRichOutputView output={output} />
+}
+
 function LinkedInOutputView({ output }: { output: UnknownRecord }) {
+  const { t } = useTranslation()
   const ideas = Array.isArray(output.post_ideas) ? output.post_ideas : []
   const themes = asStringList(output.thought_leadership_themes)
   const hooks = asStringList(output.hook_formulas)
   const frequency = asString(output.posting_frequency)
 
+  const ideaCards = ideas.map((raw, index) => {
+    const idea = asRecord(raw) ?? {}
+    return {
+      contentType: asString(idea.content_type) || 'Post',
+      topic: asString(idea.topic) || t('agents.output.ideaN', { n: index + 1 }),
+      hook: asString(idea.hook),
+      postStructure: asString(idea.post_structure),
+      cta: asString(idea.cta),
+      reasoning: asString(idea.reasoning),
+    }
+  })
+
   return (
     <div className="space-y-4">
-      {ideas.length > 0 ? (
-        <Section title="Post ideas">
+      {ideaCards.length > 0 ? (
+        <Section title={t('agents.output.postIdeas')}>
           <div className="space-y-3">
-            {ideas.map((raw, index) => {
-              const idea = asRecord(raw) ?? {}
-              return (
-                <article
-                  key={`li-${index}`}
-                  className="rounded-xl border border-border-hairline bg-canvas-raised px-3 py-3"
-                >
-                  <p className="text-xs uppercase tracking-wide text-accent-primary">
-                    {asString(idea.content_type) || 'Post'}
+            {ideaCards.map((idea, index) => (
+              <article
+                key={`li-${index}`}
+                className="rounded-xl border border-border-hairline bg-canvas-raised px-3 py-3"
+              >
+                <p className="text-xs uppercase tracking-wide text-accent-primary">
+                  {idea.contentType}
+                </p>
+                <h5 className="mt-1 font-medium text-ink">{idea.topic}</h5>
+                {idea.hook ? <p className="mt-2 font-medium text-ink">{idea.hook}</p> : null}
+                {idea.postStructure ? (
+                  <p className="mt-2 whitespace-pre-wrap text-sm text-ink-muted">
+                    {idea.postStructure}
                   </p>
-                  <h5 className="mt-1 font-medium text-ink">
-                    {asString(idea.topic) || `Idea ${index + 1}`}
-                  </h5>
-                  {asString(idea.hook) ? (
-                    <p className="mt-2 font-medium text-ink">{asString(idea.hook)}</p>
-                  ) : null}
-                  {asString(idea.post_structure) ? (
-                    <p className="mt-2 whitespace-pre-wrap text-sm text-ink-muted">
-                      {asString(idea.post_structure)}
-                    </p>
-                  ) : null}
-                  {asString(idea.cta) ? (
-                    <p className="mt-2 text-sm text-ink">CTA: {asString(idea.cta)}</p>
-                  ) : null}
-                  {asString(idea.reasoning) ? (
-                    <p className="mt-2 border-t border-border-hairline pt-2 text-xs text-ink-muted">
-                      Why: {asString(idea.reasoning)}
-                    </p>
-                  ) : null}
-                </article>
-              )
-            })}
+                ) : null}
+                {idea.cta ? (
+                  <p className="mt-2 text-sm text-ink">
+                    {t('agents.output.cta', { value: idea.cta })}
+                  </p>
+                ) : null}
+                {idea.reasoning ? (
+                  <p className="mt-2 border-t border-border-hairline pt-2 text-xs text-ink-muted">
+                    {t('agents.output.reasoning')}: {idea.reasoning}
+                  </p>
+                ) : null}
+              </article>
+            ))}
           </div>
         </Section>
       ) : null}
       {themes.length > 0 ? (
-        <Section title="Themes">
+        <Section title={t('agents.output.themes')}>
           <BulletList items={themes} />
         </Section>
       ) : null}
       {hooks.length > 0 ? (
-        <Section title="Hook formulas">
+        <Section title={t('agents.output.hookFormulas')}>
           <BulletList items={hooks} />
         </Section>
       ) : null}
       {frequency ? (
-        <Section title="Posting cadence">
+        <Section title={t('agents.output.postingCadence')}>
           <p className="text-sm text-ink">{frequency}</p>
         </Section>
       ) : null}
@@ -284,37 +368,46 @@ function LinkedInOutputView({ output }: { output: UnknownRecord }) {
 }
 
 function PlaybookOutputView({ output }: { output: UnknownRecord }) {
+  const { t } = useTranslation()
+  const frameworks = asStringList(output.strategy_frameworks)
+  const guardrails = asStringList(output.guardrails)
+  const recommendations = asStringList(output.recommendations)
+  const brokenRules = asStringList(output.broken_rules)
+  const reasoning = asString(output.reasoning)
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2">
-        <span className="text-xs uppercase tracking-wide text-ink-muted">Audit</span>
+        <span className="text-xs uppercase tracking-wide text-ink-muted">
+          {t('agents.output.audit')}
+        </span>
         <span className="rounded-md bg-accent-primary-soft px-2 py-0.5 text-xs font-semibold text-accent-primary">
           {asString(output.audit_result) || 'N/A'}
         </span>
       </div>
-      {asStringList(output.strategy_frameworks).length > 0 ? (
-        <Section title="Strategy frameworks">
-          <BulletList items={asStringList(output.strategy_frameworks)} />
+      {frameworks.length > 0 ? (
+        <Section title={t('agents.output.strategyFrameworks')}>
+          <BulletList items={frameworks} />
         </Section>
       ) : null}
-      {asStringList(output.guardrails).length > 0 ? (
-        <Section title="Guardrails">
-          <BulletList items={asStringList(output.guardrails)} />
+      {guardrails.length > 0 ? (
+        <Section title={t('agents.output.guardrails')}>
+          <BulletList items={guardrails} />
         </Section>
       ) : null}
-      {asStringList(output.recommendations).length > 0 ? (
-        <Section title="Recommendations">
-          <BulletList items={asStringList(output.recommendations)} />
+      {recommendations.length > 0 ? (
+        <Section title={t('agents.output.recommendations')}>
+          <BulletList items={recommendations} />
         </Section>
       ) : null}
-      {asStringList(output.broken_rules).length > 0 ? (
-        <Section title="Broken rules">
-          <BulletList items={asStringList(output.broken_rules)} />
+      {brokenRules.length > 0 ? (
+        <Section title={t('agents.output.brokenRules')}>
+          <BulletList items={brokenRules} />
         </Section>
       ) : null}
-      {asString(output.reasoning) ? (
+      {reasoning ? (
         <p className="whitespace-pre-wrap border-t border-border-hairline pt-3 text-sm text-ink-muted">
-          {asString(output.reasoning)}
+          {reasoning}
         </p>
       ) : null}
     </div>
@@ -322,57 +415,61 @@ function PlaybookOutputView({ output }: { output: UnknownRecord }) {
 }
 
 function TwitterOutputView({ output }: { output: UnknownRecord }) {
+  const { t } = useTranslation()
   const tweets = Array.isArray(output.tweet_ideas) ? output.tweet_ideas : []
   const formulas = asStringList(output.hook_formulas)
   const tactics = asStringList(output.engagement_tactics)
   const frequency = asString(output.posting_frequency)
 
+  const tweetCards = tweets.map((raw) => {
+    const tweet = asRecord(raw) ?? {}
+    return {
+      type: asString(tweet.type) || 'Tweet',
+      hook: asString(tweet.hook),
+      fullTweet: asString(tweet.full_tweet),
+      reasoning: asString(tweet.reasoning),
+    }
+  })
+
   return (
     <div className="space-y-4">
-      {tweets.length > 0 ? (
-        <Section title="Tweet ideas">
+      {tweetCards.length > 0 ? (
+        <Section title={t('agents.output.tweetIdeas')}>
           <div className="space-y-3">
-            {tweets.map((raw, index) => {
-              const tweet = asRecord(raw) ?? {}
-              return (
-                <article
-                  key={`tw-${index}`}
-                  className="rounded-xl border border-border-hairline bg-canvas-raised px-3 py-3"
-                >
-                  <p className="text-xs uppercase tracking-wide text-accent-primary">
-                    {asString(tweet.type) || 'Tweet'}
+            {tweetCards.map((tweet, index) => (
+              <article
+                key={`tw-${index}`}
+                className="rounded-xl border border-border-hairline bg-canvas-raised px-3 py-3"
+              >
+                <p className="text-xs uppercase tracking-wide text-accent-primary">{tweet.type}</p>
+                {tweet.hook ? <p className="mt-2 font-medium text-ink">{tweet.hook}</p> : null}
+                {tweet.fullTweet ? (
+                  <p className="mt-2 whitespace-pre-wrap text-sm text-ink-muted">
+                    {tweet.fullTweet}
                   </p>
-                  {asString(tweet.hook) ? (
-                    <p className="mt-2 font-medium text-ink">{asString(tweet.hook)}</p>
-                  ) : null}
-                  {asString(tweet.full_tweet) ? (
-                    <p className="mt-2 whitespace-pre-wrap text-sm text-ink-muted">
-                      {asString(tweet.full_tweet)}
-                    </p>
-                  ) : null}
-                  {asString(tweet.reasoning) ? (
-                    <p className="mt-2 border-t border-border-hairline pt-2 text-xs text-ink-muted">
-                      Why: {asString(tweet.reasoning)}
-                    </p>
-                  ) : null}
-                </article>
-              )
-            })}
+                ) : null}
+                {tweet.reasoning ? (
+                  <p className="mt-2 border-t border-border-hairline pt-2 text-xs text-ink-muted">
+                    {t('agents.output.reasoning')}: {tweet.reasoning}
+                  </p>
+                ) : null}
+              </article>
+            ))}
           </div>
         </Section>
       ) : null}
       {formulas.length > 0 ? (
-        <Section title="Hook formulas">
+        <Section title={t('agents.output.hookFormulas')}>
           <BulletList items={formulas} />
         </Section>
       ) : null}
       {tactics.length > 0 ? (
-        <Section title="Engagement tactics">
+        <Section title={t('agents.output.engagementTactics')}>
           <BulletList items={tactics} />
         </Section>
       ) : null}
       {frequency ? (
-        <Section title="Posting cadence">
+        <Section title={t('agents.output.postingCadence')}>
           <p className="text-sm text-ink">{frequency}</p>
         </Section>
       ) : null}
@@ -389,6 +486,8 @@ export function AgentOutputRenderer({
   output: unknown
   streamingText?: string
 }) {
+  const { t } = useTranslation()
+
   if (typeof output === 'string' && output.trim()) {
     return <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink">{output}</p>
   }
@@ -426,5 +525,5 @@ export function AgentOutputRenderer({
     )
   }
 
-  return <p className="text-sm text-ink-muted">No response yet.</p>
+  return <p className="text-sm text-ink-muted">{t('agents.output.noResponseYet')}</p>
 }

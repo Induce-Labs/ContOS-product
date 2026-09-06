@@ -1,8 +1,7 @@
+import { useTranslation } from 'react-i18next'
 import type { Competitor } from '../../lib/competitors'
 import type { PipelineStep } from '../../types/contos'
 import {
-  PIPELINE_STEP_DESCRIPTIONS,
-  PIPELINE_STEP_LABELS,
   getPipelineStepsForPlatform,
   isPipelineStepActive,
   isPipelineStepComplete,
@@ -24,6 +23,7 @@ export function CompetitorProgressCard({
   isRetrying = false,
   isStopping = false,
 }: CompetitorProgressCardProps) {
+  const { t } = useTranslation()
   const pipelineStep = competitor.pipeline_step as PipelineStep
   const isFailed = pipelineStep === 'failed'
   const canStartOrRetry = isFailed || pipelineStep === 'queued'
@@ -43,7 +43,7 @@ export function CompetitorProgressCard({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-xs font-medium uppercase tracking-wide text-accent-primary">
-            Research in progress
+            {t('competitors.progressCard.eyebrow')}
           </p>
           <div className="mt-1 flex flex-wrap items-center gap-2">
             <h2 className="text-xl font-semibold text-ink">
@@ -53,8 +53,8 @@ export function CompetitorProgressCard({
           </div>
           <p className="mt-2 text-sm text-ink-muted">
             {stopRequested
-              ? 'Stopping… ContOS will keep scraped posts and summarize what it has so far.'
-              : PIPELINE_STEP_DESCRIPTIONS[pipelineStep]}
+              ? t('competitors.progressCard.stoppingHint')
+              : t(`pipeline.descriptions.${pipelineStep}`)}
           </p>
         </div>
         <StatusBadge
@@ -83,10 +83,10 @@ export function CompetitorProgressCard({
             }`}
           >
             {isRetrying
-              ? 'Starting…'
+              ? t('competitors.progressCard.starting')
               : isFailed
-                ? 'Retry research'
-                : 'Start research'}
+                ? t('competitors.progressCard.retryResearch')
+                : t('competitors.progressCard.startResearch')}
           </button>
         </div>
       ) : null}
@@ -99,7 +99,9 @@ export function CompetitorProgressCard({
             disabled={stopRequested || isStopping || !canStop}
             className="rounded-xl border border-red-200 bg-white px-4 py-2 text-sm font-medium text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {stopRequested || isStopping ? 'Stopping…' : 'Stop'}
+            {stopRequested || isStopping
+              ? t('competitors.progressCard.stopping')
+              : t('competitors.progressCard.stop')}
           </button>
         </div>
       ) : null}
@@ -134,7 +136,7 @@ export function CompetitorProgressCard({
                         : 'text-ink-muted'
                 }`}
               >
-                {PIPELINE_STEP_LABELS[step]}
+                {t(`pipeline.labels.${step}`)}
               </p>
             </li>
           )
@@ -145,7 +147,11 @@ export function CompetitorProgressCard({
 }
 
 function PlatformBadge({ platform }: { platform: string }) {
-  const label = platform === 'linkedin' ? 'LinkedIn' : 'Instagram'
+  const { t } = useTranslation()
+  const label =
+    platform === 'linkedin'
+      ? t('common.platforms.linkedin')
+      : t('common.platforms.instagram')
   return (
     <span className="rounded-full border border-border-hairline px-2 py-0.5 text-xs capitalize text-ink-muted">
       {label}
@@ -160,10 +166,12 @@ type StatusBadgeProps = {
 }
 
 function StatusBadge({ step, scrapeStatus, stopRequested }: StatusBadgeProps) {
+  const { t } = useTranslation()
+
   if (stopRequested && step !== 'done' && step !== 'failed') {
     return (
       <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-900">
-        Stopping
+        {t('pipeline.status.stopping')}
       </span>
     )
   }
@@ -171,7 +179,7 @@ function StatusBadge({ step, scrapeStatus, stopRequested }: StatusBadgeProps) {
   if (step === 'failed') {
     return (
       <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-medium text-red-700">
-        Failed
+        {t('pipeline.status.failed')}
       </span>
     )
   }
@@ -179,14 +187,14 @@ function StatusBadge({ step, scrapeStatus, stopRequested }: StatusBadgeProps) {
   if (step === 'done' || scrapeStatus === 'completed') {
     return (
       <span className="rounded-full bg-signal-positive-soft px-3 py-1 text-xs font-medium text-signal-positive">
-        Done
+        {t('pipeline.status.done')}
       </span>
     )
   }
 
   return (
     <span className="rounded-full bg-accent-primary-soft px-3 py-1 text-xs font-medium text-accent-primary-deep">
-      In progress
+      {t('pipeline.status.inProgress')}
     </span>
   )
 }

@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { AddCompetitorPanel } from '../components/dashboard/AddCompetitorPanel'
 import { CompetitorProgressCard } from '../components/dashboard/CompetitorProgressCard'
 import { CompetitorSummaryCard } from '../components/dashboard/CompetitorSummaryCard'
@@ -9,8 +10,10 @@ import { useDashboardShell } from '../hooks/useDashboardShell'
 import { enqueueCompetitorScrapeJobsOrThrow, stopCompetitorPipeline } from '../lib/api'
 import { MAX_COMPETITORS_PER_AVATAR } from '../lib/competitors'
 import { updateProjectStatus } from '../lib/projects'
+import { requeueOrphanedCompetitorScrapes } from '../lib/requeueOrphanedScrapes'
 
 export function AnalyticsPage() {
+  const { t } = useTranslation()
   const {
     user,
     projects,
@@ -32,6 +35,13 @@ export function AnalyticsPage() {
   const [stoppingCompetitorId, setStoppingCompetitorId] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
 
+  useEffect(() => {
+    if (!activeProject?.id || isLoading || competitors.length === 0) {
+      return
+    }
+    void requeueOrphanedCompetitorScrapes(activeProject.id, competitors)
+  }, [activeProject?.id, competitors, isLoading])
+
   const atCompetitorCap = competitors.length >= MAX_COMPETITORS_PER_AVATAR
   const remainingSlots = Math.max(0, MAX_COMPETITORS_PER_AVATAR - competitors.length)
 
@@ -49,7 +59,7 @@ export function AnalyticsPage() {
       await refresh()
     } catch (error) {
       setActionError(
-        error instanceof Error ? error.message : 'Failed to retry competitor research.',
+        error instanceof Error ? error.message : t('dashboard.retryFailed'),
       )
     } finally {
       setRetryingCompetitorId(null)
@@ -69,7 +79,7 @@ export function AnalyticsPage() {
       await refresh()
     } catch (error) {
       setActionError(
-        error instanceof Error ? error.message : 'Failed to stop competitor research.',
+        error instanceof Error ? error.message : t('dashboard.stopFailed'),
       )
     } finally {
       setStoppingCompetitorId(null)
@@ -92,8 +102,8 @@ export function AnalyticsPage() {
       <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
         <OverviewWorkspaceHeader
           className="mb-0"
-          title="Analytics"
-          subtitle="Follow research progress live, then read competitor intelligence summaries when jobs finish."
+          title={t('analytics.title')}
+          subtitle={t('analytics.subtitle')}
         />
         {activeProject ? (
           <button
@@ -102,21 +112,22 @@ export function AnalyticsPage() {
             disabled={atCompetitorCap || isAddCompetitorOpen}
             title={
               atCompetitorCap
-                ? `Maximum of ${MAX_COMPETITORS_PER_AVATAR} competitors per avatar`
-                : 'Add another competitor'
+                ? t('onboarding.competitors.maxReached', { max: MAX_COMPETITORS_PER_AVATAR })
+                : undefined
             }
             className="shrink-0 rounded-full bg-accent-primary px-4 py-2.5 text-sm font-medium text-white transition hover:bg-accent-primary-deep disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {isAddCompetitorOpen ? 'Adding competitor…' : 'Add competitor'}
+            {isAddCompetitorOpen ? t('competitors.addingCompetitor') : t('competitors.addCompetitor')}
           </button>
         ) : null}
       </div>
 
       <p className="mb-6 text-sm text-ink-muted">
-        {competitors.length}/{MAX_COMPETITORS_PER_AVATAR} tracked
-        {remainingSlots > 0
-          ? ` · ${remainingSlots} slot${remainingSlots === 1 ? '' : 's'} left`
-          : ''}
+        {t('analytics.tracked', {
+          count: competitors.length,
+          max: MAX_COMPETITORS_PER_AVATAR,
+        })}
+        {remainingSlots > 0 ? t('analytics.slotsLeft', { count: remainingSlots }) : ''}
       </p>
 
       {projectsError || errorMessage || actionError ? (
@@ -140,14 +151,11 @@ export function AnalyticsPage() {
 
       {!activeProject ? (
         <section className="rounded-[2rem] border border-border-hairline bg-white p-8">
-          <p className="text-sm text-ink-muted">Select a project from the header switcher.</p>
+          <p className="text-sm text-ink-muted">{t('dashboard.selectProject')}</p>
         </section>
       ) : competitors.length === 0 ? (
         <section className="rounded-[2rem] border border-dashed border-border-hairline bg-white/80 p-8 text-center">
-          <p className="text-sm text-ink-muted">
-            No competitors yet. Use Add competitor to start research — progress and summaries will
-            show here.
-          </p>
+          <p className="text-sm text-ink-muted">{t('analytics.noCompetitors')}</p>
         </section>
       ) : (
         <div className="space-y-8">
@@ -172,13 +180,10 @@ export function AnalyticsPage() {
                   className="rounded-[2rem] border border-border-hairline bg-white p-6"
                 >
                   <p className="text-xs font-medium uppercase tracking-wide text-signal-positive">
-                    Research finished
+                    {t('analytics.researchFinishedEyebrow')}
                   </p>
                   <p className="mt-2 text-sm font-medium text-ink">{competitor.handle_or_url}</p>
-                  <p className="mt-2 text-sm text-ink-muted">
-                    Pipeline completed. Summary is still generating or unavailable — this page
-                    refreshes automatically.
-                  </p>
+                  <p className="mt-2 text-sm text-ink-muted">{t('analytics.summaryPending')}</p>
                 </section>
               )
             }

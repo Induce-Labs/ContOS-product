@@ -1,13 +1,17 @@
+import { useTranslation } from 'react-i18next'
 import { DashboardLayout } from '../components/dashboard/DashboardLayout'
 import { OverviewWorkspaceHeader } from '../components/dashboard/OverviewWorkspaceHeader'
 import { useDashboardShell } from '../hooks/useDashboardShell'
 
 type PlaceholderFeaturePageProps = {
-  title: string
-  subtitle: string
+  titleKey: string
+  subtitleKey: string
 }
 
-export function PlaceholderFeaturePage({ title, subtitle }: PlaceholderFeaturePageProps) {
+export function PlaceholderFeaturePage({ titleKey, subtitleKey }: PlaceholderFeaturePageProps) {
+  const { t } = useTranslation()
+  const title = t(titleKey)
+  const subtitle = t(subtitleKey)
   const {
     user,
     projects,
@@ -36,12 +40,11 @@ export function PlaceholderFeaturePage({ title, subtitle }: PlaceholderFeaturePa
       <OverviewWorkspaceHeader title={title} subtitle={subtitle} />
       <section className="rounded-[2rem] border border-white/80 bg-white p-8 shadow-[0_16px_40px_rgba(28,27,41,0.05)] sm:p-10">
         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-accent-primary">
-          Coming soon
+          {t('placeholder.comingSoon')}
         </p>
-        <h2 className="mt-3 font-serif text-2xl text-ink">This module is in development</h2>
+        <h2 className="mt-3 font-serif text-2xl text-ink">{t('placeholder.inDevelopment')}</h2>
         <p className="mt-3 max-w-xl text-sm leading-relaxed text-ink-muted">
-          The {title.toLowerCase()} experience will appear here without changing your existing
-          projects, chat, or competitor research.
+          {t('placeholder.body', { title: title.toLowerCase() })}
         </p>
       </section>
     </DashboardLayout>
@@ -51,8 +54,8 @@ export function PlaceholderFeaturePage({ title, subtitle }: PlaceholderFeaturePa
 export function CalendarPage() {
   return (
     <PlaceholderFeaturePage
-      title="Calendar"
-      subtitle="Plan and review content timing for this project."
+      titleKey="placeholder.calendar.title"
+      subtitleKey="placeholder.calendar.subtitle"
     />
   )
 }
@@ -60,8 +63,8 @@ export function CalendarPage() {
 export function InsightsPage() {
   return (
     <PlaceholderFeaturePage
-      title="Insights"
-      subtitle="Surface strategic takeaways from competitor research and brand context."
+      titleKey="placeholder.insights.title"
+      subtitleKey="placeholder.insights.subtitle"
     />
   )
 }

@@ -13,6 +13,7 @@ from typing import Any
 from dotenv import load_dotenv
 from openai import OpenAI
 
+from constants import response_language_instruction, response_language_user_reminder
 from context.assembly import assemble_context
 from db.supabase_client import log_agent_call
 from mcp.server import mcp_server
@@ -271,8 +272,13 @@ class BaseAgent:
         user_input: str,
         chatbot_context_on: bool = False,
         chat_history: list[dict[str, str]] | None = None,
+        response_language: str = "en",
     ) -> list[dict[str, str]]:
         history = [turn for turn in (chat_history or []) if turn.get("content")]
+        language_tail = response_language_user_reminder(
+            response_language,
+            structured=bool(self.structured_output),
+        )
 
         def _with_history(final_user_content: str) -> list[dict[str, str]]:
             messages: list[dict[str, str]] = [
@@ -284,7 +290,9 @@ class BaseAgent:
                 if role not in ("user", "assistant") or not content:
                     continue
                 messages.append({"role": role, "content": content})
-            messages.append({"role": "user", "content": final_user_content})
+            messages.append(
+                {"role": "user", "content": f"{final_user_content}{language_tail}"}
+            )
             return messages
 
         def _memory_block() -> str:
@@ -298,8 +306,8 @@ class BaseAgent:
             if not lines:
                 return ""
             return (
-                "\n\nCONVERSATION MEMORY (prior turns in this thread — "
-                "stay consistent with what was already discussed):\n"
+                "\n\nCONVERSATION MEMORY (prior turns — keep topic continuity only; "
+                "do NOT copy their language if RESPONSE LANGUAGE says otherwise):\n"
                 + "\n".join(lines)
             )
 
@@ -322,7 +330,11 @@ class BaseAgent:
                 "competitor_comparison or analysis — do NOT invent a content calendar. "
                 "Only generate a content calendar when they ask for posts/Reels/calendar. "
                 "Include reasoning for every creative recommendation. Be concise. "
-                "Never use asterisk (*) characters."
+                "Never use asterisk (*) characters. "
+                "Follow RESPONSE LANGUAGE for EVERY prose field "
+                "(hook, caption, cta, hashtags, transcript, reasoning, analysis, "
+                "top_hooks, caption_formulas) — fully in that language with ZERO "
+                "code-mixing / Hinglish; not reasoning alone."
             )
         return _with_history(user_content)
 
@@ -630,6 +642,7 @@ class BaseAgent:
         competitor_summaries: list[dict[str, Any]] | None = None,
         tagged_avatar_ids: list[str] | None = None,
         chat_history: list[dict[str, str]] | None = None,
+        response_language: str = "en",
         stream: bool = True,
     ) -> Generator[dict[str, Any], None, None]:
         """Execute the agent pipeline, yielding SSE-ready event dicts."""
@@ -651,6 +664,12 @@ class BaseAgent:
 
             from context.avatar_context import build_avatar_context
             from context.avatar_resolve import resolve_avatar_ids
+            from constants import normalize_response_language
+
+            try:
+                response_language = normalize_response_language(response_language)
+            except ValueError as lang_error:
+                raise ValueError(str(lang_error)) from lang_error
 
             avatar_ids = resolve_avatar_ids(
                 user_id=user_id,
@@ -747,12 +766,17 @@ class BaseAgent:
                 chatbot_context_on,
                 multi_avatar=bool(avatar_bundle and avatar_bundle.get("multi_avatar")),
             )
+            system_prompt += response_language_instruction(
+                response_language,
+                structured=bool(self.structured_output),
+            )
             messages = self.build_messages(
                 system_prompt,
                 context,
                 user_input,
                 chatbot_context_on,
                 chat_history=chat_history,
+                response_language=response_language,
             )
 
             yield {

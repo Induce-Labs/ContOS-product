@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { normalizeCompetitorInputs, validateInstagramInput } from '../lib/instagram'
 import { normalizeLinkedInInputs, validateLinkedInInput } from '../lib/linkedin'
 import {
@@ -21,12 +22,20 @@ type ValidatedCompetitorGroup = {
 }
 
 export function useCompetitorIntake(initialPlatform: CompetitorPlatform = 'instagram') {
+  const { t } = useTranslation()
   const [competitorInputs, setCompetitorInputs] = useState<CompetitorDraft[]>([
     { value: '', platform: initialPlatform },
   ])
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  function localizeValidationMessage(message: string): string {
+    if (message.startsWith('competitors.validation.')) {
+      return t(message)
+    }
+    return message
+  }
 
   function updateCompetitorInput(index: number, value: string) {
     setCompetitorInputs((current) =>
@@ -62,12 +71,16 @@ export function useCompetitorIntake(initialPlatform: CompetitorPlatform = 'insta
     const filled = competitorInputs.filter((entry) => entry.value.trim())
 
     if (filled.length < MIN_COMPETITORS_PER_AVATAR) {
-      setErrorMessage(`Add at least ${MIN_COMPETITORS_PER_AVATAR} competitor.`)
+      setErrorMessage(
+        t('competitors.validation.addAtLeast', { min: MIN_COMPETITORS_PER_AVATAR }),
+      )
       return null
     }
 
     if (filled.length > MAX_COMPETITORS_PER_AVATAR) {
-      setErrorMessage(`You can add up to ${MAX_COMPETITORS_PER_AVATAR} competitors per avatar.`)
+      setErrorMessage(
+        t('competitors.validation.addUpTo', { max: MAX_COMPETITORS_PER_AVATAR }),
+      )
       return null
     }
 
@@ -82,12 +95,12 @@ export function useCompetitorIntake(initialPlatform: CompetitorPlatform = 'insta
       if (entry.platform === 'linkedin') {
         const result = validateLinkedInInput(trimmed)
         if (!result.valid) {
-          errors[`competitor-${index}`] = result.message
+          errors[`competitor-${index}`] = localizeValidationMessage(result.message)
         }
       } else {
         const result = validateInstagramInput(trimmed)
         if (!result.valid) {
-          errors[`competitor-${index}`] = result.message
+          errors[`competitor-${index}`] = localizeValidationMessage(result.message)
         }
       }
     })
@@ -95,7 +108,7 @@ export function useCompetitorIntake(initialPlatform: CompetitorPlatform = 'insta
     setFieldErrors(errors)
 
     if (Object.keys(errors).length > 0) {
-      setErrorMessage('Fix the highlighted competitor entries before continuing.')
+      setErrorMessage(t('competitors.addPanel.fixHighlighted'))
       return null
     }
 
@@ -121,8 +134,16 @@ export function useCompetitorIntake(initialPlatform: CompetitorPlatform = 'insta
 
       return groups
     } catch (error) {
+      const raw =
+        error instanceof Error
+          ? error.message
+          : 'competitors.validation.validationFailed'
       setErrorMessage(
-        error instanceof Error ? error.message : 'Competitor validation failed unexpectedly.',
+        localizeValidationMessage(
+          raw.startsWith('competitors.validation.')
+            ? raw
+            : 'competitors.validation.validationFailed',
+        ),
       )
       return null
     }
@@ -152,7 +173,9 @@ export function useCompetitorIntake(initialPlatform: CompetitorPlatform = 'insta
       return true
     } catch (error) {
       setErrorMessage(
-        error instanceof Error ? error.message : 'Failed to start competitor research.',
+        error instanceof Error
+          ? error.message
+          : t('competitors.validation.startResearchFailed'),
       )
       return false
     } finally {

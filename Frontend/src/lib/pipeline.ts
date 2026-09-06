@@ -18,6 +18,17 @@ export const LINKEDIN_PIPELINE_STEPS: PipelineStep[] = [
 /** @deprecated Prefer platform-aware helpers; kept for Instagram default. */
 export const PIPELINE_STEPS = INSTAGRAM_PIPELINE_STEPS
 
+/** i18n key suffixes under `pipeline.labels.*` / `pipeline.descriptions.*`. */
+export const PIPELINE_STEP_I18N_KEYS: Record<PipelineStep, string> = {
+  queued: 'queued',
+  scraping: 'scraping',
+  transcribing: 'transcribing',
+  analyzing: 'analyzing',
+  done: 'done',
+  failed: 'failed',
+}
+
+/** English fallbacks for non-React callers; UI should use `t('pipeline.labels.*')`. */
 export const PIPELINE_STEP_LABELS: Record<PipelineStep, string> = {
   queued: 'Queued',
   scraping: 'Researching competitors',

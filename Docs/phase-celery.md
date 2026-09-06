@@ -39,8 +39,11 @@ Dashboard / profiling UI poll Supabase for status (not Celery results).
 
 - [`Agents/backend/celery_app.py`](../Agents/backend/celery_app.py)
 - [`Agents/backend/tasks/profiling.py`](../Agents/backend/tasks/profiling.py) — `profiling.run_summarize`
+- [`Agents/backend/tasks/translate.py`](../Agents/backend/tasks/translate.py) — `translate.translate_content` (cache warm / batch)
 - [`Agents/backend/services/enqueue_profiling.py`](../Agents/backend/services/enqueue_profiling.py)
+- [`Agents/backend/services/enqueue_translate.py`](../Agents/backend/services/enqueue_translate.py)
 - `POST /api/profiling/summarize` returns `202`; frontend polls avatar status columns
+- `POST /api/translate` runs in-process `translate_batch` (JWT); see [phase-i18n.md](./phase-i18n.md)
 - Health: `GET /api/health` includes `"redis": "up"|"down"` (503 when down)
 
 ## Celery settings (parity — both apps)
@@ -113,22 +116,26 @@ docker compose up -d
 cd Backend && .venv/Scripts/activate   # or source .venv/bin/activate
 uvicorn app.main:app --reload --port 8000
 # Linux / Railway (prefork): up to 2 competitor scrapes in parallel
-celery -A app.celery_app worker --loglevel=info -Q scrape --concurrency=2
+celery -A app.celery_app worker --loglevel=info -Q scrape --concurrency=2 -n scrape@%h
 # Windows (prefork is unreliable): use threads so 2 scrapes run at once
-# celery -A app.celery_app worker --loglevel=info -Q scrape --pool=threads --concurrency=2
+# celery -A app.celery_app worker --loglevel=info -Q scrape --pool=threads --concurrency=2 -n scrape@%h
 
 # Agents
 cd Agents/backend && .venv/Scripts/activate
 uvicorn main:app --reload --host 127.0.0.1 --port 8001
-celery -A celery_app worker --loglevel=info -Q website --concurrency=2
+celery -A celery_app worker --loglevel=info -Q website --concurrency=2 -n website@%h
 # Windows website worker:
-# celery -A celery_app worker --loglevel=info -Q website --pool=threads --concurrency=2
+# celery -A celery_app worker --loglevel=info -Q website --pool=threads --concurrency=2 -n website@%h
 
 # Frontend
 cd Frontend && npm run dev
 ```
 
+**Node names:** always pass unique `-n scrape@%h` / `-n website@%h`. Multiple workers with the same default name (`celery@hostname`) steal jobs into Redis `unacked` and leave competitors stuck on `pending`/`queued`.
+
 **Why Redis + Celery still matter:** FastAPI returns `202` immediately; each competitor is a separate queued task. Worker `--concurrency` (and pool) controls how many of those tasks run at once. Without Celery, the API would block on every scrape. Without concurrency > 1 (or multiple workers), queued tasks still run one-by-one.
+
+**Orphan recovery:** if Redis is flushed or workers die, Supabase rows can stay `pending` while no Celery message exists. The dashboard re-enqueues those orphans once per browser session (after ~90s age). Manual **Retry** on a competitor card still works anytime.
 ## Production mapping
 
 | Piece | Deploy |
@@ -146,8 +153,13 @@ cd Frontend && npm run dev
 - Defaults: 15/min, 150/UTC-calendar-day, 1 inflight stream
 - Atomic Lua: concurrent reject does not burn minute/day quota
 - Inflight SET has a shared safety TTL (default 900s) refreshed ~every 30s while SSE is alive
+- If admit hits `concurrent`, the server clears that user's inflight SET once and re-admits (preempts zombie streams left when a tab was backgrounded)
+- Agent generation runs in a **producer thread** decoupled from the SSE consumer — backgrounding/closing the tab does not abort the LLM; results are stored in Redis under `run_id` (`agents:run:{id}`, TTL 1h)
+- First SSE `status` event includes `run_id`; `GET /api/agents/runs/{run_id}` lets the UI catch up when the tab becomes visible again
+- Frontend also persists `{runId,assistantId,projectId}` in `sessionStorage` and polls every 2s / on focus — so Chrome tab discard or a full reload can still hydrate the answer
 - Redis down → HTTP 503 fail-closed; quota/concurrent → 429 with `detail.error` / `Retry-After` for minute/day
-- Known limitation: if the process dies after admit but before the SSE generator runs, the inflight slot relies on the safety TTL
+- Known limitation: if the process dies after admit but before the producer starts, the inflight slot relies on the safety TTL
+- Frontend retries `concurrent_limit` briefly so a just-released slot does not brick the next send after a tab switch
 
 ## Security
 

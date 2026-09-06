@@ -1,0 +1,502 @@
+{
+  "nav": {
+    "createProjectToUnlock": "创建项目以解锁导航。",
+    "projects": "项目",
+    "profiling": "分析",
+    "analytics": "分析",
+    "overview": "概览",
+    "contentAgent": "内容代理",
+    "chatbot": "聊天机器人",
+    "chatHistory": "聊天记录",
+    "calendar": "日历",
+    "insights": "洞察"
+  },
+  "topBar": {
+    "openNavigationAria": "打开导航",
+    "signOut": "登出",
+    "signingOut": "正在登出…",
+    "language": "语言"
+  },
+  "layout": {
+    "brandName": "ContOS",
+    "brandTagline": "部分首席营销官",
+    "loadingWorkspace": "正在加载工作区…",
+    "closeNavigationAria": "关闭导航",
+    "projectLimitReached": "项目限制已达到 ({{max}})。",
+    "newProject": "+ 新项目",
+    "emptyProjects": {
+      "step": "步骤 01",
+      "title": "创建您的第一个项目",
+      "body": "项目组织您跟踪的竞争对手以及 ContOS 为您的品牌或业务生成的情报。",
+      "cta": "新项目"
+    }
+  },
+  "projectSwitcher": {
+    "projectPrefix": "项目: {{name}}",
+    "selectProject": "选择项目",
+    "noProjectsYet": "还没有项目。",
+    "defaultSuffix": " · 默认",
+    "setDefault": "设为默认",
+    "editProfile": "编辑个人资料",
+    "delete": "删除",
+    "deleteConfirm": "删除此头像吗？与之相关的分析答案和竞争对手将被移除。",
+    "failedSetDefault": "设置默认头像失败。",
+    "failedDelete": "删除头像失败。",
+    "avatarLimitReached": "头像限制已达到 ({{max}})。升级以添加更多。",
+    "newProject": "+ 新项目"
+  },
+  "incompleteProfilingBanner": {
+    "title": "完成您的分析以获得更好的聊天答案",
+    "body": "ContOS 使用您的分析答案来个性化策略和内容。完成问卷，以便聊天机器人获得所需的上下文。",
+    "progress": "{{progress}}% 完成",
+    "cta": "完成分析"
+  },
+  "auth": {
+    "brandName": "ContOS",
+    "panelEyebrow": "竞争对手情报",
+    "panelHeadline": "跟踪市场信号，保持领先于竞争对手。",
+    "orContinueWith": "或继续使用",
+    "email": "电子邮件",
+    "password": "密码",
+    "login": {
+      "title": "登录",
+      "subtitle": "访问您的竞争对手情报工作区。",
+      "footerNeedAccount": "需要账户？",
+      "footerSignUp": "注册",
+      "submit": "登录",
+      "submitting": "正在登录…",
+      "google": "使用 Google 登录",
+      "failedUnexpected": "登录意外失败",
+      "googleFailedUnexpected": "Google 登录意外失败"
+    },
+    "signup": {
+      "title": "创建您的账户",
+      "subtitle": "开始跟踪竞争对手和市场信号。",
+      "footerHaveAccount": "已经有账户？",
+      "footerSignIn": "登录",
+      "submit": "注册",
+      "submitting": "正在创建账户…",
+      "google": "使用 Google 注册",
+      "checkEmail": "检查您的电子邮件以确认您的账户，然后登录以继续。",
+      "failedUnexpected": "注册意外失败",
+      "googleFailedUnexpected": "Google 注册意外失败"
+    },
+    "callback": {
+      "completing": "正在完成登录…",
+      "failedTitle": "登录失败",
+      "backToSignIn": "返回登录",
+      "failedUnexpected": "身份验证回调意外失败"
+    },
+    "loadingSession": "正在加载会话…"
+  },
+  "onboarding": {
+    "preparingWorkspace": "正在准备您的工作区…",
+    "welcome": {
+      "title": "欢迎来到 ContOS。",
+      "subtitle": "您的部分首席营销官工作区。让我们建立您的战略基础。",
+      "cta": "开始吧",
+      "starting": "正在开始…",
+      "exploreModule": "探索模块 →",
+      "modules": {
+        "01": {
+          "title": "竞争对手情报引擎",
+          "description": "抓取和分析竞争对手的帖子、钩子和互动，以便每个策略都基于真实的市场数据。"
+        },
+        "02": {
+          "title": "品牌头像分析",
+          "description": "一次性捕捉您的受众、语气和目标，以便每个输出都听起来像您——而不是通用的 AI。"
+        },
+        "03": {
+          "title": "AI 部分首席营销官",
+          "description": "与一个上下文感知的战略家聊天，使用您的品牌资料和实时竞争对手研究进行回答。"
+        },
+        "04": {
+          "title": "平台原生内容代理",
+          "description": "以原生格式生成 LinkedIn、Instagram、X 和剧本内容，并提供每个创意背后的推理。"
+        }
+      },
+      "illustrationAiBadge": "AI",
+      "loadStateFailed": "意外加载入职状态失败",
+      "completeFailed": "意外完成入职失败"
+    },
+    "projectType": {
+      "stepLabel": "工作区设置 · 步骤 2",
+      "newProjectStepLabel": "新项目",
+      "title": "开始一个新项目",
+      "subtitle": "选择此工作区的主要重点，以便量身定制洞察和策略。",
+      "backToOverview": "← 返回 ContOS 概览",
+      "cancel": "← 取消",
+      "continue": "继续",
+      "creating": "正在创建…",
+      "selectTypeError": "选择一个工作区类型以继续。",
+      "createAvatarFailed": "创建头像失败（基本计划最多 {{max}}）。",
+      "options": {
+        "personalBrand": {
+          "title": "个人品牌",
+          "description": "为您的个人品牌、受众和内容语音量身定制洞察和策略。"
+        },
+        "business1": {
+          "title": "商业 1",
+          "description": "为您的第一个商业工作区和市场定位量身定制洞察和策略。"
+        },
+        "business2": {
+          "title": "商业 2",
+          "description": "为您的第二个商业工作区和增长目标量身定制洞察和策略。"
+        }
+      }
+    },
+    "competitors": {
+      "loading": "正在加载竞争对手设置…",
+      "unavailable": "竞争对手设置不可用。",
+      "title": "了解您的竞争环境",
+      "body": "添加竞争对手以帮助 ContOS 理解您所在领域的动态。Instagram 和 LinkedIn 资料。添加 {{min}}–{{max}}（推荐 {{recommended}}）。",
+      "addCompetitor": "+ 添加竞争对手",
+      "remove": "移除",
+      "back": "返回",
+      "submit": "研究竞争对手 →",
+      "submitting": "开始研究…",
+      "maxReached": "已达到最大 {{max}} 个竞争对手。",
+      "competitorLabel": "竞争对手 {{n}}",
+      "platformInstagram": "Instagram",
+      "platformLinkedIn": "LinkedIn",
+      "placeholderInstagram": "@competitor 或 https://instagram.com/competitor",
+      "placeholderLinkedIn": "linkedin.com/in/competitor 或 slug",
+      "missingAvatar": "入职头像缺失。返回项目设置并重试。",
+      "loadAvatarFailed": "加载入职头像失败。"
+    },
+    "profiling": {
+      "questionsUnavailable": "分析问题不可用。"
+    }
+  },
+  "pipeline": {
+    "labels": {
+      "queued": "排队中",
+      "scraping": "研究竞争对手",
+      "transcribing": "转录视频",
+      "analyzing": "分析内容",
+      "done": "完成",
+      "failed": "失败"
+    },
+    "descriptions": {
+      "queued": "等待开始研究…",
+      "scraping": "正在研究您的竞争对手…",
+      "transcribing": "正在转录视频音频…",
+      "analyzing": "正在分析顶级内容…",
+      "done": "情报报告准备就绪",
+      "failed": "研究过程中出现问题"
+    },
+    "status": {
+      "stopping": "停止中",
+      "failed": "失败",
+      "done": "完成",
+      "inProgress": "进行中"
+    }
+  },
+  "dashboard": {
+    "workspaceTitle": "工作区",
+    "workspaceSubtitle": "跟踪竞争对手研究进度，然后在抓取完成后进入聊天。",
+    "projectStatus": "项目状态: {{status}}",
+    "openChat": "打开聊天",
+    "partialFailure": "一些竞争对手完成了研究，但 {{count}} 失败。使用失败卡上的重试，或打开已完成竞争对手的聊天。",
+    "noCompetitors": "此项目中还没有竞争对手。使用添加竞争对手开始研究。",
+    "selectProject": "从头部切换器中选择一个项目。",
+    "researchReadyEyebrow": "研究准备就绪",
+    "researchFinishedTitle": "竞争对手研究完成",
+    "researchFinishedBody": "打开聊天以请求基于此竞争对手数据的策略、内容创意或比较。",
+    "researchFinishedPartialSuffix": " 打开聊天以使用该部分研究。",
+    "retryFailed": "重试竞争对手研究失败。",
+    "stopFailed": "停止竞争对手研究失败。"
+  },
+  "analytics": {
+    "title": "分析",
+    "subtitle": "实时跟踪研究进度，然后在任务完成后阅读竞争对手情报摘要。",
+    "tracked": "{{count}}/{{max}} 已跟踪",
+    "slotsLeft": " · {{count}} 个名额剩余",
+    "slotsLeft_plural": " · {{count}} 个名额剩余",
+    "noCompetitors": "还没有竞争对手。使用添加竞争对手开始研究——进度和摘要将在这里显示。",
+    "researchFinishedEyebrow": "研究完成",
+    "summaryPending": "管道已完成。摘要仍在生成或不可用——此页面会自动刷新。"
+  },
+  "competitors": {
+    "addCompetitor": "添加竞争对手",
+    "addingCompetitor": "正在添加竞争对手…",
+    "progressCard": {
+      "eyebrow": "研究进行中",
+      "stoppingHint": "停止中… ContOS 将保留抓取的帖子并总结到目前为止的内容。",
+      "startResearch": "开始研究",
+      "retryResearch": "重试研究",
+      "starting": "正在开始…",
+      "stop": "停止",
+      "stopping": "停止中…"
+    },
+    "workspacePanel": {
+      "heading": "竞争对手",
+      "tracked": "{{count}}/{{max}} 已跟踪"
+    },
+    "addPanel": {
+      "title": "添加竞争对手",
+      "subtitle": "Instagram 或 LinkedIn。此项目最多可添加 {{count}} 个竞争对手。",
+      "subtitle_plural": "Instagram 或 LinkedIn。此项目最多可添加 {{count}} 个竞争对手。",
+      "close": "关闭",
+      "addAnother": "添加另一个",
+      "submit": "添加并开始研究",
+      "submitting": "正在开始研究…",
+      "enterAtLeastOne": "至少输入一个竞争对手。",
+      "atMostMore": "您最多可以添加 {{count}} 个竞争对手。",
+      "fixHighlighted": "在继续之前修复突出显示的竞争对手条目。",
+      "failedUnexpected": "意外添加竞争对手失败。"
+    },
+    "summaryCard": {
+      "unavailable": "此竞争对手的摘要数据不可用。",
+      "intelligenceReport": "{{platform}} 情报报告",
+      "generated": "生成于 {{datetime}} · {{model}}",
+      "metrics": {
+        "totalContent": "总内容",
+        "posts": "帖子",
+        "reels": "视频",
+        "carousels": "轮播",
+        "avgLikes": "平均点赞",
+        "avgComments": "平均评论",
+        "avgViews": "平均观看",
+        "avgShares": "平均分享",
+        "engagementRate": "互动率"
+      },
+      "sections": {
+        "topPerforming": "表现最佳的内容",
+        "hooksPatterns": "重复的钩子和模式",
+        "strategiesThemes": "内容策略和主题",
+        "strategicSignals": "战略信号"
+      },
+      "likesComments": "{{likes}} 个点赞 · {{comments}} 条评论",
+      "viewsSuffix": " · {{views}} 次观看",
+      "noItems": "没有报告的项目。",
+      "emDash": "—",
+      "contentTypes": {
+        "post": "帖子",
+        "carousel": "轮播",
+        "reel": "短视频",
+        "video": "视频",
+        "story": "快拍"
+      }
+    },
+    "validation": {
+      "instagramRequired": "需要 Instagram 账号或个人资料 URL。",
+      "instagramNotPostOrExplore": "输入 Instagram 个人资料 URL 或账号，而不是帖子或探索链接。",
+      "instagramInvalid": "输入有效的 Instagram 账号（例如 @nike）或个人资料 URL。",
+      "linkedinRequired": "需要 LinkedIn 个人资料 URL 或 slug。",
+      "linkedinNotCompany": "输入个人 LinkedIn 个人资料（/in/...），而不是公司页面。",
+      "linkedinInvalidUrl": "输入有效的 LinkedIn 个人资料 URL（例如 https://www.linkedin.com/in/jane-doe）。",
+      "linkedinInvalidSlug": "输入 LinkedIn 个人资料 URL 或 slug（例如 jane-doe）。",
+      "addAtLeast": "至少添加 {{min}} 个竞争对手。",
+      "addUpTo": "您最多可以为每个头像添加 {{max}} 个竞争对手。",
+      "validationFailed": "竞争对手验证意外失败。",
+      "startResearchFailed": "启动竞争对手研究失败。"
+    },
+    "limitReached": "已达到竞争对手上限（{{max}}）"
+  },
+  "agents": {
+    "pageSubtitle": "请求来自您竞争对手研究的策略和内容创意。",
+    "newChat": "新聊天",
+    "researchInProgress": "研究仍在进行中。竞争对手基础的答案在抓取完成后效果最佳。",
+    "viewProgress": "查看进度",
+    "placeholder": "询问 ContOS 关于您的品牌的任何事情… 输入 @ 来标记头像",
+    "sendAria": "发送",
+    "sendingAria": "正在发送",
+    "respondingAria": "ContOS 正在响应",
+    "chatSyncPrefix": "聊天同步: {{message}}",
+    "sorryPrefix": "抱歉 — {{message}}",
+    "backToDashboard": "返回仪表板",
+    "projectUnavailable": "项目不可用。",
+    "missingProjectId": "缺少项目 ID。",
+    "loadFailed": "加载代理失败。",
+    "reachFailed": "无法联系 ContOS 代理。",
+    "openChatFailed": "无法打开该聊天。",
+    "syncToFailed": "无法将聊天记录同步到 Supabase。",
+    "syncFromFailed": "无法从 Supabase 同步聊天记录。",
+    "agentTypes": {
+      "chat": "聊天",
+      "linkedin": "LinkedIn",
+      "instagram": "Instagram"
+    },
+    "history": {
+      "title": "之前的聊天",
+      "close": "关闭",
+      "currentSuffix": " · 当前",
+      "empty": "还没有早期聊天。开始对话，然后使用新聊天开始另一个线程。"
+    },
+    "sessionTitles": {
+      "newChat": "新聊天",
+      "chatFallback": "聊天"
+    },
+    "welcome": {
+      "goodMorning": "早上好",
+      "goodAfternoon": "下午好",
+      "goodEvening": "晚上好",
+      "greeting": "{{greeting}}, {{name}}",
+      "fallbackName": "您好",
+      "legacyWelcome": "此头像的研究已准备就绪。我可以将竞争对手数据转化为策略、内容创意或比较。您想专注于什么——LinkedIn、Instagram 还是增长剧本？"
+    },
+    "output": {
+      "noResponseYet": "尚无回应。",
+      "noInstagramContent": "未返回 Instagram 策略内容。",
+      "strategy": "策略",
+      "comparisonSummary": "比较摘要",
+      "competitorInsights": "竞争对手洞察",
+      "contentCalendar": "内容日历",
+      "topHooks": "最佳钩子",
+      "captionFormulas": "标题公式",
+      "postingCadence": "发布节奏",
+      "howToDifferentiate": "如何区分",
+      "keySignals": "关键信号",
+      "hooksThemes": "钩子和主题",
+      "strengths": "优势",
+      "weaknesses": "劣势",
+      "cta": "CTA: {{value}}",
+      "day": "第 {{n}} 天",
+      "competitorN": "竞争对手 {{n}}",
+      "ideaN": "创意 {{n}}",
+      "postIdeas": "帖子创意",
+      "themes": "主题",
+      "hookFormulas": "钩子公式",
+      "linkedinIdeas": "LinkedIn 创意",
+      "tweetIdeas": "推文创意",
+      "engagementTactics": "互动策略",
+      "audit": "审计",
+      "strategyFrameworks": "策略框架",
+      "frameworks": "框架",
+      "guardrails": "保护措施",
+      "recommendations": "建议",
+      "brokenRules": "违反规则",
+      "reasoning": "推理",
+      "signal": "信号: {{value}}",
+      "theme": "主题: {{value}}",
+      "strength": "优势: {{value}}",
+      "weakness": "劣势: {{value}}"
+    },
+    "translating": "正在翻译…",
+    "translationFailed": "翻译失败。显示原始英语。"
+  },
+  "profiling": {
+    "loadingQuestions": "正在加载分析问题…",
+    "questionsUnavailable": "分析问题不可用。",
+    "answersUnavailable": "分析答案不可用。",
+    "projectMissing": "项目缺失。返回仪表板并重试。",
+    "avatarMissingSetup": "头像缺失。返回项目设置并重试。",
+    "avatarMissingType": "头像缺失。返回项目类型选择。",
+    "workspaceLabel": "工作区: {{label}}",
+    "optional": "可选",
+    "ofTotal": "{{current}} / {{total}}",
+    "pressEnter": "按 Enter ↵ 继续",
+    "back": "← 返回",
+    "next": "下一步",
+    "saving": "正在保存…",
+    "buildingSummary": "正在构建您的个人资料摘要…",
+    "defaultSection": "基础",
+    "stepFoundations": "步骤 {{n}} — 基础",
+    "review": {
+      "title": "分析",
+      "subtitle": "您的答案个性化 ContOS 聊天机器人。编辑下面的任何响应并在完成后保存。",
+      "unsaved": "您有未保存的更改。",
+      "allSaved": "所有更改已保存。",
+      "save": "保存更改",
+      "updatingSummary": "正在更新摘要…"
+    },
+    "field": {
+      "describeOwnWords": "用您自己的话描述…",
+      "competitorPlaceholder": "竞争对手",
+      "enterUpToNames": "输入最多 {{max}} 个竞争对手名称。"
+    },
+    "validation": {
+      "invalidWebsite": "输入有效的网站 URL（例如 https://example.com）。",
+      "addCompetitorName": "至少添加一个竞争对手名称。",
+      "selectOption": "选择一个选项以继续。",
+      "describeOwnWords": "请用您自己的话描述您的答案。",
+      "answerRequired": "请在继续之前回答此问题。",
+      "answerEmpty": "答案不能为空。",
+      "fixBeforeSave": "在保存之前修复突出显示的答案。"
+    },
+    "errors": {
+      "loadQuestionnaire": "加载分析问卷失败。",
+      "saveAnswer": "保存分析答案失败。",
+      "loadAnswers": "加载分析答案失败。",
+      "saveAnswers": "保存分析答案失败。",
+      "summaryAfterSave": "分析已保存，但无法生成个人资料摘要。",
+      "summaryAfterSaveWithDetail": "分析已保存，但无法生成个人资料摘要: {{detail}}",
+      "summaryAfterReviewSave": "答案已保存，但无法更新个人资料摘要。",
+      "summaryAfterReviewSaveWithDetail": "答案已保存，但无法更新个人资料摘要: {{detail}}"
+    }
+  },
+  "placeholder": {
+    "comingSoon": "即将推出",
+    "inDevelopment": "此模块正在开发中",
+    "body": "{{title}} 体验将在这里出现，而不会更改您现有的项目、聊天或竞争对手研究。",
+    "calendar": {
+      "title": "日历",
+      "subtitle": "计划和审查此项目的内容时间。"
+    },
+    "insights": {
+      "title": "洞察",
+      "subtitle": "从竞争对手研究和品牌背景中提取战略要点。"
+    }
+  },
+  "workspaceTypes": {
+    "personalBrand": "个人品牌",
+    "business1": "商业 1",
+    "business2": "商业 2",
+    "business": "商业",
+    "workspace": "工作区"
+  },
+  "common": {
+    "signOut": "登出",
+    "signingOut": "正在登出…",
+    "close": "关闭",
+    "back": "返回",
+    "continue": "继续",
+    "remove": "移除",
+    "delete": "删除",
+    "retry": "重试",
+    "loading": "加载中…",
+    "platforms": {
+      "instagram": "Instagram",
+      "linkedin": "LinkedIn"
+    }
+  },
+  "errors": {
+    "profileSummary": {
+      "mustBeSignedIn": "您必须登录才能生成个人资料摘要。",
+      "generationFailed": "个人资料摘要生成失败。",
+      "timedOut": "个人资料摘要在 {{seconds}} 秒后超时。",
+      "requestFailedStatus": "个人资料摘要请求失败 ({{status}})。",
+      "requestFailed": "个人资料摘要请求失败。"
+    },
+    "agentsApi": {
+      "missingBaseUrl": "缺少 VITE_AGENT_API_BASE_URL。将其设置为 http://localhost:8001 以便于本地代理。",
+      "invalidBaseUrl": "无效的 VITE_AGENT_API_BASE_URL: \"{{url}}\"",
+      "mustBeSignedIn": "您必须登录才能使用 ContOS 代理。",
+      "streamFailed": "代理流意外失败。",
+      "invokeFailedStatus": "代理调用失败 (状态 {{status}}): {{body}}",
+      "noResponseBody": "没有响应体",
+      "emptyStreamBody": "代理调用返回了一个空的流体。",
+      "translateFailed": "翻译请求失败 ({{status}})。",
+      "translateFailedGeneric": "翻译请求失败。"
+    },
+    "avatars": {
+      "operationFailed": "头像操作失败",
+      "limitReached": "您已达到当前计划的最大头像数量。",
+      "nameRequired": "头像名称是必需的。"
+    },
+    "dashboard": {
+      "projectNotFound": "未找到项目或您没有访问权限。",
+      "loadFailed": "加载仪表板失败",
+      "refreshFailed": "刷新仪表板数据失败",
+      "signOutFailed": "登出失败",
+      "signOutFailedPeriod": "登出失败。"
+    },
+    "onboarding": {
+      "verifyStepFailed": "意外验证入职步骤失败"
+    },
+    "chat": {
+      "sessionNotFound": "聊天会话未找到: {{sessionId}}"
+    }
+  }
+}

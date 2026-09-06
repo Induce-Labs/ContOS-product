@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { MAX_COMPETITORS_PER_AVATAR } from '../../lib/competitors'
 import { displayCompetitorHandle } from '../../lib/instagram-display'
 import type { Competitor } from '../../lib/competitors'
@@ -17,6 +18,7 @@ export function CompetitorWorkspacePanel({
   onAddCompetitor,
   isAddCompetitorOpen,
 }: CompetitorWorkspacePanelProps) {
+  const { t } = useTranslation()
   const atCompetitorCap = competitors.length >= MAX_COMPETITORS_PER_AVATAR
 
   return (
@@ -24,10 +26,13 @@ export function CompetitorWorkspacePanel({
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-ink-muted">
-            Competitors
+            {t('competitors.workspacePanel.heading')}
           </p>
           <p className="mt-1 text-sm text-ink-muted">
-            {competitors.length}/{MAX_COMPETITORS_PER_AVATAR} tracked
+            {t('competitors.workspacePanel.tracked', {
+              count: competitors.length,
+              max: MAX_COMPETITORS_PER_AVATAR,
+            })}
           </p>
         </div>
         <button
@@ -36,23 +41,31 @@ export function CompetitorWorkspacePanel({
           disabled={atCompetitorCap}
           title={
             atCompetitorCap
-              ? `Maximum of ${MAX_COMPETITORS_PER_AVATAR} competitors per avatar`
-              : 'Add another competitor'
+              ? t('onboarding.competitors.maxReached', { max: MAX_COMPETITORS_PER_AVATAR })
+              : undefined
           }
           className="rounded-full bg-accent-primary px-4 py-2 text-sm font-medium text-white transition hover:bg-accent-primary-deep disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {isAddCompetitorOpen ? 'Adding competitor…' : 'Add competitor'}
+          {isAddCompetitorOpen ? t('competitors.addingCompetitor') : t('competitors.addCompetitor')}
         </button>
       </div>
 
       {competitors.length === 0 ? (
-        <p className="text-sm text-ink-muted">
-          No competitors in this project yet. Use Add competitor to start research.
-        </p>
+        <p className="text-sm text-ink-muted">{t('dashboard.noCompetitors')}</p>
       ) : (
         <div className="flex gap-2 overflow-x-auto pb-1">
           {competitors.map((competitor) => {
             const isSelected = selectedCompetitorId === competitor.id
+            const platformLabel =
+              competitor.platform === 'linkedin'
+                ? t('common.platforms.linkedin')
+                : t('common.platforms.instagram')
+            const statusLabel =
+              competitor.pipeline_step === 'done'
+                ? t('pipeline.status.done')
+                : competitor.pipeline_step === 'failed'
+                  ? t('pipeline.status.failed')
+                  : t('pipeline.status.inProgress')
 
             return (
               <button
@@ -73,12 +86,7 @@ export function CompetitorWorkspacePanel({
                     isSelected ? 'text-white/80' : 'text-ink-muted'
                   }`}
                 >
-                  {competitor.platform === 'linkedin' ? 'LinkedIn · ' : 'Instagram · '}
-                  {competitor.pipeline_step === 'done'
-                    ? 'Ready'
-                    : competitor.pipeline_step === 'failed'
-                      ? 'Failed'
-                      : 'In progress'}
+                  {platformLabel} · {statusLabel}
                 </span>
               </button>
             )
@@ -88,7 +96,7 @@ export function CompetitorWorkspacePanel({
 
       {atCompetitorCap ? (
         <p className="mt-3 text-xs text-ink-muted">
-          Competitor limit reached ({MAX_COMPETITORS_PER_AVATAR})
+          {t('onboarding.competitors.maxReached', { max: MAX_COMPETITORS_PER_AVATAR })}
         </p>
       ) : null}
     </section>
