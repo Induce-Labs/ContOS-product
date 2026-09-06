@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import sys
+import time
 from pathlib import Path
 from typing import Any, Literal
 from uuid import UUID
@@ -273,10 +274,29 @@ def invoke_agent(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    from rate_limit import (
+        DEFAULT_SCOPE,
+        INFLIGHT_REFRESH_INTERVAL_SECS,
+        admit_chat_request,
+        rate_limit_http_exception,
+        refresh_inflight_ttl,
+        release_inflight,
+    )
+
     auth_user_id = str(user_id)
     auth_avatar_id = body.avatar_id
+    # scope is server-controlled only — never from the client
+    rate_scope = DEFAULT_SCOPE
+
+    admit_result, inflight_token = admit_chat_request(
+        auth_user_id,
+        scope=rate_scope,
+    )
+    if not admit_result.allowed or not inflight_token:
+        raise rate_limit_http_exception(admit_result)
 
     def event_stream():
+        last_refresh = time.monotonic()
         try:
             for evt in agent.run(
                 user_id=auth_user_id,
@@ -291,10 +311,24 @@ def invoke_agent(
                 chat_history=normalized_history,
                 stream=True,
             ):
+                now_mono = time.monotonic()
+                if now_mono - last_refresh >= INFLIGHT_REFRESH_INTERVAL_SECS:
+                    refresh_inflight_ttl(
+                        auth_user_id,
+                        inflight_token,
+                        scope=rate_scope,
+                    )
+                    last_refresh = now_mono
                 yield _sse(evt["event"], evt["data"])
         except Exception as exc:
             logger.exception("SSE stream failed")
             yield _sse("error", {"error": str(exc), "agent": body.agent_type})
+        finally:
+            release_inflight(
+                auth_user_id,
+                inflight_token,
+                scope=rate_scope,
+            )
 
     return StreamingResponse(
         event_stream(),

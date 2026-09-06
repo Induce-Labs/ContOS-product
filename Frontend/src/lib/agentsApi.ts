@@ -162,10 +162,24 @@ export async function invokeAgentStream(
 
   if (!response.ok) {
     const responseBody = await response.text()
-    throw new AgentsApiError(
-      `Agents invoke failed (status ${response.status}): ${responseBody || 'no response body'}`,
-      response.status,
-    )
+    let message = `Agents invoke failed (status ${response.status}): ${responseBody || 'no response body'}`
+    try {
+      const payload = JSON.parse(responseBody) as Record<string, unknown>
+      const detail = payload.detail
+      if (typeof detail === 'object' && detail && 'message' in detail) {
+        const detailMessage = (detail as { message: unknown }).message
+        if (typeof detailMessage === 'string' && detailMessage.trim()) {
+          message = detailMessage.trim()
+        }
+      } else if (typeof detail === 'string' && detail.trim()) {
+        message = detail.trim()
+      } else if (typeof payload.message === 'string' && payload.message.trim()) {
+        message = payload.message.trim()
+      }
+    } catch {
+      // keep fallback message from status + raw body
+    }
+    throw new AgentsApiError(message, response.status)
   }
 
   if (!response.body) {

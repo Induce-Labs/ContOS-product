@@ -138,6 +138,17 @@ cd Frontend && npm run dev
 | Agents | Procfile `web` + `worker` (`-Q website`) |
 | Uptime | Point checks at `GET /health` and `GET /api/health` |
 
+## Chat rate limits (Agents invoke)
+
+`POST /api/agents/invoke` uses Redis admission (not Celery):
+
+- Keys: `agents:rl:{user_id}:global:m:{YYYYMMDDHHmm}`, `…:d:{YYYYMMDD}`, `…:inflight` (SET of server tokens)
+- Defaults: 15/min, 150/UTC-calendar-day, 1 inflight stream
+- Atomic Lua: concurrent reject does not burn minute/day quota
+- Inflight SET has a shared safety TTL (default 900s) refreshed ~every 30s while SSE is alive
+- Redis down → HTTP 503 fail-closed; quota/concurrent → 429 with `detail.error` / `Retry-After` for minute/day
+- Known limitation: if the process dies after admit but before the SSE generator runs, the inflight slot relies on the safety TTL
+
 ## Security
 
 - JWT + ownership before enqueue; workers re-validate owned rows
@@ -157,6 +168,5 @@ cd Frontend && npm run dev
 
 ## Future improvements
 
-- Chat rate limits on Redis (not Celery)
 - Embedding backfill on `website` queue
 - Flower / metrics dashboards
