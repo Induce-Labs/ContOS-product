@@ -53,13 +53,18 @@ Invoke body:
 
 Resolution (`Agents/backend/context/avatar_resolve.py`):
 
-1. Tagged IDs (must be owned) → else active `avatar_id` → else `is_default` → else empty
+1. Active chat `avatar_id` (owned) is always first
+2. Each owned `tagged_avatar_ids` entry is appended (deduped)
+3. If there is no active id, tagged IDs → else `is_default` → else empty
+
+Tagging `@` avatars **adds** their profile + competitor intel. It does not replace the avatar the user is chatting from.
 
 Context (`Agents/backend/context/avatar_context.py`):
 
-- Load `profiling_data` per avatar
-- RAG via `similarity_search` / `fetch_summaries` scoped by `avatar_id`
-- Multi-avatar → multi-context prompt path
+- Load `profiling_data` per resolved avatar
+- RAG via `similarity_search` / `fetch_summaries` scoped by each `avatar_id`
+- Multi-avatar → `avatar_profiles` + `competitor_context_by_avatar` + multi-context prompt path
+- Token compression keeps at least one competitor-intel row per tagged avatar
 
 ## Legacy `profiles` table
 

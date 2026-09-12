@@ -318,6 +318,11 @@
       "linkedin": "LinkedIn",
       "instagram": "Instagram"
     },
+    "platformRedirect": {
+      "ask": "¿Quieres que te cambie al agente de {{platform}}? Responde yes para continuar.",
+      "switched": "Cambiado a {{platform}}. Pídeme estrategias, ideas de contenido o comparaciones.",
+      "stayed": "De acuerdo — seguimos en Chat. ¿En qué te ayudo?"
+    },
     "history": {
       "title": "Chats anteriores",
       "close": "Cerrar",

@@ -48,16 +48,22 @@ def main() -> int:
         pass
 
     ctx = assemble_context(
-        profile={"business_name": "Stub Project", "industry": "other"},
+        profile=None,
         summaries=[],
         playbooks=[],
         user_input="create a strategy plan",
         agent_type="linkedin",
-        tagged_avatars=cleaned,
+        avatar_bundle={
+            "multi_avatar": True,
+            "avatars": cleaned,
+            "profiles": [profile_from_avatar(item) for item in cleaned],
+            "relevant_insights": [],
+            "competitor_context": [],
+        },
     )
     assert ctx["brand_profile"]["business_name"] == "Sara Al-Rashid"
     assert len(ctx["tagged_avatars"]) == 2
-    assert ctx["tagged_avatars"][1]["business_name"] == "NovaLedger"
+    assert ctx["avatar_profiles"][1]["business_name"] == "NovaLedger"
     primary = profile_from_avatar(cleaned[0])
     assert primary["source"] == "tagged_avatar"
     print("OK avatar normalize + assemble_context")

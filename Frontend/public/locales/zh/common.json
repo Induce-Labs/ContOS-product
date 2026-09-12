@@ -318,6 +318,11 @@
       "linkedin": "LinkedIn",
       "instagram": "Instagram"
     },
+    "platformRedirect": {
+      "ask": "要我切换到 {{platform}} 智能体吗？回复 yes 继续。",
+      "switched": "已切换到 {{platform}}。可以问我策略、内容创意或竞品对比。",
+      "stayed": "好的 — 继续留在聊天。需要我帮你做什么？"
+    },
     "history": {
       "title": "之前的聊天",
       "close": "关闭",

@@ -671,6 +671,13 @@ class BaseAgent:
             except ValueError as lang_error:
                 raise ValueError(str(lang_error)) from lang_error
 
+            has_tagged_avatars = bool(
+                tagged_avatar_ids
+                and any(str(item).strip() for item in tagged_avatar_ids)
+            )
+            if has_tagged_avatars:
+                chatbot_context_on = True
+
             avatar_ids = resolve_avatar_ids(
                 user_id=user_id,
                 avatar_id=avatar_id,
@@ -680,6 +687,8 @@ class BaseAgent:
             avatar_bundle: dict[str, Any] | None = None
             if avatar_ids and (
                 chatbot_context_on
+                or has_tagged_avatars
+                or len(avatar_ids) > 1
                 or agent_type in {"linkedin", "instagram", "twitter"}
                 or competitor_summaries
             ):

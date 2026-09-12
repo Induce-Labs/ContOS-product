@@ -42,10 +42,13 @@ def assemble_context(
         [profile] if profile else []
     )
 
+    avatars = (avatar_bundle or {}).get("avatars") or []
+    primary = profile or (profiles[0] if profiles else {})
     context: dict[str, Any] = {
-        "brand_profile": profile or (profiles[0] if len(profiles) == 1 else {}),
+        "brand_profile": primary,
         "avatar_profiles": profiles,
-        "avatars": (avatar_bundle or {}).get("avatars") or [],
+        "tagged_avatars": avatars,
+        "avatars": avatars,
         "multi_avatar": multi,
         "platform": agent_type,
         "competitor_intelligence": compress_summaries(

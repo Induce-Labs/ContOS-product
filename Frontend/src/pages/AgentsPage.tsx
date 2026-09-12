@@ -29,9 +29,18 @@ import {
   formatStructuredAgentOutput,
   isStructuredAgentOutput,
 } from '../lib/agentOutputDisplay'
+import {
+  detectPlatformFromRedirectAsk,
+  detectPlatformRedirectRequest,
+  isAffirmativeReply,
+  isNegativeReply,
+  platformLabel,
+  type PlatformAgent,
+} from '../lib/agentPlatformRedirect'
 import contosMark from '../assets/contos-mark.png'
 import { AgentOutputRenderer } from '../components/agents/AgentOutputRenderer'
 import { buildChatHistoryForInvoke } from '../lib/agentChatMemory'
+import { resolveInvokeTaggedAvatarIds } from '../lib/agentMentions'
 import { resolveUiLanguage } from '../lib/profilingLocaleCore'
 import {
   fetchRemoteChatStore,
@@ -175,6 +184,8 @@ export function AgentsPage() {
   const [taggedAvatarIds, setTaggedAvatarIds] = useState<string[]>([])
   const [mentionOpen, setMentionOpen] = useState(false)
   const [mentionQuery, setMentionQuery] = useState('')
+  const [pendingPlatformRedirect, setPendingPlatformRedirect] =
+    useState<PlatformAgent | null>(null)
   const bottomRef = useRef<HTMLDivElement | null>(null)
   const chatStoreRef = useRef<ChatStore | null>(null)
   const skipPersistRef = useRef(false)
@@ -544,6 +555,7 @@ export function AgentsPage() {
     setChatStore(next)
     setMessages(getActiveSession(next).messages as ChatMessage[])
     setSendError(null)
+    setPendingPlatformRedirect(null)
     setHistoryPanel(false)
     if (user?.id && projectId) {
       saveChatStore(user.id, projectId, next)
@@ -632,7 +644,7 @@ export function AgentsPage() {
     toggleTaggedAvatar(avatar.id)
     const atIndex = input.lastIndexOf('@')
     if (atIndex >= 0) {
-      setInput(input.slice(0, atIndex).trimEnd())
+      setInput(`${input.slice(0, atIndex)}@${avatar.name} `)
     }
     setMentionOpen(false)
     setMentionQuery('')
@@ -652,17 +664,84 @@ export function AgentsPage() {
 
     setSendError(null)
     setInput('')
-    const taggedNames = taggedAvatarIds
+    const invokeAvatarIds = resolveInvokeTaggedAvatarIds({
+      activeAvatarId: projectId,
+      selectedIds: taggedAvatarIds,
+      messageText: text,
+      avatars: projects,
+    })
+    const extraTaggedIds = invokeAvatarIds.filter((id) => id !== projectId)
+    const taggedNames = extraTaggedIds
       .map((id) => projects.find((avatar) => avatar.id === id)?.name)
       .filter((name): name is string => !!name)
-    const chatHistory = buildChatHistoryForInvoke(messages)
     const userMessage: ChatMessage = {
       id: newId(),
       role: 'user',
       content: text,
-      taggedAvatarIds: [...taggedAvatarIds],
+      taggedAvatarIds: extraTaggedIds,
       taggedAvatarNames: taggedNames,
     }
+
+    // Chat → Instagram / LinkedIn handoff (confirm then auto-switch chip).
+    if (agentType === 'chatbot') {
+      const inferredPending =
+        pendingPlatformRedirect ??
+        (() => {
+          const lastAssistant = [...messages]
+            .reverse()
+            .find((message) => message.role === 'assistant' && message.content.trim())
+          return lastAssistant
+            ? detectPlatformFromRedirectAsk(lastAssistant.content)
+            : null
+        })()
+
+      if (inferredPending && isAffirmativeReply(text)) {
+        const label = platformLabel(inferredPending)
+        const assistantMessage: ChatMessage = {
+          id: newId(),
+          role: 'assistant',
+          content: t('agents.platformRedirect.switched', { platform: label }),
+          agentType: inferredPending,
+        }
+        setMessages((current) => [...current, userMessage, assistantMessage])
+        setPendingPlatformRedirect(null)
+        setAgentType(inferredPending)
+        return
+      }
+
+      if (inferredPending && isNegativeReply(text)) {
+        const assistantMessage: ChatMessage = {
+          id: newId(),
+          role: 'assistant',
+          content: t('agents.platformRedirect.stayed'),
+          agentType: 'chatbot',
+        }
+        setMessages((current) => [...current, userMessage, assistantMessage])
+        setPendingPlatformRedirect(null)
+        return
+      }
+
+      const requestedPlatform = detectPlatformRedirectRequest(text)
+      if (requestedPlatform && requestedPlatform !== agentType) {
+        const label = platformLabel(requestedPlatform)
+        const assistantMessage: ChatMessage = {
+          id: newId(),
+          role: 'assistant',
+          content: t('agents.platformRedirect.ask', { platform: label }),
+          agentType: 'chatbot',
+        }
+        setMessages((current) => [...current, userMessage, assistantMessage])
+        setPendingPlatformRedirect(requestedPlatform)
+        return
+      }
+
+      // Any other message clears a stale pending redirect offer.
+      if (pendingPlatformRedirect) {
+        setPendingPlatformRedirect(null)
+      }
+    }
+
+    const chatHistory = buildChatHistoryForInvoke(messages)
     const assistantId = newId()
     setMessages((current) => [
       ...current,
@@ -682,7 +761,7 @@ export function AgentsPage() {
           agent_type: agentType,
           user_input: text,
           chatbot_context_on: true,
-          tagged_avatar_ids: taggedAvatarIds.length > 0 ? taggedAvatarIds : undefined,
+          tagged_avatar_ids: extraTaggedIds.length > 0 ? extraTaggedIds : undefined,
           chat_history: chatHistory.length > 0 ? chatHistory : undefined,
           response_language: resolveUiLanguage(i18n.language),
         },
@@ -690,6 +769,12 @@ export function AgentsPage() {
           onComplete: (data) => {
             const output = data.output
             const formatted = formatAgentOutput(output)
+            if (agentType === 'chatbot' && typeof output === 'string') {
+              const offered = detectPlatformFromRedirectAsk(output)
+              if (offered) {
+                setPendingPlatformRedirect(offered)
+              }
+            }
             setMessages((current) =>
               current.map((message) => {
                 if (message.id !== assistantId) {
@@ -868,7 +953,10 @@ export function AgentsPage() {
           agentType={agentType}
           streaming={showResponding}
           options={agentOptions}
-          onChange={setAgentType}
+          onChange={(next) => {
+            setPendingPlatformRedirect(null)
+            setAgentType(next)
+          }}
         />
       </div>
 

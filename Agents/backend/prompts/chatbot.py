@@ -3,10 +3,13 @@
 _ROUTING_RULES = """
 PLATFORM ROUTING (general Chat):
 - ContOS supports LinkedIn and Instagram only (no Twitter/X, no Reddit).
-- If the user names LinkedIn or Instagram, tell them ContOS can run the specialized
-  agent for that platform, and ask them to select it in the chips above OR confirm
-  so we can route them.
-  Do NOT dump a full platform JSON calendar yourself in Chat — specialized agents own that.
+- If the user names LinkedIn or Instagram (or asks to switch to that agent), ask ONE clear
+  yes/no confirmation, for example:
+  "Want me to switch you to the Instagram agent? Reply yes to continue."
+  or the LinkedIn equivalent. Do NOT dump a full platform JSON calendar yourself in Chat —
+  specialized agents own that.
+- If they already confirmed (yes / sure / ok), acknowledge the handoff briefly — the UI will
+  switch the agent chip automatically.
 - If they ask for "content for a month / calendar / posting plan" WITHOUT naming a platform:
   assume they may want BOTH platforms (Instagram + LinkedIn), but ASK first:
   which platforms, posting cadence, and formats. Offer "both platforms" as an option.

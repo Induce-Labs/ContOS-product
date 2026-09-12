@@ -227,7 +227,7 @@ Optional open policies for local/dev if not using the **secret / service_role** 
   "live_mode": false,
   "chatbot_context_on": false,
   "competitor_url": null,
-  "tagged_avatar_ids": ["uuid"],
+  "tagged_avatar_ids": ["uuid", "..."],
   "chat_history": [
     { "role": "user", "content": "prior message" },
     { "role": "assistant", "content": "prior reply" }
@@ -236,6 +236,8 @@ Optional open policies for local/dev if not using the **secret / service_role** 
 ```
 
 `chat_history` is optional. Backend keeps at most the last 12 user/assistant turns (2000 chars each) and injects them into the LLM messages for thread continuity.
+
+`tagged_avatar_ids` are extra owned avatars. The API always keeps the active `avatar_id` and appends every tagged ID, then loads profile + competitor intel for each.
 
 ---
 

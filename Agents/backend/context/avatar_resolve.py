@@ -16,6 +16,22 @@ class AvatarResolutionError(Exception):
         self.status_code = status_code
 
 
+def _assert_tagged_owned(tagged_id: str, user_id: str) -> None:
+    from db import supabase_client as db
+
+    row = db.fetch_avatar_row(avatar_id=tagged_id, user_id=None)
+    if not row:
+        raise AvatarResolutionError(
+            f"Avatar not found: {tagged_id}",
+            status_code=404,
+        )
+    if str(row.get("user_id") or "") != str(user_id):
+        raise AvatarResolutionError(
+            f"Avatar not owned by authenticated user: {tagged_id}",
+            status_code=403,
+        )
+
+
 def resolve_avatar_ids(
     *,
     user_id: str,
@@ -25,35 +41,28 @@ def resolve_avatar_ids(
     """
     Resolve avatar context ids (avatars.id).
 
-    1. tagged_avatar_ids if present (all must be owned)
-    2. else active avatar_id if owned
-    3. else user's default avatar (is_default)
-    4. else empty list
+    Active chat avatar is always first (when present). Tagged IDs are appended
+    so @mentions add those avatars' profiles and competitor intel — they do
+    not replace the avatar the user is chatting from.
+
+    Fallback when no active id: tagged IDs → default avatar → empty list.
     """
     from db import supabase_client as db
 
+    resolved: list[str] = []
     tagged = [str(x).strip() for x in (tagged_avatar_ids or []) if str(x).strip()]
-    if tagged:
-        resolved: list[str] = []
-        for tagged_id in tagged:
-            row = db.fetch_avatar_row(avatar_id=tagged_id, user_id=None)
-            if not row:
-                raise AvatarResolutionError(
-                    f"Avatar not found: {tagged_id}",
-                    status_code=404,
-                )
-            if str(row.get("user_id") or "") != str(user_id):
-                raise AvatarResolutionError(
-                    f"Avatar not owned by authenticated user: {tagged_id}",
-                    status_code=403,
-                )
-            if tagged_id not in resolved:
-                resolved.append(tagged_id)
-        return resolved
 
     if avatar_id:
         db.assert_avatar_owned(avatar_id, user_id)
-        return [str(avatar_id)]
+        resolved.append(str(avatar_id))
+
+    for tagged_id in tagged:
+        _assert_tagged_owned(tagged_id, user_id)
+        if tagged_id not in resolved:
+            resolved.append(tagged_id)
+
+    if resolved:
+        return resolved
 
     default_row = db.fetch_default_avatar_row(user_id)
     if default_row and default_row.get("id"):

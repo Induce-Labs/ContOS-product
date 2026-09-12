@@ -39,6 +39,7 @@
 - Not rendered as a chat bubble; conversation bubbles appear after the first user message
 - Empty threads refresh the greeting on open so the time-of-day line stays current
 - While the agent is responding, pipeline stages (e.g. `calling_llm`) are hidden; a pulsing ContOS mark is shown instead
+- In **Chat**, saying `Instagram` / `LinkedIn` asks for confirmation; `yes` auto-switches the agent chip
 - `isAgentsWelcomeMessage` keeps personalized (and legacy) welcome text out of LLM history
 
 ### New chat / Previous chats
@@ -53,6 +54,8 @@ Visible in two places while on Agents:
 ### Invoke wiring
 
 Frontend sends `avatar_id`, optional `tagged_avatar_ids`, and optional `chat_history` on `POST /api/agents/invoke`.
+
+`tagged_avatar_ids` are extra avatars from mention chips and `@Name` text ([agentMentions.ts](../src/lib/agentMentions.ts)). The Agents API unions those IDs with the active chat avatar, then loads **each** avatar’s `profiling_data` + competitor summaries. `@Name` stays in the message so the model can see who was tagged.
 
 ## Env
 

@@ -20,7 +20,7 @@ Frontend (:5173)
 
 - Avatar = `projects` row. Competitors/RAG remain scoped by `project_id`.
 - Invoke may include `tagged_avatar_ids` (owned project UUIDs).
-- Resolution: tagged → active project → `is_default` → empty.
+- Resolution: active avatar first, then each tagged ID (deduped). Tags add context; they do not replace the current avatar.
 - Profile prefers `projects.profiling_data`; see [`Docs/phase-2-avatars.md`](../Docs/phase-2-avatars.md).
 
 ## Auth & scoping
