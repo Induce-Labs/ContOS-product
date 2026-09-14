@@ -197,7 +197,9 @@ export function AgentsPage() {
   const showResponding = streaming || awaitingCatchUp
   const pendingCatchUp = getPendingAgentCatchUp()
   const pendingAssistantId =
-    pendingCatchUp?.projectId === projectId ? pendingCatchUp.assistantId : null
+    pendingCatchUp && pendingCatchUp.projectId === projectId
+      ? pendingCatchUp.assistantId
+      : null
 
   useEffect(() => {
     try {
@@ -722,7 +724,8 @@ export function AgentsPage() {
       }
 
       const requestedPlatform = detectPlatformRedirectRequest(text)
-      if (requestedPlatform && requestedPlatform !== agentType) {
+      // Already inside agentType === 'chatbot'; any detected platform differs.
+      if (requestedPlatform) {
         const label = platformLabel(requestedPlatform)
         const assistantMessage: ChatMessage = {
           id: newId(),
