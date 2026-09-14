@@ -15,21 +15,20 @@ export const PROJECT_TYPE_OPTIONS: ProjectTypeOption[] = [
     value: 'personal_branding',
     title: 'Personal Brand',
     description:
-      'Tailor insights and strategy for your personal brand, audience, and content voice.',
+      'Focus on thought leadership, audience growth, and individual positioning.',
     icon: 'user',
   },
   {
     value: 'business_1',
     title: 'Business 1',
-    description:
-      'Tailor insights and strategy for your first business workspace and market positioning.',
+    description: 'Standard setup for a specific product line or service offering.',
     icon: 'store',
   },
   {
     value: 'business_2',
     title: 'Business 2',
     description:
-      'Tailor insights and strategy for your second business workspace and growth goals.',
+      'Setup for a secondary venture, agency, or distinct corporate entity.',
     icon: 'building',
   },
 ]
@@ -62,10 +61,51 @@ function projectTypeOptionKeys(value: ProjectType): {
   }
 }
 
+function ArrowIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <path d="M5 12h14" />
+      <path d="m12 5 7 7-7 7" />
+    </svg>
+  )
+}
+
+function CheckIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <path d="M5 13l4 4L19 7" />
+    </svg>
+  )
+}
+
 function ProjectTypeIcon({ icon }: { icon: ProjectTypeOption['icon'] }) {
   if (icon === 'user') {
     return (
-      <svg className="h-5 w-5 text-ink" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <svg
+        className="h-5 w-5 text-neutral-500"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.75"
+      >
         <circle cx="12" cy="8" r="3.5" />
         <path d="M5 20c1.2-3 3.4-4.5 7-4.5s5.8 1.5 7 4.5" strokeLinecap="round" />
       </svg>
@@ -74,7 +114,13 @@ function ProjectTypeIcon({ icon }: { icon: ProjectTypeOption['icon'] }) {
 
   if (icon === 'store') {
     return (
-      <svg className="h-5 w-5 text-ink" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <svg
+        className="h-5 w-5 text-neutral-500"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.75"
+      >
         <path d="M4 10 6 5h12l2 5" strokeLinecap="round" strokeLinejoin="round" />
         <path d="M5 10v9h14v-9" strokeLinecap="round" strokeLinejoin="round" />
         <path d="M9 19v-4h6v4" strokeLinecap="round" strokeLinejoin="round" />
@@ -83,7 +129,13 @@ function ProjectTypeIcon({ icon }: { icon: ProjectTypeOption['icon'] }) {
   }
 
   return (
-    <svg className="h-5 w-5 text-ink" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+    <svg
+      className="h-5 w-5 text-neutral-500"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+    >
       <rect x="5" y="6" width="14" height="14" rx="1.5" />
       <path d="M9 6V4h6v2" strokeLinecap="round" />
       <path d="M8 11h2M8 14h2M14 11h2M14 14h2" strokeLinecap="round" />
@@ -116,83 +168,103 @@ export function ProjectTypeStep({
   const resolvedStepLabel = stepLabel ?? t('onboarding.projectType.stepLabel')
 
   return (
-    <div className="flex h-dvh flex-col overflow-hidden bg-[radial-gradient(circle_at_top,_#f3ecff_0%,_#faf9f7_42%,_#faf9f7_100%)] px-4 py-5 sm:px-6 sm:py-6 lg:px-10">
-      <div className="mx-auto flex h-full w-full max-w-[1180px] min-w-0 flex-col">
-        <header className="flex shrink-0 items-center justify-between gap-4">
-          {backControl}
-          <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-ink-muted">
-            {resolvedStepLabel}
-          </p>
-        </header>
+    <div className="relative min-h-dvh overflow-auto bg-[#faf9fd] font-sans text-[#1c1c1c] antialiased selection:bg-neutral-900 selection:text-white">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none fixed inset-0 z-0 bg-[radial-gradient(ellipse_80%_60%_at_50%_0%,rgba(238,230,253,0.6)_0%,rgba(247,244,253,0.3)_45%,rgba(255,255,255,0)_80%),radial-gradient(circle_at_100%_100%,rgba(235,225,252,0.4)_0%,rgba(255,255,255,0)_50%)]"
+      />
 
-        <div className="mt-8 shrink-0 text-center sm:mt-10">
-          <h1 className="font-serif text-4xl leading-tight text-ink sm:text-5xl lg:text-[3.25rem]">
-            {t('onboarding.projectType.title')}
-          </h1>
-          <p className="mx-auto mt-3 max-w-2xl text-sm text-ink-muted sm:text-base">
-            {t('onboarding.projectType.subtitle')}
-          </p>
+      <div
+        aria-hidden="true"
+        className="pointer-events-none fixed inset-x-0 top-0 z-10 h-20 bg-gradient-to-b from-black/[0.12] via-black/[0.02] to-transparent sm:h-32"
+      />
+
+      <main className="relative z-20 mx-auto flex min-h-dvh w-full max-w-[1180px] flex-col px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+        <div className="flex shrink-0 items-center justify-between gap-4">
+          <div className="project-type-back min-w-0">{backControl}</div>
+          <span className="shrink-0 text-[11px] font-medium uppercase tracking-[0.14em] text-neutral-400 sm:text-xs">
+            {resolvedStepLabel}
+          </span>
         </div>
 
-        {errorMessage ? (
-          <div className="mx-auto mt-5 w-full max-w-3xl shrink-0">
-            <AuthAlert message={errorMessage} />
+        <div className="flex flex-1 flex-col items-center justify-center py-10 sm:py-14">
+          <header className="mx-auto max-w-2xl shrink-0 text-center">
+            <h1 className="mb-3 font-serif text-[34px] font-bold leading-[1.12] tracking-[-0.03em] text-neutral-900 sm:text-[44px] md:text-[50px]">
+              {t('onboarding.projectType.title')}
+            </h1>
+            <p className="mx-auto max-w-lg text-sm leading-relaxed text-neutral-500 sm:text-base">
+              {t('onboarding.projectType.subtitle')}
+            </p>
+          </header>
+
+          {errorMessage ? (
+            <div className="mx-auto mt-6 w-full max-w-3xl shrink-0">
+              <AuthAlert message={errorMessage} />
+            </div>
+          ) : null}
+
+          <div className="mt-10 w-full max-w-full overflow-x-auto overscroll-x-contain sm:mt-12">
+            <div className="mx-auto flex w-max items-stretch gap-5 px-2 py-3 sm:gap-6">
+              {PROJECT_TYPE_OPTIONS.map((option) => {
+                const isSelected = selectedType === option.value
+                const keys = projectTypeOptionKeys(option.value)
+
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => onSelect(option.value)}
+                    aria-pressed={isSelected}
+                    className={`contos-glow-card flex w-[260px] shrink-0 cursor-pointer flex-col rounded-[28px] bg-white p-7 text-left transition-shadow duration-300 sm:w-[280px] sm:p-8 ${
+                      isSelected
+                        ? 'contos-glow-card--selected border-2 border-neutral-900 shadow-[0_12px_32px_rgba(0,0,0,0.06)]'
+                        : 'border border-transparent shadow-[0_8px_30px_rgba(0,0,0,0.04)]'
+                    }`}
+                  >
+                    {isSelected ? (
+                      <span className="absolute right-5 top-5 z-[1] flex h-6 w-6 items-center justify-center rounded-full bg-neutral-900 text-white">
+                        <CheckIcon className="h-3.5 w-3.5" />
+                      </span>
+                    ) : null}
+
+                    <div className="relative z-[1] mb-6 flex h-11 w-11 items-center justify-center rounded-full bg-neutral-100">
+                      <ProjectTypeIcon icon={option.icon} />
+                    </div>
+
+                    <h2 className="relative z-[1] mb-2.5 font-serif text-[22px] font-bold leading-[1.2] tracking-[-0.02em] text-neutral-900 sm:text-[24px]">
+                      {t(keys.title)}
+                    </h2>
+
+                    <p className="relative z-[1] text-[13.5px] leading-relaxed text-neutral-500 sm:text-[14px]">
+                      {t(keys.description)}
+                    </p>
+                  </button>
+                )
+              })}
+            </div>
           </div>
-        ) : null}
 
-        <section className="mt-8 grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-y-auto sm:mt-10 md:grid-cols-3 md:gap-5">
-          {PROJECT_TYPE_OPTIONS.map((option) => {
-            const isSelected = selectedType === option.value
-            const keys = projectTypeOptionKeys(option.value)
+          {fieldError ? (
+            <p className="mt-4 shrink-0 text-center text-sm text-red-600">{fieldError}</p>
+          ) : null}
+        </div>
 
-            return (
-              <button
-                key={option.value}
-                type="button"
-                onClick={() => onSelect(option.value)}
-                className={`relative flex min-h-[260px] min-w-0 flex-col rounded-[1.75rem] p-6 text-left transition sm:min-h-[300px] sm:p-7 ${
-                  isSelected
-                    ? 'border-2 border-ink bg-white'
-                    : 'border border-transparent bg-white shadow-[0_18px_45px_rgba(28,27,41,0.06)] hover:shadow-[0_22px_50px_rgba(28,27,41,0.08)]'
-                }`}
-              >
-                {isSelected ? (
-                  <span className="absolute right-5 top-5 flex h-6 w-6 items-center justify-center rounded-full bg-ink text-xs text-white">
-                    ✓
-                  </span>
-                ) : null}
-
-                <span className="flex h-11 w-11 items-center justify-center rounded-full bg-[#f3f0eb]">
-                  <ProjectTypeIcon icon={option.icon} />
-                </span>
-
-                <div className="mt-auto space-y-3 pt-10">
-                  <h2 className="font-serif text-2xl leading-tight text-ink sm:text-[1.7rem]">
-                    {t(keys.title)}
-                  </h2>
-                  <p className="text-sm leading-relaxed text-ink-muted">{t(keys.description)}</p>
-                </div>
-              </button>
-            )
-          })}
-        </section>
-
-        {fieldError ? (
-          <p className="mt-4 shrink-0 text-center text-sm text-red-600">{fieldError}</p>
-        ) : null}
-
-        <div className="flex shrink-0 justify-end pt-5 sm:pt-6">
+        <div className="flex shrink-0 justify-end pb-2 sm:pb-4">
           <button
             type="button"
             onClick={onContinue}
             disabled={isSubmitting}
-            className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-accent-primary to-[#8d67cf] px-8 py-3.5 text-sm font-semibold text-white shadow-[0_12px_28px_rgba(116,79,185,0.32)] transition hover:from-accent-primary-deep hover:to-accent-primary disabled:cursor-not-allowed disabled:opacity-60 sm:px-10 sm:text-base"
+            className="group inline-flex cursor-pointer items-center gap-2.5 rounded-full bg-[#9353ea] px-7 py-3 text-sm font-semibold text-white shadow-[0_8px_25px_rgba(147,83,234,0.4)] transition-all duration-300 hover:scale-105 hover:bg-[#823fe0] hover:shadow-[0_12px_30px_rgba(147,83,234,0.5)] active:scale-95 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100 sm:px-8 sm:py-3.5 sm:text-[14.5px]"
           >
-            {isSubmitting ? t('onboarding.projectType.creating') : t('onboarding.projectType.continue')}
-            <span aria-hidden="true">→</span>
+            <span>
+              {isSubmitting
+                ? t('onboarding.projectType.creating')
+                : t('onboarding.projectType.continue')}
+            </span>
+            <ArrowIcon className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-1" />
           </button>
         </div>
-      </div>
+      </main>
     </div>
   )
 }

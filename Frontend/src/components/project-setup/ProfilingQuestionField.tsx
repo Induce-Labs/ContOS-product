@@ -27,6 +27,26 @@ type SingleSelectQuestion = ProfilingQuestionDef & {
   }
 }
 
+const minimalInputClassName =
+  'w-full border-0 bg-transparent px-0 py-1.5 text-base text-neutral-900 outline-none placeholder:text-neutral-300 focus:outline-none disabled:opacity-60 sm:text-[17px]'
+
+function CheckIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="3"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <path d="M5 13l4 4L19 7" />
+    </svg>
+  )
+}
+
 function SingleSelectControls({
   question,
   value,
@@ -83,8 +103,8 @@ function SingleSelectControls({
   }
 
   return (
-    <div className="space-y-3">
-      <div className="space-y-2">
+    <div className="space-y-2.5">
+      <div className="space-y-2.5">
         {question.input.options.map((option, index) => {
           const selected = selectedOption === option
           const isOther = isOtherSelectOptionAt(
@@ -109,13 +129,25 @@ function SingleSelectControls({
                   onSubmit?.(option)
                 }
               }}
-              className={`flex w-full items-start rounded-2xl border px-4 py-3 text-left text-sm transition disabled:opacity-60 ${
+              className={`flex w-full cursor-pointer items-center justify-between rounded-xl p-3 text-left transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-60 sm:rounded-2xl sm:p-3.5 ${
                 selected
-                  ? 'border-ink bg-accent-primary-soft/40 text-ink'
-                  : 'border-border-hairline bg-white text-ink-muted hover:border-ink/30 hover:bg-[#faf8f5]'
+                  ? 'border-2 border-[#9353ea] bg-purple-50/50 text-neutral-900 shadow-sm'
+                  : 'border border-neutral-200/70 bg-[#faf9fd] text-neutral-700 hover:border-neutral-300 hover:text-neutral-900'
               }`}
             >
-              {option}
+              <span className="pr-3 text-xs font-medium leading-snug sm:text-sm sm:leading-relaxed">
+                {option}
+              </span>
+              <span
+                className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-all ${
+                  selected
+                    ? 'border-[#9353ea] bg-[#9353ea] text-white'
+                    : 'border-neutral-300 bg-transparent'
+                }`}
+                aria-hidden="true"
+              >
+                {selected ? <CheckIcon className="h-3 w-3" /> : null}
+              </span>
             </button>
           )
         })}
@@ -132,7 +164,7 @@ function SingleSelectControls({
           }}
           onKeyDown={handleKeyDown}
           placeholder={t('profiling.field.describeOwnWords')}
-          className="w-full border-0 border-b border-ink/20 bg-transparent px-0 py-3 text-base text-ink outline-none placeholder:text-ink-muted/55 focus:border-ink disabled:opacity-60"
+          className={minimalInputClassName}
           autoFocus
         />
       ) : null}
@@ -175,7 +207,7 @@ export function ProfilingQuestionField({
     const max = question.input.max
 
     return (
-      <div className="space-y-3">
+      <div className="space-y-4">
         {Array.from({ length: max }, (_, index) => (
           <input
             key={`competitor-${index}`}
@@ -189,10 +221,10 @@ export function ProfilingQuestionField({
             }}
             onKeyDown={handleKeyDown}
             placeholder={`${question.placeholder ?? t('profiling.field.competitorPlaceholder')} ${index + 1}`}
-            className="w-full border-0 border-b border-ink/20 bg-transparent px-0 py-3 text-base text-ink outline-none placeholder:text-ink-muted/55 focus:border-ink disabled:opacity-60"
+            className={minimalInputClassName}
           />
         ))}
-        <p className="text-xs text-ink-muted">
+        <p className="text-xs text-neutral-400">
           {t('profiling.field.enterUpToNames', { max })}
         </p>
       </div>
@@ -206,8 +238,8 @@ export function ProfilingQuestionField({
         disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
         placeholder={question.placeholder}
-        rows={4}
-        className="w-full resize-y rounded-2xl border border-border-hairline bg-transparent px-4 py-3 text-base text-ink outline-none placeholder:text-ink-muted/55 focus:border-ink disabled:opacity-60"
+        rows={3}
+        className={`${minimalInputClassName} resize-none`}
       />
     )
   }
@@ -220,7 +252,7 @@ export function ProfilingQuestionField({
       onChange={(event) => onChange(event.target.value)}
       onKeyDown={handleKeyDown}
       placeholder={question.placeholder}
-      className="w-full border-0 border-b border-ink/20 bg-transparent px-0 py-3 text-base text-ink outline-none placeholder:text-ink-muted/55 focus:border-ink disabled:opacity-60"
+      className={minimalInputClassName}
     />
   )
 }

@@ -107,6 +107,22 @@ Both remain in the flow.
 
 **Dashboard Profiling tab** (`/dashboard/:projectId/profiling`): when `profiling_completeness === 100`, shows a scrollable review list ([`ProfilingReviewPanel`](../Frontend/src/components/dashboard/ProfilingReviewPanel.tsx)) so users can edit any answer without stepping through every question. Incomplete profiling still uses the step wizard until all required questions are answered.
 
+## Welcome screen UI
+
+[`WelcomeOnboardingPage`](../Frontend/src/pages/WelcomeOnboardingPage.tsx) is a style-only lavender studio layout: soft radial wash, top vignette, four module cards with hover lift, CSS illustrations in `aspect-[4/3]` frames, and a solid purple “Let’s go” CTA. Copy remains i18n-driven; onboarding advance / navigation logic is unchanged. Cards are decorative (no routes).
+
+## Project type screen UI
+
+[`ProjectTypeStep`](../Frontend/src/components/project-setup/ProjectTypeStep.tsx) matches the workspace-setup layout: top back link + step label, centered serif title, three fixed-width option cards with circular icons and a black checkmark when selected, purple Continue bottom-right, and the same traveling lavender border glow as welcome cards. Selection still creates an avatar and advances onboarding (or the new-project wizard).
+
+## Profiling questionnaire UI
+
+[`ProfilingStep`](../Frontend/src/components/project-setup/ProfilingStep.tsx) uses a centered white card on a lavender wash: black progress bar on the card top edge, section label + workspace type header, serif question title, minimal borderless inputs, Press Enter hint, and purple NEXT pill. The page is viewport-locked (`h-dvh`); question options scroll inside the card while Back/Next stay visible. Field behavior and DB-driven questions are unchanged; no Quick prompt.
+
+## Competitor intake UI
+
+[`CompetitorsStep`](../Frontend/src/components/project-setup/CompetitorsStep.tsx) matches the competitive-landscape layout: ContOS badge, serif title, count/recommend tracker with 10 dots, numbered platform + handle rows, dashed add control, and purple Research CTA. Intake still creates competitors, sets scraping status, and enqueues scrape jobs (plus `completeOnboarding` on the onboarding path only).
+
 ## Routes
 
 | Route                     | Page                        | Step           |

@@ -128,6 +128,8 @@
       "cancel": "← Cancelar",
       "continue": "Continuar",
       "creating": "Creando…",
+      "activeSelection": "Selección activa",
+      "clickToSelect": "Haz clic para seleccionar",
       "selectTypeError": "Selecciona un tipo de espacio de trabajo para continuar.",
       "createAvatarFailed": "Error al crear avatar (máx {{max}} en el plan Básico).",
       "options": {

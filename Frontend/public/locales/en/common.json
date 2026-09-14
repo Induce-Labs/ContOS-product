@@ -128,20 +128,22 @@
       "cancel": "← Cancel",
       "continue": "Continue",
       "creating": "Creating…",
+      "activeSelection": "Active Selection",
+      "clickToSelect": "Click to select",
       "selectTypeError": "Select a workspace type to continue.",
       "createAvatarFailed": "Failed to create avatar (max {{max}} on Basic plan).",
       "options": {
         "personalBrand": {
           "title": "Personal Brand",
-          "description": "Tailor insights and strategy for your personal brand, audience, and content voice."
+          "description": "Focus on thought leadership, audience growth, and individual positioning."
         },
         "business1": {
           "title": "Business 1",
-          "description": "Tailor insights and strategy for your first business workspace and market positioning."
+          "description": "Standard setup for a specific product line or service offering."
         },
         "business2": {
           "title": "Business 2",
-          "description": "Tailor insights and strategy for your second business workspace and growth goals."
+          "description": "Setup for a secondary venture, agency, or distinct corporate entity."
         }
       }
     },

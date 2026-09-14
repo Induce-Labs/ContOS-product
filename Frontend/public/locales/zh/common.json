@@ -128,6 +128,8 @@
       "cancel": "← 取消",
       "continue": "继续",
       "creating": "正在创建…",
+      "activeSelection": "当前选择",
+      "clickToSelect": "点击选择",
       "selectTypeError": "选择一个工作区类型以继续。",
       "createAvatarFailed": "创建头像失败（基本计划最多 {{max}}）。",
       "options": {

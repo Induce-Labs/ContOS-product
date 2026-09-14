@@ -36,3 +36,97 @@ body {
 .contos-mark-loading {
   animation: contos-mark-pulse 1.1s ease-in-out infinite;
 }
+
+@property --welcome-card-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@keyframes welcome-card-border-travel {
+  to {
+    --welcome-card-angle: 360deg;
+  }
+}
+
+.welcome-module-card,
+.contos-glow-card {
+  position: relative;
+  isolation: isolate;
+}
+
+.welcome-module-card::before,
+.welcome-module-card::after,
+.contos-glow-card::before,
+.contos-glow-card::after {
+  content: "";
+  position: absolute;
+  border-radius: inherit;
+  pointer-events: none;
+  background: conic-gradient(
+    from var(--welcome-card-angle),
+    transparent 0deg,
+    transparent 240deg,
+    #f3e9fd 275deg,
+    #d7baf5 305deg,
+    #8a43e3 328deg,
+    #d7baf5 348deg,
+    transparent 360deg
+  );
+  animation: welcome-card-border-travel 5.5s linear infinite;
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+
+.welcome-module-card::before,
+.contos-glow-card::before {
+  inset: -1px;
+  z-index: 2;
+  padding: 1.5px;
+  opacity: 0.55;
+}
+
+.welcome-module-card::after,
+.contos-glow-card::after {
+  inset: -4px;
+  z-index: -1;
+  padding: 4px;
+  opacity: 0.28;
+  filter: blur(10px);
+}
+
+.welcome-module-card:hover::before,
+.contos-glow-card:hover::before {
+  opacity: 0.85;
+}
+
+.welcome-module-card:hover::after,
+.contos-glow-card:hover::after {
+  opacity: 0.48;
+  filter: blur(12px);
+}
+
+.contos-glow-card--selected::before {
+  opacity: 0.9;
+}
+
+.contos-glow-card--selected::after {
+  opacity: 0.42;
+  filter: blur(11px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .welcome-module-card::before,
+  .welcome-module-card::after,
+  .contos-glow-card::before,
+  .contos-glow-card::after {
+    animation: none;
+    --welcome-card-angle: 320deg;
+  }
+}

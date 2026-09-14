@@ -21,6 +21,24 @@ export type ProfilingStepProps = {
   onBack: () => void
 }
 
+function ArrowIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <path d="M5 12h14" />
+      <path d="m12 5 7 7-7 7" />
+    </svg>
+  )
+}
+
 export function ProfilingStepLoading() {
   const { t } = useTranslation()
   return (
@@ -65,115 +83,129 @@ export function ProfilingStep({
   const progress = questions.length > 0 ? ((questionIndex + 1) / questions.length) * 100 : 0
   const value = answers[currentQuestion.key] ?? ''
   const disabled = isSaving || isSummarizing
+  const sectionLabel =
+    currentQuestion.sectionLabel ||
+    t('profiling.stepFoundations', {
+      n: String(questionIndex + 1).padStart(2, '0'),
+    })
+  const workspaceTypeName = avatarTypeLabel(workspaceLabel)
+  const workspacePrefix = t('profiling.workspaceLabel', { label: '' }).replace(/\s*$/, '')
+  const showPressEnter =
+    currentQuestion.input.kind !== 'textarea' &&
+    currentQuestion.input.kind !== 'single_select'
 
   return (
-    <div className="flex h-dvh flex-col overflow-hidden bg-[radial-gradient(circle_at_top,_#f3ecff_0%,_#faf9f7_42%,_#faf9f7_100%)] px-4 py-5 sm:px-6 sm:py-8">
-      <div className="mx-auto flex h-full w-full max-w-[920px] min-w-0 flex-col">
-        <div className="mb-4 flex shrink-0 items-center justify-end gap-3">
+    <div className="relative flex h-dvh flex-col overflow-hidden bg-[#faf9fd] font-sans text-[#1c1c1c] antialiased selection:bg-neutral-900 selection:text-white">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none fixed inset-0 z-0 bg-[radial-gradient(ellipse_75%_55%_at_15%_10%,rgba(238,230,253,0.55)_0%,rgba(247,244,253,0.25)_45%,rgba(255,255,255,0)_75%),radial-gradient(ellipse_70%_50%_at_85%_90%,rgba(235,225,252,0.45)_0%,rgba(247,244,253,0.2)_40%,rgba(255,255,255,0)_70%)]"
+      />
+
+      <div
+        aria-hidden="true"
+        className="pointer-events-none fixed inset-x-0 top-0 z-10 h-16 bg-gradient-to-b from-black/[0.1] via-black/[0.02] to-transparent sm:h-24"
+      />
+
+      <main className="relative z-20 mx-auto flex h-full w-full max-w-3xl min-h-0 flex-col px-3 py-3 sm:px-5 sm:py-4 lg:px-6">
+        <div className="mb-2 flex shrink-0 items-center justify-end gap-3 sm:mb-3">
           {isTranslating ? (
-            <p className="text-xs text-ink-muted">{t('agents.translating')}</p>
+            <p className="text-xs text-neutral-500">{t('agents.translating')}</p>
           ) : null}
           <LanguageSelector id="profiling-language-select" />
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          <div className="rounded-[2rem] bg-white px-5 py-6 shadow-[0_24px_60px_rgba(28,27,41,0.06)] sm:px-8 sm:py-8 lg:px-10 lg:py-10">
-            <div className="h-1.5 w-full overflow-hidden rounded-full bg-[#ece8e2]">
-              <div
-                className="h-full rounded-full bg-ink transition-all duration-300"
-                style={{ width: `${progress}%` }}
-              />
-            </div>
+        <article className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[24px] border border-[#ede7de] bg-white shadow-[0_12px_45px_rgba(0,0,0,0.035)] sm:rounded-[28px]">
+          <div className="h-[3px] w-full shrink-0 bg-neutral-100/80">
+            <div
+              className="h-full bg-neutral-900 transition-all duration-500 ease-out"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
 
-            <div className="mt-6 flex flex-col gap-2 text-xs uppercase tracking-[0.18em] text-ink-muted sm:flex-row sm:items-center sm:justify-between">
-              <p>
-                {currentQuestion.sectionLabel ||
-                  t('profiling.stepFoundations', {
-                    n: String(questionIndex + 1).padStart(2, '0'),
-                  })}
-              </p>
+          <div className="flex min-h-0 flex-1 flex-col px-5 py-4 sm:px-8 sm:py-5 lg:px-10 lg:py-6">
+            <div className="flex shrink-0 flex-col gap-1 text-[11px] font-medium uppercase tracking-[0.16em] text-neutral-400 sm:flex-row sm:items-center sm:justify-between sm:text-xs">
+              <p>{sectionLabel}</p>
               <p className="normal-case tracking-normal">
-                {t('profiling.workspaceLabel', {
-                  label: avatarTypeLabel(workspaceLabel),
-                })}
+                <span className="text-neutral-400">{workspacePrefix}</span>
+                <span className="font-serif text-neutral-900">{workspaceTypeName}</span>
               </p>
             </div>
 
             {errorMessage ? (
-              <div className="mt-5">
+              <div className="mt-3 shrink-0">
                 <AuthAlert message={errorMessage} />
               </div>
             ) : null}
 
-            <div className="mt-8 flex flex-wrap items-baseline gap-3">
-              <h1 className="font-serif text-3xl leading-tight text-ink sm:text-4xl lg:text-[2.75rem]">
+            <div className="mt-4 flex shrink-0 flex-wrap items-baseline gap-2 sm:mt-5">
+              <h1 className="font-serif text-[22px] font-bold leading-[1.18] tracking-[-0.03em] text-neutral-900 sm:text-[28px] md:text-[32px]">
                 {currentQuestion.question}
               </h1>
               {!currentQuestion.required ? (
-                <span className="rounded-full bg-[#f3f0eb] px-3 py-1 text-xs font-medium uppercase tracking-wide text-ink-muted">
+                <span className="rounded-full bg-neutral-100 px-3 py-1 text-xs font-medium uppercase tracking-wide text-neutral-500">
                   {t('profiling.optional')}
                 </span>
               ) : null}
             </div>
 
-            <p className="mt-2 text-sm text-ink-muted">
-              {t('profiling.ofTotal', {
-                current: questionIndex + 1,
-                total: questions.length,
-              })}
-            </p>
-
             <form
-              className="mt-8"
+              className="mt-4 flex min-h-0 flex-1 flex-col sm:mt-5"
               onSubmit={(event: FormEvent) => {
                 event.preventDefault()
                 onNext()
               }}
             >
-              <ProfilingQuestionField
-                question={currentQuestion}
-                value={value}
-                onChange={(next) => onAnswerChange(currentQuestion.key, next)}
-                onSubmit={onNext}
-                disabled={disabled}
-                autoAdvanceOnSelect
-              />
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-0.5">
+                <ProfilingQuestionField
+                  question={currentQuestion}
+                  value={value}
+                  onChange={(next) => onAnswerChange(currentQuestion.key, next)}
+                  onSubmit={onNext}
+                  disabled={disabled}
+                  autoAdvanceOnSelect
+                />
 
-              {fieldError ? <p className="mt-3 text-sm text-red-600">{fieldError}</p> : null}
+                {fieldError ? (
+                  <p className="mt-3 text-sm text-red-600">{fieldError}</p>
+                ) : null}
+              </div>
 
-              {currentQuestion.input.kind !== 'textarea' &&
-              currentQuestion.input.kind !== 'single_select' ? (
-                <p className="mt-5 text-sm text-ink-muted">{t('profiling.pressEnter')}</p>
-              ) : null}
+              <div className="mt-3 shrink-0 border-t border-neutral-100 pt-3 sm:mt-4 sm:pt-4">
+                {showPressEnter ? (
+                  <p className="mb-3 text-xs text-neutral-400 sm:text-sm">{t('profiling.pressEnter')}</p>
+                ) : null}
+
+                <div className="flex items-center justify-between gap-3">
+                  <button
+                    type="button"
+                    onClick={onBack}
+                    disabled={disabled}
+                    className="inline-flex items-center gap-2 rounded-full px-2 py-2 text-sm font-medium text-neutral-500 transition-colors hover:text-neutral-900 disabled:cursor-not-allowed disabled:opacity-60 sm:px-3"
+                  >
+                    {t('profiling.back')}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => onNext()}
+                    disabled={disabled}
+                    className="group inline-flex cursor-pointer items-center gap-2 rounded-full bg-[#9353ea] px-6 py-2.5 text-xs font-semibold uppercase tracking-wider text-white shadow-[0_10px_30px_rgba(147,83,234,0.4)] transition-all duration-300 hover:scale-105 hover:bg-[#823fe0] hover:shadow-[0_14px_35px_rgba(147,83,234,0.5)] active:scale-95 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100 sm:px-8 sm:py-3 sm:text-sm"
+                  >
+                    <span>
+                      {isSummarizing
+                        ? t('profiling.buildingSummary')
+                        : isSaving
+                          ? t('profiling.saving')
+                          : t('profiling.next')}
+                    </span>
+                    <ArrowIcon className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-1" />
+                  </button>
+                </div>
+              </div>
             </form>
           </div>
-        </div>
-
-        <div className="flex shrink-0 items-center justify-between pt-5 sm:pt-6">
-          <button
-            type="button"
-            onClick={onBack}
-            disabled={disabled}
-            className="text-sm font-medium text-ink-muted transition hover:text-ink disabled:opacity-60"
-          >
-            {t('profiling.back')}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => onNext()}
-            disabled={disabled}
-            className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-accent-primary to-[#8d67cf] px-8 py-3.5 text-sm font-semibold uppercase tracking-wide text-white shadow-[0_12px_28px_rgba(116,79,185,0.32)] transition hover:from-accent-primary-deep hover:to-accent-primary disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {isSummarizing
-              ? t('profiling.buildingSummary')
-              : isSaving
-                ? t('profiling.saving')
-                : t('profiling.next')}
-            <span aria-hidden="true">→</span>
-          </button>
-        </div>
-      </div>
+        </article>
+      </main>
     </div>
   )
 }

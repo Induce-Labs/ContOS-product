@@ -62,7 +62,7 @@ function OnboardingProjectTypeContent() {
         <Link
           to="/welcome"
           onClick={() => void advanceOnboardingStep('welcome')}
-          className="text-sm text-ink-muted transition hover:text-ink"
+          className="inline-flex items-center gap-1.5 text-sm font-medium text-neutral-500 transition-colors hover:text-neutral-900"
         >
           ← Back to ContOS Overview
         </Link>

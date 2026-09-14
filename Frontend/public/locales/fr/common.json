@@ -128,6 +128,8 @@
       "cancel": "← Annuler",
       "continue": "Continuer",
       "creating": "Création…",
+      "activeSelection": "Sélection active",
+      "clickToSelect": "Cliquer pour sélectionner",
       "selectTypeError": "Sélectionnez un type d'espace de travail pour continuer.",
       "createAvatarFailed": "Échec de la création de l'avatar (max {{max}} sur le plan de base).",
       "options": {

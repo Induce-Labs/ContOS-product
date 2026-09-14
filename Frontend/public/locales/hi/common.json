@@ -128,6 +128,8 @@
       "cancel": "← रद्द करें",
       "continue": "जारी रखें",
       "creating": "बना रहा है…",
+      "activeSelection": "सक्रिय चयन",
+      "clickToSelect": "चयन करने के लिए क्लिक करें",
       "selectTypeError": "जारी रखने के लिए एक कार्यक्षेत्र प्रकार चुनें।",
       "createAvatarFailed": "अवतार बनाने में विफल (बुनियादी योजना पर अधिकतम {{max}})।",
       "options": {

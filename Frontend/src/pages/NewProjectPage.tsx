@@ -192,7 +192,10 @@ export function NewProjectPage() {
         fieldError={fieldError}
         stepLabel="New Project"
         backControl={
-          <Link to="/dashboard" className="text-sm text-ink-muted transition hover:text-ink">
+          <Link
+            to="/dashboard"
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-neutral-500 transition-colors hover:text-neutral-900"
+          >
             ← Cancel
           </Link>
         }
