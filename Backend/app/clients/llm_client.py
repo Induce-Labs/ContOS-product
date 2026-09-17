@@ -223,7 +223,12 @@ class LlmClient:
         platform: str = "instagram",
     ) -> str:
         content_lines = []
-        platform_label = "LinkedIn" if platform == "linkedin" else "Instagram"
+        if platform == "linkedin":
+            platform_label = "LinkedIn"
+        elif platform == "twitter":
+            platform_label = "Twitter/X"
+        else:
+            platform_label = "Instagram"
 
         for item in content_items:
             caption = sanitize_text(str(item.get("caption") or "")) or ""
@@ -233,16 +238,24 @@ class LlmClient:
                 if isinstance(transcript_raw, str) and transcript_raw.strip()
                 else None
             )
+            default_type = (
+                "post" if platform in {"linkedin", "twitter"} else "unknown"
+            )
             lines = [
                 f"- external_id: {item.get('external_id')}",
-                f"  content_type: {item.get('content_type') or ('post' if platform == 'linkedin' else 'unknown')}",
+                f"  content_type: {item.get('content_type') or default_type}",
                 f"  caption: {caption}",
-                f"  likes: {item.get('likes')}",
-                f"  views: {item.get('views')}",
-                f"  shares: {item.get('shares')}",
-                f"  comments_count: {item.get('comments_count')}",
                 f"  posted_at: {item.get('posted_at')}",
             ]
+            if platform != "twitter":
+                lines.extend(
+                    [
+                        f"  likes: {item.get('likes')}",
+                        f"  views: {item.get('views')}",
+                        f"  shares: {item.get('shares')}",
+                        f"  comments_count: {item.get('comments_count')}",
+                    ],
+                )
             if platform == "linkedin":
                 if item.get("author_name"):
                     lines.append(
@@ -251,6 +264,22 @@ class LlmClient:
                 if item.get("author_headline"):
                     lines.append(
                         f"  author_headline: {sanitize_text(str(item.get('author_headline'))) or ''}",
+                    )
+            if platform == "twitter":
+                if item.get("author_name"):
+                    lines.append(
+                        f"  author_name: {sanitize_text(str(item.get('author_name'))) or ''}",
+                    )
+                if item.get("author_username"):
+                    lines.append(
+                        f"  author_username: {sanitize_text(str(item.get('author_username'))) or ''}",
+                    )
+                if item.get("author_followers") is not None:
+                    lines.append(f"  author_followers: {item.get('author_followers')}")
+                if item.get("author_description"):
+                    lines.append(
+                        f"  author_description: "
+                        f"{sanitize_text(str(item.get('author_description'))) or ''}",
                     )
 
             if transcript:
@@ -262,6 +291,13 @@ class LlmClient:
             dataset_guidance = (
                 "The dataset includes LinkedIn profile posts. "
                 "Use post text and engagement metrics (reactions/likes, comments, shares/reposts)."
+            )
+        elif platform == "twitter":
+            dataset_guidance = (
+                "The dataset includes recent Twitter/X profile tweets (last ~7 days). "
+                "Engagement metrics are not provided in this dataset — focus on tweet text, "
+                "hooks, themes, posting patterns, and author/profile context. "
+                "Do not invent or estimate likes, replies, retweets, or views."
             )
         else:
             dataset_guidance = (

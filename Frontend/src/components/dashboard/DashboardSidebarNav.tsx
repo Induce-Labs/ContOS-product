@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../../hooks/useAuth'
 import type { AgentType } from '../../lib/agentsApi'
+import { isUiAgentType } from '../../lib/agentsApi'
 import {
   peekLocalChatSessions,
   type ChatSession,
@@ -95,7 +96,7 @@ type NavItem = {
 
 function persistAgentType(agentType: AgentType) {
   try {
-    if (agentType === 'linkedin' || agentType === 'instagram' || agentType === 'chatbot') {
+    if (isUiAgentType(agentType)) {
       sessionStorage.setItem('contos_agents_agent_type', agentType)
     }
   } catch {
@@ -355,6 +356,7 @@ export function DashboardSidebarNav({
       label: t('nav.x'),
       href: agentsBase,
       icon: 'x',
+      agentType: 'twitter',
       isActive: () => false,
     },
   ]

@@ -1,4 +1,4 @@
-"""Tool: similarity_search — embed query + pgvector RAG (playbooks / LinkedIn / Instagram)."""
+"""Tool: similarity_search — embed query + pgvector RAG (playbooks / LinkedIn / Instagram / Twitter)."""
 
 from __future__ import annotations
 
@@ -11,6 +11,7 @@ SUPPORTED_TABLES = {
     "playbooks",
     "linkedin_content_summaries",
     "instagram_content_summaries",
+    "twitter_content_summaries",
 }
 
 
@@ -72,7 +73,11 @@ def _lexical_search(
             top_k,
         )
 
-    if table in {"linkedin_content_summaries", "instagram_content_summaries"}:
+    if table in {
+        "linkedin_content_summaries",
+        "instagram_content_summaries",
+        "twitter_content_summaries",
+    }:
         from mcp.tools.fetch_summaries import fetch_summaries
 
         if not avatar_id:
@@ -82,6 +87,8 @@ def _lexical_search(
             return []
         if table == "linkedin_content_summaries":
             platform = "linkedin"
+        elif table == "twitter_content_summaries":
+            platform = "twitter"
         summaries = fetch_summaries(avatar_id=avatar_id, platform=platform)
         if table == "linkedin_content_summaries":
             summaries = [
@@ -89,6 +96,13 @@ def _lexical_search(
                 for s in summaries
                 if (s.get("platform") or "").lower() == "linkedin"
                 or "linkedin" in str(s.get("source") or "").lower()
+            ]
+        elif table == "twitter_content_summaries":
+            summaries = [
+                s
+                for s in summaries
+                if (s.get("platform") or "").lower() in {"twitter", "x"}
+                or "twitter" in str(s.get("source") or "").lower()
             ]
         elif platform:
             summaries = [
@@ -140,17 +154,22 @@ def similarity_search(
 
     - linkedin_content_summaries → LinkedIn competitor RAG (requires avatar_id)
     - instagram_content_summaries → Instagram summaries (requires avatar_id)
+    - twitter_content_summaries → Twitter/X competitor RAG (requires avatar_id)
     """
     table = (table or "playbooks").strip()
     if table not in SUPPORTED_TABLES:
         raise ValueError(
             "table must be one of: playbooks, linkedin_content_summaries, "
-            "instagram_content_summaries"
+            "instagram_content_summaries, twitter_content_summaries"
         )
     if not (query_text or "").strip():
         raise ValueError("query_text is required for similarity_search")
 
-    if table in {"linkedin_content_summaries", "instagram_content_summaries"}:
+    if table in {
+        "linkedin_content_summaries",
+        "instagram_content_summaries",
+        "twitter_content_summaries",
+    }:
         if not avatar_id:
             raise ValueError(
                 f"avatar_id is required for similarity_search on table={table}"
@@ -210,6 +229,22 @@ def similarity_search(
         )
         return _lexical_search(
             query_text, table, top_k, avatar_id=avatar_id, platform="linkedin"
+        )
+
+    if table == "twitter_content_summaries":
+        rows = db.similarity_search_twitter_summaries(
+            embedding, top_k=top_k, avatar_id=avatar_id
+        )
+        if rows:
+            return _format_summary_hits(
+                rows, "supabase.twitter_content_summaries"
+            )
+        logger.info(
+            "twitter vector search returned 0 rows; lexical fallback avatar_id=%s",
+            avatar_id,
+        )
+        return _lexical_search(
+            query_text, table, top_k, avatar_id=avatar_id, platform="twitter"
         )
 
     platform_filter = (platform or "instagram").lower().strip()

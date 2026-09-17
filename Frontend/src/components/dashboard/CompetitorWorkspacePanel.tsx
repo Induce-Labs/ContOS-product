@@ -59,7 +59,9 @@ export function CompetitorWorkspacePanel({
             const platformLabel =
               competitor.platform === 'linkedin'
                 ? t('common.platforms.linkedin')
-                : t('common.platforms.instagram')
+                : competitor.platform === 'twitter'
+                  ? t('common.platforms.twitter')
+                  : t('common.platforms.instagram')
             const statusLabel =
               competitor.pipeline_step === 'done'
                 ? t('pipeline.status.done')

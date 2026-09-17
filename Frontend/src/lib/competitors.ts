@@ -3,6 +3,7 @@ import type { Tables, TablesInsert } from '../types/database'
 import type { CompetitorPlatform } from '../types/contos'
 import { getInstagramHandle } from './instagram'
 import { getLinkedInSlug } from './linkedin'
+import { getTwitterHandle } from './twitter'
 
 export type Competitor = Tables<'competitors'>
 
@@ -23,6 +24,9 @@ export class CompetitorsServiceError extends Error {
 function competitorIdentityKey(platform: CompetitorPlatform, handleOrUrl: string): string {
   if (platform === 'linkedin') {
     return `linkedin:${getLinkedInSlug(handleOrUrl)}`
+  }
+  if (platform === 'twitter') {
+    return `twitter:${getTwitterHandle(handleOrUrl)}`
   }
 
   return `instagram:${getInstagramHandle(handleOrUrl)}`

@@ -26,7 +26,9 @@ export function CompetitorProgressCard({
   const platform = competitor.platform
   const steps = getPipelineStepsForPlatform(platform)
   const gridClass =
-    platform === 'linkedin' ? 'sm:grid-cols-4' : 'sm:grid-cols-5'
+    platform === 'linkedin' || platform === 'twitter'
+      ? 'sm:grid-cols-4'
+      : 'sm:grid-cols-5'
 
   return (
     <section className="rounded-[2rem] border border-border-hairline bg-canvas-raised p-6 sm:p-8">
@@ -123,7 +125,9 @@ function PlatformBadge({ platform }: { platform: string }) {
   const label =
     platform === 'linkedin'
       ? t('common.platforms.linkedin')
-      : t('common.platforms.instagram')
+      : platform === 'twitter'
+        ? t('common.platforms.twitter')
+        : t('common.platforms.instagram')
   return (
     <span className="rounded-full border border-border-hairline px-2 py-0.5 text-xs capitalize text-ink-muted">
       {label}

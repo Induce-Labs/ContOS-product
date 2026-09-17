@@ -39,6 +39,11 @@ class Settings(BaseSettings):
         validation_alias="APIFY_LINKEDIN_ACTOR_ID",
     )
     linkedin_max_posts: int = Field(default=50, validation_alias="LINKEDIN_MAX_POSTS")
+    apify_twitter_actor_id: str = Field(
+        default="xquik/x-tweet-scraper",
+        validation_alias="APIFY_TWITTER_ACTOR_ID",
+    )
+    twitter_max_items: int = Field(default=50, validation_alias="TWITTER_MAX_ITEMS")
     apify_wait_secs: int = Field(default=300, validation_alias="APIFY_WAIT_SECS")
     apify_instagram_session_id: str = Field(
         default="",

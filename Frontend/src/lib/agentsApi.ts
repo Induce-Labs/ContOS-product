@@ -29,6 +29,16 @@ export function isConcurrentLimitError(error: unknown): boolean {
 
 export type AgentType = 'chatbot' | 'linkedin' | 'instagram' | 'playbook' | 'twitter'
 
+/** Agent chips shown in the ContOS Agents UI (excludes playbook). */
+export function isUiAgentType(value: string | null | undefined): value is AgentType {
+  return (
+    value === 'chatbot' ||
+    value === 'linkedin' ||
+    value === 'instagram' ||
+    value === 'twitter'
+  )
+}
+
 export type AgentsInvokeRequest = {
   avatar_id: string
   agent_type: AgentType

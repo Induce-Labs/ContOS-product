@@ -14,6 +14,7 @@ import {
   AgentsApiError,
   getUserFirstName,
   isAgentsWelcomeMessage,
+  isUiAgentType,
   type AgentType,
 } from '../lib/agentsApi'
 import {
@@ -158,11 +159,11 @@ export function AgentsPage() {
   const [agentType, setAgentType] = useState<AgentType>(() => {
     try {
       const pending = getPendingAgentCatchUp()
-      if (pending?.agentType === 'linkedin' || pending?.agentType === 'instagram' || pending?.agentType === 'chatbot') {
+      if (isUiAgentType(pending?.agentType)) {
         return pending.agentType
       }
       const stored = sessionStorage.getItem('contos_agents_agent_type')
-      if (stored === 'linkedin' || stored === 'instagram' || stored === 'chatbot') {
+      if (isUiAgentType(stored)) {
         return stored
       }
     } catch {
@@ -208,7 +209,7 @@ export function AgentsPage() {
     function onAgentTypeEvent(event: Event) {
       const detail = (event as CustomEvent<{ agentType?: AgentType }>).detail
       const next = detail?.agentType
-      if (next === 'linkedin' || next === 'instagram' || next === 'chatbot') {
+      if (isUiAgentType(next)) {
         setPendingPlatformRedirect(null)
         setAgentType(next)
       }
@@ -230,6 +231,7 @@ export function AgentsPage() {
     { value: 'chatbot', label: t('agents.agentTypes.chat') },
     { value: 'linkedin', label: t('agents.agentTypes.linkedin') },
     { value: 'instagram', label: t('agents.agentTypes.instagram') },
+    { value: 'twitter', label: t('agents.agentTypes.twitter') },
   ]
 
   function queueRemoteSave(userId: string, avatarId: string, store: ChatStore) {
@@ -417,11 +419,7 @@ export function AgentsPage() {
           if (pending && pending.projectId === projectId) {
             setAwaitingCatchUp(true)
             setStreaming(false)
-            if (
-              pending.agentType === 'linkedin' ||
-              pending.agentType === 'instagram' ||
-              pending.agentType === 'chatbot'
-            ) {
+            if (isUiAgentType(pending.agentType)) {
               setAgentType(pending.agentType)
             }
           } else {
@@ -433,11 +431,7 @@ export function AgentsPage() {
       }
       setStreaming(snapshot.streaming)
       setAwaitingCatchUp(Boolean(snapshot.streaming || snapshot.runId))
-      if (
-        snapshot.agentType === 'linkedin' ||
-        snapshot.agentType === 'instagram' ||
-        snapshot.agentType === 'chatbot'
-      ) {
+      if (isUiAgentType(snapshot.agentType)) {
         setAgentType(snapshot.agentType)
       }
       setMessages((current) => {
@@ -515,11 +509,7 @@ export function AgentsPage() {
     const pending = getPendingAgentCatchUp()
     if (pending && pending.projectId === projectId) {
       setAwaitingCatchUp(true)
-      if (
-        pending.agentType === 'linkedin' ||
-        pending.agentType === 'instagram' ||
-        pending.agentType === 'chatbot'
-      ) {
+      if (isUiAgentType(pending.agentType)) {
         setAgentType(pending.agentType)
       }
     }

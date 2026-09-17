@@ -133,18 +133,28 @@ function ArrowRightIcon({ className }: { className?: string }) {
   )
 }
 
+function TwitterIcon({ className }: { className?: string }) {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor" className={className}>
+      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.74l7.727-8.835L1.254 2.25H8.08l4.253 5.622L18.244 2.25Zm-1.161 17.52h1.833L7.084 4.126H5.117l11.966 15.644Z" />
+    </svg>
+  )
+}
+
 function PlatformPicker({
   platform,
   disabled,
   onChange,
   instagramLabel,
   linkedinLabel,
+  twitterLabel,
 }: {
   platform: CompetitorPlatform
   disabled: boolean
   onChange: (platform: CompetitorPlatform) => void
   instagramLabel: string
   linkedinLabel: string
+  twitterLabel: string
 }) {
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
@@ -165,7 +175,29 @@ function PlatformPicker({
     return () => document.removeEventListener('mousedown', handlePointerDown)
   }, [open])
 
-  const isInstagram = platform === 'instagram'
+  const options: {
+    value: CompetitorPlatform
+    label: string
+    icon: ReturnType<typeof InstagramIcon>
+  }[] = [
+    {
+      value: 'instagram',
+      label: instagramLabel,
+      icon: <InstagramIcon className="h-4 w-4 shrink-0 text-pink-600" />,
+    },
+    {
+      value: 'linkedin',
+      label: linkedinLabel,
+      icon: <LinkedInIcon className="h-4 w-4 shrink-0 text-blue-600" />,
+    },
+    {
+      value: 'twitter',
+      label: twitterLabel,
+      icon: <TwitterIcon className="h-4 w-4 shrink-0 text-neutral-900" />,
+    },
+  ]
+
+  const selected = options.find((option) => option.value === platform) ?? options[0]
 
   return (
     <div ref={rootRef} className="relative w-full shrink-0 sm:w-48">
@@ -179,12 +211,8 @@ function PlatformPicker({
         className="flex w-full cursor-pointer items-center justify-between rounded-xl border border-neutral-200 bg-[#faf9fd] px-4 py-2.5 text-left text-xs font-medium text-neutral-800 transition-all hover:border-neutral-300 disabled:cursor-not-allowed disabled:opacity-60 sm:text-sm"
       >
         <span className="flex min-w-0 items-center gap-2 truncate">
-          {isInstagram ? (
-            <InstagramIcon className="h-4 w-4 shrink-0 text-pink-600" />
-          ) : (
-            <LinkedInIcon className="h-4 w-4 shrink-0 text-blue-600" />
-          )}
-          <span className="truncate">{isInstagram ? instagramLabel : linkedinLabel}</span>
+          {selected.icon}
+          <span className="truncate">{selected.label}</span>
         </span>
         <ChevronDownIcon className="h-3.5 w-3.5 shrink-0 text-neutral-400" />
       </button>
@@ -195,32 +223,22 @@ function PlatformPicker({
           role="listbox"
           className="absolute left-0 right-0 top-full z-30 mt-1.5 rounded-xl border border-neutral-200 bg-white py-1 shadow-lg"
         >
-          <button
-            type="button"
-            role="option"
-            aria-selected={isInstagram}
-            onClick={() => {
-              onChange('instagram')
-              setOpen(false)
-            }}
-            className="flex w-full cursor-pointer items-center gap-2.5 px-3.5 py-2 text-left text-xs font-medium text-neutral-700 transition-colors hover:bg-neutral-50 hover:text-neutral-900"
-          >
-            <InstagramIcon className="h-4 w-4 text-pink-600" />
-            <span>{instagramLabel}</span>
-          </button>
-          <button
-            type="button"
-            role="option"
-            aria-selected={!isInstagram}
-            onClick={() => {
-              onChange('linkedin')
-              setOpen(false)
-            }}
-            className="flex w-full cursor-pointer items-center gap-2.5 px-3.5 py-2 text-left text-xs font-medium text-neutral-700 transition-colors hover:bg-neutral-50 hover:text-neutral-900"
-          >
-            <LinkedInIcon className="h-4 w-4 text-blue-600" />
-            <span>{linkedinLabel}</span>
-          </button>
+          {options.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              role="option"
+              aria-selected={platform === option.value}
+              onClick={() => {
+                onChange(option.value)
+                setOpen(false)
+              }}
+              className="flex w-full cursor-pointer items-center gap-2.5 px-3.5 py-2 text-left text-xs font-medium text-neutral-700 transition-colors hover:bg-neutral-50 hover:text-neutral-900"
+            >
+              {option.icon}
+              <span>{option.label}</span>
+            </button>
+          ))}
         </div>
       ) : null}
     </div>
@@ -384,6 +402,7 @@ export function CompetitorsStep({
                       onChange={(platform) => onUpdatePlatform(index, platform)}
                       instagramLabel={t('onboarding.competitors.platformInstagram')}
                       linkedinLabel={t('onboarding.competitors.platformLinkedIn')}
+                      twitterLabel={t('onboarding.competitors.platformTwitter')}
                     />
 
                     <div className="min-w-0 flex-1">
@@ -400,7 +419,9 @@ export function CompetitorsStep({
                         placeholder={
                           entry.platform === 'linkedin'
                             ? t('onboarding.competitors.placeholderLinkedIn')
-                            : t('onboarding.competitors.placeholderInstagram')
+                            : entry.platform === 'twitter'
+                              ? t('onboarding.competitors.placeholderTwitter')
+                              : t('onboarding.competitors.placeholderInstagram')
                         }
                         className="w-full rounded-xl border border-neutral-200 bg-[#faf9fd] px-4 py-2.5 font-mono text-xs text-neutral-900 placeholder:text-neutral-400 transition-all focus:border-[#9353ea] focus:outline-none focus:ring-2 focus:ring-[#9353ea]/10 disabled:opacity-60 sm:text-sm"
                       />

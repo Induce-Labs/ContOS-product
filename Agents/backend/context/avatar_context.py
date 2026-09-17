@@ -32,9 +32,17 @@ def _competitor_context_for_avatar(
     table = (
         "linkedin_content_summaries"
         if agent_type == "linkedin"
+        else "twitter_content_summaries"
+        if agent_type == "twitter"
         else "instagram_content_summaries"
     )
-    platform = "linkedin" if agent_type == "linkedin" else "instagram"
+    platform = (
+        "linkedin"
+        if agent_type == "linkedin"
+        else "twitter"
+        if agent_type == "twitter"
+        else "instagram"
+    )
 
     # Prefer a single summaries fetch first. Embedding RAG is only worth it when
     # there are more rows than we would send to the model anyway.
@@ -64,6 +72,7 @@ def _competitor_context_for_avatar(
                 for tbl, plat in (
                     ("linkedin_content_summaries", "linkedin"),
                     ("instagram_content_summaries", "instagram"),
+                    ("twitter_content_summaries", "twitter"),
                 ):
                     matches = similarity_search(
                         query_text=user_input,
@@ -71,7 +80,7 @@ def _competitor_context_for_avatar(
                         top_k=2,
                         avatar_id=avatar_id,
                         user_id=user_id,
-                        platform=plat if tbl == "instagram_content_summaries" else None,
+                        platform=plat if tbl != "linkedin_content_summaries" else None,
                         fast=True,
                     )
                     tools_used.append("similarity_search")
@@ -89,7 +98,7 @@ def _competitor_context_for_avatar(
                 )
         return summaries[:4], tools_used
 
-    if agent_type in {"linkedin", "instagram"} and len(summaries) > 3:
+    if agent_type in {"linkedin", "instagram", "twitter"} and len(summaries) > 3:
         try:
             matches = similarity_search(
                 query_text=user_input,
@@ -97,7 +106,7 @@ def _competitor_context_for_avatar(
                 top_k=3,
                 avatar_id=avatar_id,
                 user_id=user_id,
-                platform=platform if agent_type == "instagram" else None,
+                platform=platform if agent_type in {"instagram", "twitter"} else None,
                 # Lexical rank avoids an OpenRouter embedding round-trip (~1–3s).
                 fast=True,
             )

@@ -45,10 +45,14 @@ export function CompetitorSummaryCard({
   }
 
   const metrics = summary.aggregated_engagement_metrics
-  const isLinkedIn = competitor.platform === 'linkedin' || summaryRecord.source === 'linkedin'
-  const platformLabel = isLinkedIn
-    ? t('common.platforms.linkedin')
-    : t('common.platforms.instagram')
+  const platformKey =
+    competitor.platform === 'linkedin' || summaryRecord.source === 'linkedin'
+      ? 'linkedin'
+      : competitor.platform === 'twitter' || summaryRecord.source === 'twitter'
+        ? 'twitter'
+        : 'instagram'
+  const platformLabel = t(`common.platforms.${platformKey}`)
+  const isScrapeAnalyzeOnly = platformKey === 'linkedin' || platformKey === 'twitter'
 
   const topCount = summary.top_performing_content.length
   const translatedCaptions = translated.slice(0, topCount)
@@ -105,7 +109,7 @@ export function CompetitorSummaryCard({
             label={t('competitors.summaryCard.metrics.totalContent')}
             value={metrics.total_content_count}
           />
-          {isLinkedIn ? (
+          {isScrapeAnalyzeOnly ? (
             <MetricTile
               label={t('competitors.summaryCard.metrics.posts')}
               value={metrics.total_content_count}
@@ -134,7 +138,7 @@ export function CompetitorSummaryCard({
             label={t('competitors.summaryCard.metrics.avgComments')}
             value={formatMetric(metrics.avg_comments, t)}
           />
-          {!isLinkedIn ? (
+          {!isScrapeAnalyzeOnly ? (
             <MetricTile
               label={t('competitors.summaryCard.metrics.avgViews')}
               value={formatMetric(metrics.avg_views, t)}

@@ -163,7 +163,7 @@
       "loading": "Loading competitor setup…",
       "unavailable": "Competitor setup is unavailable.",
       "title": "Know your competitive landscape",
-      "body": "Add competitors to help ContOS understand what is happening in your space. Instagram and LinkedIn profiles. Add {{min}}–{{max}} (recommend {{recommended}}).",
+      "body": "Add competitors to help ContOS understand what is happening in your space. Instagram, LinkedIn, and X/Twitter profiles. Add {{min}}–{{max}} (recommend {{recommended}}).",
       "addCompetitor": "+ Add Competitor",
       "remove": "Remove",
       "back": "Back",
@@ -173,8 +173,10 @@
       "competitorLabel": "Competitor {{n}}",
       "platformInstagram": "Instagram",
       "platformLinkedIn": "LinkedIn",
+      "platformTwitter": "X / Twitter",
       "placeholderInstagram": "@competitor or https://instagram.com/competitor",
       "placeholderLinkedIn": "linkedin.com/in/competitor or slug",
+      "placeholderTwitter": "@competitor or https://x.com/competitor",
       "missingAvatar": "Onboarding avatar is missing. Return to project setup and try again.",
       "loadAvatarFailed": "Failed to load onboarding avatar."
     },
@@ -302,6 +304,9 @@
       "linkedinNotCompany": "Enter a personal LinkedIn profile (/in/...), not a company page.",
       "linkedinInvalidUrl": "Enter a valid LinkedIn profile URL (e.g. https://www.linkedin.com/in/jane-doe).",
       "linkedinInvalidSlug": "Enter a LinkedIn profile URL or slug (e.g. jane-doe).",
+      "twitterRequired": "X/Twitter handle or profile URL is required.",
+      "twitterInvalidUrl": "Enter a valid X/Twitter profile URL (e.g. https://x.com/nasa).",
+      "twitterInvalidHandle": "Enter a valid X/Twitter handle (e.g. @nasa) or profile URL.",
       "addAtLeast": "Add at least {{min}} competitor.",
       "addUpTo": "You can add up to {{max}} competitors per avatar.",
       "validationFailed": "Competitor validation failed unexpectedly.",
@@ -330,7 +335,8 @@
     "agentTypes": {
       "chat": "Chat",
       "linkedin": "LinkedIn",
-      "instagram": "Instagram"
+      "instagram": "Instagram",
+      "twitter": "X"
     },
     "platformRedirect": {
       "ask": "Want me to switch you to the {{platform}} agent? Reply yes to continue.",
@@ -490,7 +496,8 @@
     "loading": "Loading…",
     "platforms": {
       "instagram": "Instagram",
-      "linkedin": "LinkedIn"
+      "linkedin": "LinkedIn",
+      "twitter": "X / Twitter"
     }
   },
   "errors": {

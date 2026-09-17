@@ -10,6 +10,7 @@ import {
 } from '../../lib/competitors'
 import { normalizeCompetitorInputs, validateInstagramInput } from '../../lib/instagram'
 import { normalizeLinkedInInputs, validateLinkedInInput } from '../../lib/linkedin'
+import { normalizeTwitterInputs, validateTwitterInput } from '../../lib/twitter'
 import { enqueueCompetitorScrapeJobsOrThrow } from '../../lib/api'
 import { updateProjectStatus } from '../../lib/projects'
 import type { CompetitorPlatform } from '../../types/contos'
@@ -102,6 +103,11 @@ export function AddCompetitorPanel({
         if (!result.valid) {
           errors[`competitor-${index}`] = t(result.message)
         }
+      } else if (entry.platform === 'twitter') {
+        const result = validateTwitterInput(trimmed)
+        if (!result.valid) {
+          errors[`competitor-${index}`] = t(result.message)
+        }
       } else {
         const result = validateInstagramInput(trimmed)
         if (!result.valid) {
@@ -122,7 +128,12 @@ export function AddCompetitorPanel({
     try {
       const byPlatform = new Map<CompetitorPlatform, string[]>()
       for (const entry of filled) {
-        const platform = entry.platform === 'linkedin' ? 'linkedin' : 'instagram'
+        const platform =
+          entry.platform === 'linkedin'
+            ? 'linkedin'
+            : entry.platform === 'twitter'
+              ? 'twitter'
+              : 'instagram'
         const existing = byPlatform.get(platform) ?? []
         existing.push(entry.value.trim())
         byPlatform.set(platform, existing)
@@ -134,7 +145,9 @@ export function AddCompetitorPanel({
         const normalized =
           platform === 'linkedin'
             ? normalizeLinkedInInputs(values)
-            : normalizeCompetitorInputs(values)
+            : platform === 'twitter'
+              ? normalizeTwitterInputs(values)
+              : normalizeCompetitorInputs(values)
         const competitors = await createCompetitors(projectId, normalized, platform)
         createdIds.push(...competitors.map((competitor) => competitor.id))
       }
@@ -191,6 +204,7 @@ export function AddCompetitorPanel({
               >
                 <option value="instagram">{t('common.platforms.instagram')}</option>
                 <option value="linkedin">{t('common.platforms.linkedin')}</option>
+                <option value="twitter">{t('common.platforms.twitter')}</option>
               </select>
               {inputs.length > 1 ? (
                 <button
@@ -208,7 +222,9 @@ export function AddCompetitorPanel({
               placeholder={
                 entry.platform === 'linkedin'
                   ? t('onboarding.competitors.placeholderLinkedIn')
-                  : t('onboarding.competitors.placeholderInstagram')
+                  : entry.platform === 'twitter'
+                    ? t('onboarding.competitors.placeholderTwitter')
+                    : t('onboarding.competitors.placeholderInstagram')
               }
               value={entry.value}
               onChange={(event) => updateInput(index, event.target.value)}

@@ -236,6 +236,104 @@ export type Database = {
           },
         ]
       }
+      twitter_content_summaries: {
+        Row: {
+          competitor_id: string
+          embedding: string | null
+          generated_at: string
+          id: string
+          model_used: string
+          avatar_id: string
+          summary: Json
+        }
+        Insert: {
+          competitor_id: string
+          embedding?: string | null
+          generated_at?: string
+          id?: string
+          model_used: string
+          avatar_id: string
+          summary: Json
+        }
+        Update: {
+          competitor_id?: string
+          embedding?: string | null
+          generated_at?: string
+          id?: string
+          model_used?: string
+          avatar_id?: string
+          summary?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "twitter_content_summaries_competitor_id_fkey"
+            columns: ["competitor_id"]
+            isOneToOne: false
+            referencedRelation: "competitors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "twitter_content_summaries_avatar_id_fkey"
+            columns: ["avatar_id"]
+            isOneToOne: false
+            referencedRelation: "avatars"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      twitter_scraped_content: {
+        Row: {
+          author_description: string | null
+          author_followers: number | null
+          author_name: string | null
+          author_username: string | null
+          caption: string | null
+          competitor_id: string
+          external_id: string
+          id: string
+          post_url: string | null
+          posted_at: string | null
+          raw_payload: Json | null
+          scraped_at: string
+        }
+        Insert: {
+          author_description?: string | null
+          author_followers?: number | null
+          author_name?: string | null
+          author_username?: string | null
+          caption?: string | null
+          competitor_id: string
+          external_id: string
+          id?: string
+          post_url?: string | null
+          posted_at?: string | null
+          raw_payload?: Json | null
+          scraped_at?: string
+        }
+        Update: {
+          author_description?: string | null
+          author_followers?: number | null
+          author_name?: string | null
+          author_username?: string | null
+          caption?: string | null
+          competitor_id?: string
+          external_id?: string
+          id?: string
+          post_url?: string | null
+          posted_at?: string | null
+          raw_payload?: Json | null
+          scraped_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "twitter_scraped_content_competitor_id_fkey"
+            columns: ["competitor_id"]
+            isOneToOne: false
+            referencedRelation: "competitors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiling_questionnaires: {
         Row: {
           created_at: string

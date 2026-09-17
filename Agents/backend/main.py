@@ -38,6 +38,7 @@ from chat_history import ChatHistoryTurn, normalize_chat_history  # noqa: E402
 from embeddings.embed import (  # noqa: E402
     backfill_content_summary_embeddings,
     backfill_linkedin_summary_embeddings,
+    backfill_twitter_summary_embeddings,
     store_playbooks_from_mock,
 )
 
@@ -652,6 +653,25 @@ def backfill_linkedin_summaries(
         raise HTTPException(
             status_code=500,
             detail=f"Failed to backfill linkedin_content_summaries embeddings: {exc}",
+        ) from exc
+
+
+@app.post("/api/embeddings/backfill-twitter-summaries")
+def backfill_twitter_summaries(
+    only_missing: bool = True,
+    limit: int = 200,
+    user_id: UUID = Depends(get_current_user_id),
+) -> dict[str, Any]:
+    """Embed twitter_content_summaries.summary into embedding for agentic RAG."""
+    require_admin_user(user_id)
+    try:
+        return backfill_twitter_summary_embeddings(
+            only_missing=only_missing, limit=limit
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to backfill twitter_content_summaries embeddings: {exc}",
         ) from exc
 
 

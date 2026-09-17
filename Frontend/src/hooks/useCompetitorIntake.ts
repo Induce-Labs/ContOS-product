@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { normalizeCompetitorInputs, validateInstagramInput } from '../lib/instagram'
 import { normalizeLinkedInInputs, validateLinkedInInput } from '../lib/linkedin'
+import { normalizeTwitterInputs, validateTwitterInput } from '../lib/twitter'
 import {
   MAX_COMPETITORS_PER_AVATAR,
   MIN_COMPETITORS_PER_AVATAR,
@@ -97,6 +98,11 @@ export function useCompetitorIntake(initialPlatform: CompetitorPlatform = 'insta
         if (!result.valid) {
           errors[`competitor-${index}`] = localizeValidationMessage(result.message)
         }
+      } else if (entry.platform === 'twitter') {
+        const result = validateTwitterInput(trimmed)
+        if (!result.valid) {
+          errors[`competitor-${index}`] = localizeValidationMessage(result.message)
+        }
       } else {
         const result = validateInstagramInput(trimmed)
         if (!result.valid) {
@@ -116,7 +122,12 @@ export function useCompetitorIntake(initialPlatform: CompetitorPlatform = 'insta
       const byPlatform = new Map<CompetitorPlatform, string[]>()
 
       for (const entry of filled) {
-        const platform = entry.platform === 'linkedin' ? 'linkedin' : 'instagram'
+        const platform =
+          entry.platform === 'linkedin'
+            ? 'linkedin'
+            : entry.platform === 'twitter'
+              ? 'twitter'
+              : 'instagram'
         const existing = byPlatform.get(platform) ?? []
         existing.push(entry.value.trim())
         byPlatform.set(platform, existing)
@@ -128,7 +139,9 @@ export function useCompetitorIntake(initialPlatform: CompetitorPlatform = 'insta
         const normalized =
           platform === 'linkedin'
             ? normalizeLinkedInInputs(values)
-            : normalizeCompetitorInputs(values)
+            : platform === 'twitter'
+              ? normalizeTwitterInputs(values)
+              : normalizeCompetitorInputs(values)
         groups.push({ platform, urls: normalized })
       }
 
