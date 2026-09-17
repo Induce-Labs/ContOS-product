@@ -21,12 +21,10 @@ export function ChatMessageBubble({
 
   const bubble = (
     <div
-      className={`max-w-[min(100%,36rem)] rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap ${
+      className={`max-w-[min(100%,36rem)] rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap text-ink ${
         isUser
-          ? 'bg-accent-primary-soft text-ink'
-          : structuredOutput
-            ? 'border border-border-hairline bg-canvas-raised text-ink'
-            : 'bg-transparent text-ink'
+          ? 'bg-accent-primary-soft'
+          : 'border border-border-hairline bg-canvas-raised'
       }`}
     >
       {taggedAvatarNames && taggedAvatarNames.length > 0 ? (

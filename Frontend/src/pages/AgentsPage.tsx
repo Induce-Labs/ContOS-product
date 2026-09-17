@@ -1096,15 +1096,17 @@ export function AgentsPage() {
       onSignOut={() => void handleSignOut()}
       sidebarOpen={sidebarOpen}
       onSidebarOpenChange={setSidebarOpen}
-      mainClassName="flex min-h-0 flex-col overflow-hidden px-4 pb-3 pt-4 sm:px-8 sm:pt-6"
+      mainClassName="flex min-h-0 flex-col overflow-hidden pb-3 pt-4 sm:pt-6"
     >
-      <IncompleteProfilingBanner
-        projectId={project.id}
-        profilingCompleteness={project.profiling_completeness}
-      />
+      <div className="px-4 sm:px-8">
+        <IncompleteProfilingBanner
+          projectId={project.id}
+          profilingCompleteness={project.profiling_completeness}
+        />
+      </div>
 
       {!showClaudeStyleGreeting ? (
-        <div className="mb-3 shrink-0">
+        <div className="mb-3 shrink-0 px-4 sm:px-8">
           <div className="flex items-center justify-between gap-4">
             <h1 className="min-w-0 truncate font-serif text-2xl leading-none text-ink sm:text-3xl">
               {project.name}
@@ -1127,21 +1129,23 @@ export function AgentsPage() {
           </div>
         </div>
       ) : (
-        <div className="mb-2 flex shrink-0 justify-end">{headerActions}</div>
+        <div className="mb-2 flex shrink-0 justify-end px-4 sm:px-8">{headerActions}</div>
       )}
 
       {showResearchInProgressBanner ? (
-        <div className="mb-2 shrink-0 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-900">
-          {t('agents.researchInProgress')}{' '}
-          <Link className="font-medium underline" to={`/dashboard/${projectId}`}>
-            {t('agents.viewProgress')}
-          </Link>
+        <div className="mb-2 shrink-0 px-4 sm:px-8">
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-900">
+            {t('agents.researchInProgress')}{' '}
+            <Link className="font-medium underline" to={`/dashboard/${projectId}`}>
+              {t('agents.viewProgress')}
+            </Link>
+          </div>
         </div>
       ) : null}
 
       {showClaudeStyleGreeting ? (
-        <section className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto px-1 pb-4 pt-2">
-          <div className="flex w-full max-w-3xl flex-col items-center rounded-[2rem] border border-border-hairline bg-canvas-raised px-5 py-8 text-center shadow-[0_18px_50px_rgba(28,27,41,0.08)] sm:px-10 sm:py-10">
+        <section className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto px-4 pb-4 pt-2 sm:px-8">
+          <div className="flex w-full max-w-3xl flex-col items-center px-1 text-center sm:px-2">
             <img
               src={contosMark}
               alt=""
@@ -1178,8 +1182,8 @@ export function AgentsPage() {
           </div>
         </section>
       ) : (
-        <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[2rem] border border-border-hairline bg-canvas-raised shadow-[0_18px_50px_rgba(28,27,41,0.08)]">
-          <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-4 py-4 sm:px-6">
+        <section className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto py-2 sm:space-y-4 sm:py-3">
             {conversationMessages
               .filter((message) => {
                 if (message.role === 'user') return true
@@ -1191,19 +1195,20 @@ export function AgentsPage() {
                   message.role === 'assistant' ? resolveAssistantOutput(message) : null
 
                 return (
-                  <ChatMessageBubble
-                    key={message.id}
-                    role={message.role}
-                    content={message.content}
-                    taggedAvatarNames={message.taggedAvatarNames}
-                    agentType={message.agentType}
-                    structuredOutput={structuredOutput}
-                  />
+                  <div key={message.id} className="px-4 sm:px-8">
+                    <ChatMessageBubble
+                      role={message.role}
+                      content={message.content}
+                      taggedAvatarNames={message.taggedAvatarNames}
+                      agentType={message.agentType}
+                      structuredOutput={structuredOutput}
+                    />
+                  </div>
                 )
               })}
             {showResponding ? (
               <div
-                className="flex items-center gap-2.5 py-0.5"
+                className="flex items-center gap-2.5 px-4 py-0.5 sm:px-8"
                 aria-live="polite"
                 aria-label={t('agents.respondingAria')}
               >
@@ -1221,17 +1226,17 @@ export function AgentsPage() {
           </div>
 
           {sendError ? (
-            <p className="border-t border-red-100 bg-red-50 px-4 py-2 text-sm text-red-700">
+            <p className="border-t border-red-100 bg-red-50 px-4 py-2 text-sm text-red-700 sm:px-8">
               {sendError}
             </p>
           ) : null}
           {syncError ? (
-            <p className="border-t border-amber-100 bg-amber-50 px-4 py-2 text-sm text-amber-800">
+            <p className="border-t border-amber-100 bg-amber-50 px-4 py-2 text-sm text-amber-800 sm:px-8">
               {t('agents.chatSyncPrefix', { message: syncError })}
             </p>
           ) : null}
 
-          <div className="shrink-0 border-t border-border-hairline px-3 py-3 sm:px-5 sm:py-4">
+          <div className="shrink-0 border-t border-border-hairline px-4 pt-3 sm:px-8 sm:pt-4">
             {renderComposer(false)}
           </div>
         </section>

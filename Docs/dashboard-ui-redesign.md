@@ -35,16 +35,17 @@ Sidebar chrome matches the ContOS home design:
 - **Dark is dashboard-only:** honored on `/dashboard/*`. Auth (`/login`, `/signup`), welcome, `/onboarding/*`, and New Project wizards (`/projects/new`, `/avatars/new`) always render light even if the stored preference is dark.
 - Choosing Dark in the account menu persists for that user across later logins on the same browser.
 - Design tokens in `Frontend/src/index.css`: light defaults in `@theme`, dark overrides under `.dark` (main `#0d0d0d`, sidebar/cards `#161618`, ink white / muted `#a1a1aa`, hairline `#2d2d30`, accent soft `#25164d`).
+- Light-mode **main column** (right of sidebar) uses `#FFFFFF` (`DashboardLayout`); sidebar stays `canvas-raised`. Dark mode main column still uses `canvas` (`#0d0d0d`).
 - Toggle lives in the sidebar account menu only (not a top-bar control).
 
 Top bar: mobile hamburger only. On Agents, **+ New chat** and **+ New Project** sit in the page header on the same row as the project title (right-aligned), so they share vertical alignment with the heading; agent pills stay on the row below.
 
 ## Chatbot UI
 
-Agents chat uses canvas-raised rounded cards on the canvas (white in light mode; charcoal in dark):
+Agents chat sits flat on the page canvas (no nested raised chat card). Message bubbles keep distinct colors: user = `accent-primary-soft` (lavender / deep purple wash in dark); assistant = `canvas-raised` with hairline border.
 
-- Empty state: ContOS mark, greeting, agent pills, suggestion **pills** (research / content / calendar — same handlers as before), shared composer
-- Active thread: project title + agent pills above the card; assistant rows keep the ContOS mark avatar; user bubbles use `accent-primary-soft` (lavender / deep purple wash in dark) without a user-initial avatar
+- Empty state: ContOS mark, greeting, agent pills, suggestion **pills** (research / content / calendar — same handlers as before), shared composer — no bordered card wrapper
+- Active thread: project title + agent pills above the messages; assistant rows keep the ContOS mark avatar; messages scroll on the page canvas with composer pinned below a hairline divider
 - Composer: decorative mic on the left (no `+`), text field, purple circular send — mentions and send behavior unchanged; mic is not wired
 - No message timestamps (messages do not store `createdAt`)
 - **Research in progress** amber banner (with **View progress**) only when the project has at least one competitor and research is not finished (`status !== ready` and no competitor `pipeline_step === done`). Hidden when there are no competitors.
