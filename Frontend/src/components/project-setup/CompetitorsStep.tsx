@@ -21,8 +21,6 @@ export type CompetitorsStepProps = {
   onRemoveField: (index: number) => void
   onSubmit: (event: FormEvent<HTMLFormElement>) => void
   onBack: () => void
-  onSignOut?: () => void
-  isSigningOut?: boolean
 }
 
 function SparklesIcon({ className }: { className?: string }) {
@@ -240,28 +238,13 @@ export function CompetitorsStepLoading() {
 
 export function CompetitorsStepUnavailable({
   message,
-  onSignOut,
-  isSigningOut = false,
 }: {
   message: string
-  onSignOut?: () => void
-  isSigningOut?: boolean
 }) {
-  const { t } = useTranslation()
   return (
     <div className="flex min-h-dvh items-center justify-center bg-canvas px-4">
       <div className="max-w-md space-y-4 rounded-[2rem] border border-red-200 bg-red-50 p-6 text-center text-sm text-red-700">
         <p>{message}</p>
-        {onSignOut ? (
-          <button
-            type="button"
-            onClick={onSignOut}
-            disabled={isSigningOut}
-            className="rounded-xl border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-700 transition hover:bg-red-100 disabled:opacity-60"
-          >
-            {isSigningOut ? t('common.signingOut') : t('common.signOut')}
-          </button>
-        ) : null}
       </div>
     </div>
   )
@@ -280,11 +263,9 @@ export function CompetitorsStep({
   onRemoveField,
   onSubmit,
   onBack,
-  onSignOut,
-  isSigningOut = false,
 }: CompetitorsStepProps) {
   const { t } = useTranslation()
-  const disabled = isSubmitting || isSigningOut
+  const disabled = isSubmitting
   const count = competitorInputs.length
   const atRecommended = count >= RECOMMENDED_COMPETITORS_PER_AVATAR
   const submitLabel = isSubmitting
@@ -306,19 +287,6 @@ export function CompetitorsStep({
       />
 
       <main className="relative z-20 mx-auto flex w-full max-w-4xl flex-col px-4 py-10 sm:px-6 sm:py-14 lg:px-8">
-        {onSignOut ? (
-          <div className="mb-4 flex justify-end">
-            <button
-              type="button"
-              onClick={onSignOut}
-              disabled={disabled}
-              className="shrink-0 rounded-full border border-[#ede7de] bg-white px-4 py-2 text-sm text-neutral-700 transition hover:bg-purple-50 disabled:opacity-60"
-            >
-              {isSigningOut ? t('common.signingOut') : t('common.signOut')}
-            </button>
-          </div>
-        ) : null}
-
         <header className="mx-auto mb-8 max-w-2xl text-center sm:mb-10">
           <span className="mb-3 inline-flex items-center gap-1.5 rounded-full border border-purple-200/60 bg-purple-50 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-[#9353ea]">
             <SparklesIcon className="h-3.5 w-3.5" />

@@ -1,9 +1,9 @@
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, Navigate, Route, Routes, useParams } from 'react-router-dom'
 import { AuthProvider } from './contexts/AuthProvider'
+import { ThemeProvider } from './contexts/ThemeProvider'
 import { GuestRoute } from './components/GuestRoute'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { RequireOnboardingComplete } from './components/RequireOnboardingComplete'
-import { AnalyticsPage } from './pages/AnalyticsPage'
 import { CalendarPage, InsightsPage } from './pages/PlaceholderFeaturePage'
 import { AuthCallbackPage } from './pages/AuthCallbackPage'
 import { AgentsPage } from './pages/AgentsPage'
@@ -17,41 +17,51 @@ import { OnboardingCompetitorsPage } from './pages/OnboardingCompetitorsPage'
 import { OnboardingProfilingPage } from './pages/OnboardingProfilingPage'
 import { OnboardingProjectTypePage } from './pages/OnboardingProjectTypePage'
 
+function AnalyticsRedirect() {
+  const { projectId } = useParams()
+  if (!projectId) {
+    return <Navigate to="/dashboard" replace />
+  }
+  return <Navigate to={`/dashboard/${projectId}`} replace />
+}
+
 function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+        <ThemeProvider>
+          <Routes>
+            <Route path="/" element={<Navigate to="/dashboard" replace />} />
 
-          <Route element={<GuestRoute />}>
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/signup" element={<SignUpPage />} />
-          </Route>
-
-          <Route path="/auth/callback" element={<AuthCallbackPage />} />
-
-          <Route element={<ProtectedRoute />}>
-            <Route path="/welcome" element={<WelcomeOnboardingPage />} />
-            <Route path="/onboarding/project" element={<OnboardingProjectTypePage />} />
-            <Route path="/onboarding/profiling" element={<OnboardingProfilingPage />} />
-            <Route path="/onboarding/competitors" element={<OnboardingCompetitorsPage />} />
-
-            <Route element={<RequireOnboardingComplete />}>
-              <Route path="/dashboard" element={<DashboardRedirectPage />} />
-              <Route path="/dashboard/:projectId" element={<DashboardPage />} />
-              <Route path="/dashboard/:projectId/agents" element={<AgentsPage />} />
-              <Route path="/dashboard/:projectId/profiling" element={<EditProfilingPage />} />
-              <Route path="/dashboard/:projectId/analytics" element={<AnalyticsPage />} />
-              <Route path="/dashboard/:projectId/calendar" element={<CalendarPage />} />
-              <Route path="/dashboard/:projectId/insights" element={<InsightsPage />} />
-              <Route path="/projects/new" element={<NewProjectPage />} />
-              <Route path="/avatars/new" element={<NewProjectPage />} />
+            <Route element={<GuestRoute />}>
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/signup" element={<SignUpPage />} />
             </Route>
-          </Route>
 
-          <Route path="*" element={<Navigate to="/dashboard" replace />} />
-        </Routes>
+            <Route path="/auth/callback" element={<AuthCallbackPage />} />
+
+            <Route element={<ProtectedRoute />}>
+              <Route path="/welcome" element={<WelcomeOnboardingPage />} />
+              <Route path="/onboarding/project" element={<OnboardingProjectTypePage />} />
+              <Route path="/onboarding/profiling" element={<OnboardingProfilingPage />} />
+              <Route path="/onboarding/competitors" element={<OnboardingCompetitorsPage />} />
+
+              <Route element={<RequireOnboardingComplete />}>
+                <Route path="/dashboard" element={<DashboardRedirectPage />} />
+                <Route path="/dashboard/:projectId" element={<DashboardPage />} />
+                <Route path="/dashboard/:projectId/agents" element={<AgentsPage />} />
+                <Route path="/dashboard/:projectId/profiling" element={<EditProfilingPage />} />
+                <Route path="/dashboard/:projectId/analytics" element={<AnalyticsRedirect />} />
+                <Route path="/dashboard/:projectId/calendar" element={<CalendarPage />} />
+                <Route path="/dashboard/:projectId/insights" element={<InsightsPage />} />
+                <Route path="/projects/new" element={<NewProjectPage />} />
+                <Route path="/avatars/new" element={<NewProjectPage />} />
+              </Route>
+            </Route>
+
+            <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          </Routes>
+        </ThemeProvider>
       </BrowserRouter>
     </AuthProvider>
   )

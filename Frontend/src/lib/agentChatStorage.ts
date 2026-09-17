@@ -268,6 +268,23 @@ export function listChatSessions(store: ChatStore): ChatSession[] {
   )
 }
 
+/** Read session list from local cache without creating a new empty store. */
+export function peekLocalChatSessions(userId: string, projectId: string): ChatSession[] {
+  if (typeof localStorage === 'undefined' || !userId || !projectId) {
+    return []
+  }
+  try {
+    const raw = localStorage.getItem(storageKey(userId, projectId))
+    if (!raw) {
+      return []
+    }
+    const stub: StoredChatMessage = { id: '_peek', role: 'assistant', content: '' }
+    return listChatSessions(hydrateChatStore(JSON.parse(raw) as unknown, stub))
+  } catch {
+    return []
+  }
+}
+
 export function updateActiveSessionMessages(
   store: ChatStore,
   messages: StoredChatMessage[],

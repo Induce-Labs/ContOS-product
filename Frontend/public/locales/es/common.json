@@ -9,7 +9,8 @@
     "chatbot": "Chatbot",
     "chatHistory": "Historial de Chat",
     "calendar": "Calendario",
-    "insights": "Perspectivas"
+    "insights": "Perspectivas",
+    "x": "X"
   },
   "topBar": {
     "openNavigationAria": "Abrir navegación",
@@ -22,8 +23,18 @@
     "brandTagline": "CMO Fraccionado",
     "loadingWorkspace": "Cargando espacio de trabajo…",
     "closeNavigationAria": "Cerrar navegación",
+    "collapseSidebarAria": "Contraer barra lateral",
+    "expandSidebarAria": "Expandir barra lateral",
     "projectLimitReached": "Límite de proyectos alcanzado ({{max}}).",
     "newProject": "+ Nuevo Proyecto",
+    "userMenu": {
+      "openAria": "Abrir menú de cuenta",
+      "appearance": "Apariencia",
+      "light": "Claro",
+      "dark": "Oscuro",
+      "language": "Idioma",
+      "signOut": "Cerrar sesión"
+    },
     "emptyProjects": {
       "step": "Paso 01",
       "title": "Crea tu primer proyecto",
@@ -58,6 +69,7 @@
     "orContinueWith": "o continúa con",
     "email": "Correo electrónico",
     "password": "Contraseña",
+    "language": "Idioma",
     "login": {
       "title": "Iniciar sesión",
       "subtitle": "Accede a tu espacio de trabajo de inteligencia competitiva.",
@@ -341,7 +353,17 @@
       "goodEvening": "Buenas noches",
       "greeting": "{{greeting}}, {{name}}",
       "fallbackName": "ahí",
+      "subtitle": "Pide estrategias e ideas de contenido a partir de tu investigación de competidores.",
       "legacyWelcome": "La investigación para este avatar está lista. Puedo convertir los datos de competidores en estrategias, ideas de contenido o comparaciones. ¿En qué quieres enfocarte — LinkedIn, Instagram o un playbook de crecimiento?"
+    },
+    "quickActions": {
+      "researchTitle": "Investigar competidores",
+      "researchBody": "Obtén insights con IA",
+      "contentTitle": "Crear ideas de contenido",
+      "contentBody": "Adaptadas a tu marca",
+      "contentPrompt": "Sugiere ideas de contenido adaptadas a mi marca y a publicaciones recientes de competidores.",
+      "calendarTitle": "Planifica tu calendario",
+      "calendarBody": "Programa y mantén la constancia"
     },
     "output": {
       "noResponseYet": "Sin respuesta aún.",
@@ -396,6 +418,9 @@
     "pressEnter": "Presiona Enter ↵ para continuar",
     "back": "← Atrás",
     "next": "Siguiente",
+    "saveDraft": "Guardar borrador",
+    "saveDraftExit": "Guardar borrador y salir",
+    "savingDraft": "Guardando borrador…",
     "saving": "Guardando…",
     "buildingSummary": "Construyendo tu resumen de perfil…",
     "defaultSection": "FUNDAMENTOS",

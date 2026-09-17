@@ -20,7 +20,10 @@ class Settings(BaseSettings):
     openrouter_api_key: str = Field(default="", validation_alias="OPENROUTER_API_KEY")
     openai_api_key: str = Field(default="", validation_alias="OPENAI_API_KEY")
     cors_origins: str = Field(
-        default="http://localhost:5173,http://localhost:5174",
+        default=(
+            "http://localhost:5173,http://127.0.0.1:5173,"
+            "http://localhost:5174,http://127.0.0.1:5174"
+        ),
         validation_alias="CORS_ORIGINS",
     )
     apify_instagram_actor_id: str = Field(

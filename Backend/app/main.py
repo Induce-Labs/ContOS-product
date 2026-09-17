@@ -40,9 +40,20 @@ app = FastAPI(
     version="0.1.0",
 )
 
+# Browsers treat localhost and 127.0.0.1 as different origins; always allow both for Vite.
+cors_origins = list(settings.cors_origin_list)
+for _origin in (
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:5174",
+    "http://127.0.0.1:5174",
+):
+    if _origin not in cors_origins:
+        cors_origins.append(_origin)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origin_list,
+    allow_origins=cors_origins or ["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

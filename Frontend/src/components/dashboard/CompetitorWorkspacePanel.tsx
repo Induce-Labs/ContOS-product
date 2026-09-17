@@ -22,7 +22,7 @@ export function CompetitorWorkspacePanel({
   const atCompetitorCap = competitors.length >= MAX_COMPETITORS_PER_AVATAR
 
   return (
-    <section className="rounded-[1.75rem] border border-white/80 bg-white/90 p-4 shadow-[0_16px_40px_rgba(28,27,41,0.05)] sm:p-5">
+    <section className="rounded-[1.75rem] border border-border-hairline bg-canvas-raised p-4 shadow-[0_16px_40px_rgba(28,27,41,0.05)] sm:p-5">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-ink-muted">
@@ -75,7 +75,7 @@ export function CompetitorWorkspacePanel({
                 className={`shrink-0 rounded-full px-4 py-2 text-left text-sm transition ${
                   isSelected
                     ? 'bg-accent-primary text-white'
-                    : 'border border-border-hairline bg-white text-ink hover:bg-accent-primary-soft'
+                    : 'border border-border-hairline bg-canvas text-ink hover:bg-accent-primary-soft'
                 }`}
               >
                 <span className="block truncate font-medium">

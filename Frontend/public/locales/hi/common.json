@@ -9,7 +9,8 @@
     "chatbot": "चैटबॉट",
     "chatHistory": "चैट इतिहास",
     "calendar": "कैलेंडर",
-    "insights": "अंतर्दृष्टि"
+    "insights": "अंतर्दृष्टि",
+    "x": "X"
   },
   "topBar": {
     "openNavigationAria": "नेविगेशन खोलें",
@@ -22,8 +23,18 @@
     "brandTagline": "फ्रैक्शनल CMO",
     "loadingWorkspace": "कार्यक्षेत्र लोड हो रहा है…",
     "closeNavigationAria": "नेविगेशन बंद करें",
+    "collapseSidebarAria": "साइडबार संक्षिप्त करें",
+    "expandSidebarAria": "साइडबार विस्तारित करें",
     "projectLimitReached": "प्रोजेक्ट सीमा तक पहुँच गई ({{max}})।",
     "newProject": "+ नया प्रोजेक्ट",
+    "userMenu": {
+      "openAria": "खाता मेनू खोलें",
+      "appearance": "दिखावट",
+      "light": "लाइट",
+      "dark": "डार्क",
+      "language": "भाषा",
+      "signOut": "साइन आउट"
+    },
     "emptyProjects": {
       "step": "चरण 01",
       "title": "अपना पहला प्रोजेक्ट बनाएं",
@@ -58,6 +69,7 @@
     "orContinueWith": "या के साथ जारी रखें",
     "email": "ईमेल",
     "password": "पासवर्ड",
+    "language": "भाषा",
     "login": {
       "title": "साइन इन करें",
       "subtitle": "अपने प्रतियोगी बुद्धिमत्ता कार्यक्षेत्र तक पहुँचें।",
@@ -341,7 +353,17 @@
       "goodEvening": "शुभ संध्या",
       "greeting": "{{greeting}}, {{name}}",
       "fallbackName": "वहाँ",
+      "subtitle": "प्रतियोगी शोध से रणनीतियाँ और सामग्री विचार पूछें।",
       "legacyWelcome": "इस अवतार के लिए शोध तैयार है। मैं प्रतियोगी डेटा को रणनीतियों, सामग्री विचारों, या तुलना में बदल सकता हूँ। आप किस पर ध्यान केंद्रित करना चाहते हैं — लिंक्डइन, इंस्टाग्राम, या एक विकास प्लेबुक?"
+    },
+    "quickActions": {
+      "researchTitle": "प्रतियोगियों पर शोध करें",
+      "researchBody": "AI-संचालित अंतर्दृष्टि पाएं",
+      "contentTitle": "सामग्री विचार बनाएं",
+      "contentBody": "आपके ब्रांड के अनुरूप",
+      "contentPrompt": "मेरे ब्रांड और हाल की प्रतियोगी पोस्ट के अनुकूल सामग्री विचार सुझाएँ।",
+      "calendarTitle": "अपना कैलेंडर प्लान करें",
+      "calendarBody": "शेड्यूल करें और नियमित रहें"
     },
     "output": {
       "noResponseYet": "अभी तक कोई उत्तर नहीं।",
@@ -396,6 +418,9 @@
     "pressEnter": "जारी रखने के लिए Enter दबाएं ↵",
     "back": "← पीछे",
     "next": "अगला",
+    "saveDraft": "ड्राफ्ट सहेजें",
+    "saveDraftExit": "ड्राफ्ट सहेजें और बाहर निकलें",
+    "savingDraft": "ड्राफ्ट सहेजा जा रहा है…",
     "saving": "सहेजना…",
     "buildingSummary": "आपका प्रोफ़ाइल सारांश बना रहा है…",
     "defaultSection": "नींव",

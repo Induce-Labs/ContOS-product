@@ -9,7 +9,8 @@
     "chatbot": "Chatbot",
     "chatHistory": "Chat History",
     "calendar": "Calendar",
-    "insights": "Insights"
+    "insights": "Insights",
+    "x": "X"
   },
   "topBar": {
     "openNavigationAria": "Open navigation",
@@ -22,8 +23,18 @@
     "brandTagline": "Fractional CMO",
     "loadingWorkspace": "Loading workspace…",
     "closeNavigationAria": "Close navigation",
+    "collapseSidebarAria": "Collapse sidebar",
+    "expandSidebarAria": "Expand sidebar",
     "projectLimitReached": "Project limit reached ({{max}}).",
     "newProject": "+ New Project",
+    "userMenu": {
+      "openAria": "Open account menu",
+      "appearance": "Appearance",
+      "light": "Light",
+      "dark": "Dark",
+      "language": "Language",
+      "signOut": "Sign out"
+    },
     "emptyProjects": {
       "step": "Step 01",
       "title": "Create your first project",
@@ -58,6 +69,7 @@
     "orContinueWith": "or continue with",
     "email": "Email",
     "password": "Password",
+    "language": "Language",
     "login": {
       "title": "Sign in",
       "subtitle": "Access your competitor intelligence workspace.",
@@ -341,7 +353,17 @@
       "goodEvening": "Good evening",
       "greeting": "{{greeting}}, {{name}}",
       "fallbackName": "there",
+      "subtitle": "Ask for strategies and content ideas from your competitor research.",
       "legacyWelcome": "Research for this avatar is ready. I can turn competitor data into strategies, content ideas, or comparisons. What do you want to focus on — LinkedIn, Instagram, or a growth playbook?"
+    },
+    "quickActions": {
+      "researchTitle": "Research competitors",
+      "researchBody": "Get AI-powered insights",
+      "contentTitle": "Create content ideas",
+      "contentBody": "Tailored to your brand",
+      "contentPrompt": "Suggest content ideas tailored to my brand and recent competitor posts.",
+      "calendarTitle": "Plan your calendar",
+      "calendarBody": "Schedule and stay consistent"
     },
     "output": {
       "noResponseYet": "No response yet.",
@@ -396,6 +418,9 @@
     "pressEnter": "Press Enter ↵ to continue",
     "back": "← Back",
     "next": "Next",
+    "saveDraft": "Save draft",
+    "saveDraftExit": "Save draft & exit",
+    "savingDraft": "Saving draft…",
     "saving": "Saving…",
     "buildingSummary": "Building your profile summary…",
     "defaultSection": "FOUNDATIONS",

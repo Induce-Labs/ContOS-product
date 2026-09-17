@@ -27,8 +27,9 @@ type SingleSelectQuestion = ProfilingQuestionDef & {
   }
 }
 
-const minimalInputClassName =
-  'w-full border-0 bg-transparent px-0 py-1.5 text-base text-neutral-900 outline-none placeholder:text-neutral-300 focus:outline-none disabled:opacity-60 sm:text-[17px]'
+/** Shared chrome for text / url / textarea / competitor / other fields (light + dark). */
+const typedFieldClassName =
+  'w-full rounded-xl border border-border-hairline bg-canvas px-3.5 py-3 text-base leading-snug text-ink caret-ink outline-none transition-[border-color,box-shadow] placeholder:text-ink-muted/70 focus:border-accent-primary focus:ring-2 focus:ring-accent-primary/25 disabled:cursor-not-allowed disabled:opacity-60 sm:rounded-2xl sm:px-4 sm:py-3.5 sm:text-[17px]'
 
 function CheckIcon({ className }: { className?: string }) {
   return (
@@ -131,8 +132,8 @@ function SingleSelectControls({
               }}
               className={`flex w-full cursor-pointer items-center justify-between rounded-xl p-3 text-left transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-60 sm:rounded-2xl sm:p-3.5 ${
                 selected
-                  ? 'border-2 border-[#9353ea] bg-purple-50/50 text-neutral-900 shadow-sm'
-                  : 'border border-neutral-200/70 bg-[#faf9fd] text-neutral-700 hover:border-neutral-300 hover:text-neutral-900'
+                  ? 'border-2 border-accent-primary bg-accent-primary-soft/50 text-ink shadow-sm'
+                  : 'border border-border-hairline bg-canvas text-ink-muted hover:border-accent-primary/40 hover:text-ink'
               }`}
             >
               <span className="pr-3 text-xs font-medium leading-snug sm:text-sm sm:leading-relaxed">
@@ -141,8 +142,8 @@ function SingleSelectControls({
               <span
                 className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-all ${
                   selected
-                    ? 'border-[#9353ea] bg-[#9353ea] text-white'
-                    : 'border-neutral-300 bg-transparent'
+                    ? 'border-accent-primary bg-accent-primary text-white'
+                    : 'border-border-hairline bg-transparent'
                 }`}
                 aria-hidden="true"
               >
@@ -164,7 +165,7 @@ function SingleSelectControls({
           }}
           onKeyDown={handleKeyDown}
           placeholder={t('profiling.field.describeOwnWords')}
-          className={minimalInputClassName}
+          className={typedFieldClassName}
           autoFocus
         />
       ) : null}
@@ -207,7 +208,7 @@ export function ProfilingQuestionField({
     const max = question.input.max
 
     return (
-      <div className="space-y-4">
+      <div className="space-y-3">
         {Array.from({ length: max }, (_, index) => (
           <input
             key={`competitor-${index}`}
@@ -221,10 +222,12 @@ export function ProfilingQuestionField({
             }}
             onKeyDown={handleKeyDown}
             placeholder={`${question.placeholder ?? t('profiling.field.competitorPlaceholder')} ${index + 1}`}
-            className={minimalInputClassName}
+            className={typedFieldClassName}
+            autoComplete="off"
+            spellCheck={false}
           />
         ))}
-        <p className="text-xs text-neutral-400">
+        <p className="text-xs text-ink-muted">
           {t('profiling.field.enterUpToNames', { max })}
         </p>
       </div>
@@ -237,9 +240,9 @@ export function ProfilingQuestionField({
         value={value}
         disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
-        placeholder={question.placeholder}
-        rows={3}
-        className={`${minimalInputClassName} resize-none`}
+        placeholder={question.placeholder ?? t('profiling.field.describeOwnWords')}
+        rows={4}
+        className={`${typedFieldClassName} min-h-[7rem] resize-y`}
       />
     )
   }
@@ -251,8 +254,9 @@ export function ProfilingQuestionField({
       disabled={disabled}
       onChange={(event) => onChange(event.target.value)}
       onKeyDown={handleKeyDown}
-      placeholder={question.placeholder}
-      className={minimalInputClassName}
+      placeholder={question.placeholder ?? t('profiling.field.describeOwnWords')}
+      className={typedFieldClassName}
+      autoComplete={question.input.kind === 'url' ? 'url' : 'off'}
     />
   )
 }

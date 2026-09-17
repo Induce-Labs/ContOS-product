@@ -1,7 +1,6 @@
 import { type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { AuthAlert } from '../auth/AuthButtons'
-import { LanguageSelector } from '../LanguageSelector'
 import type { ProfilingQuestionDef } from '../../config/onboardingProfilingQuestions'
 import { avatarTypeLabel } from '../../lib/avatars'
 import { ProfilingQuestionField } from './ProfilingQuestionField'
@@ -16,9 +15,13 @@ export type ProfilingStepProps = {
   isSaving: boolean
   isSummarizing?: boolean
   isTranslating?: boolean
+  isSavingDraft?: boolean
+  /** New Project and dashboard incomplete resume; never for onboarding. */
+  showSaveDraft?: boolean
   onAnswerChange: (key: string, value: string) => void
   onNext: (answerOverride?: string) => void
   onBack: () => void
+  onSaveDraft?: () => void
 }
 
 function ArrowIcon({ className }: { className?: string }) {
@@ -68,9 +71,12 @@ export function ProfilingStep({
   isSaving,
   isSummarizing = false,
   isTranslating = false,
+  isSavingDraft = false,
+  showSaveDraft = false,
   onAnswerChange,
   onNext,
   onBack,
+  onSaveDraft,
 }: ProfilingStepProps) {
   const { t } = useTranslation()
   const currentQuestion = questions[questionIndex]
@@ -82,7 +88,7 @@ export function ProfilingStep({
 
   const progress = questions.length > 0 ? ((questionIndex + 1) / questions.length) * 100 : 0
   const value = answers[currentQuestion.key] ?? ''
-  const disabled = isSaving || isSummarizing
+  const disabled = isSaving || isSummarizing || isSavingDraft
   const sectionLabel =
     currentQuestion.sectionLabel ||
     t('profiling.stepFoundations', {
@@ -95,39 +101,38 @@ export function ProfilingStep({
     currentQuestion.input.kind !== 'single_select'
 
   return (
-    <div className="relative flex h-dvh flex-col overflow-hidden bg-[#faf9fd] font-sans text-[#1c1c1c] antialiased selection:bg-neutral-900 selection:text-white">
+    <div className="relative flex h-dvh flex-col overflow-hidden bg-canvas font-sans text-ink antialiased selection:bg-ink selection:text-canvas">
       <div
         aria-hidden="true"
-        className="pointer-events-none fixed inset-0 z-0 bg-[radial-gradient(ellipse_75%_55%_at_15%_10%,rgba(238,230,253,0.55)_0%,rgba(247,244,253,0.25)_45%,rgba(255,255,255,0)_75%),radial-gradient(ellipse_70%_50%_at_85%_90%,rgba(235,225,252,0.45)_0%,rgba(247,244,253,0.2)_40%,rgba(255,255,255,0)_70%)]"
+        className="pointer-events-none fixed inset-0 z-0 bg-[radial-gradient(ellipse_75%_55%_at_15%_10%,rgba(238,230,253,0.55)_0%,rgba(247,244,253,0.25)_45%,rgba(255,255,255,0)_75%),radial-gradient(ellipse_70%_50%_at_85%_90%,rgba(235,225,252,0.45)_0%,rgba(247,244,253,0.2)_40%,rgba(255,255,255,0)_70%)] dark:bg-[radial-gradient(ellipse_75%_55%_at_15%_10%,rgba(37,22,77,0.45)_0%,rgba(13,13,13,0.2)_45%,rgba(13,13,13,0)_75%),radial-gradient(ellipse_70%_50%_at_85%_90%,rgba(37,22,77,0.35)_0%,rgba(13,13,13,0.15)_40%,rgba(13,13,13,0)_70%)]"
       />
 
       <div
         aria-hidden="true"
-        className="pointer-events-none fixed inset-x-0 top-0 z-10 h-16 bg-gradient-to-b from-black/[0.1] via-black/[0.02] to-transparent sm:h-24"
+        className="pointer-events-none fixed inset-x-0 top-0 z-10 h-16 bg-gradient-to-b from-black/[0.1] via-black/[0.02] to-transparent sm:h-24 dark:from-white/[0.06]"
       />
 
       <main className="relative z-20 mx-auto flex h-full w-full max-w-3xl min-h-0 flex-col px-3 py-3 sm:px-5 sm:py-4 lg:px-6">
-        <div className="mb-2 flex shrink-0 items-center justify-end gap-3 sm:mb-3">
-          {isTranslating ? (
-            <p className="text-xs text-neutral-500">{t('agents.translating')}</p>
-          ) : null}
-          <LanguageSelector id="profiling-language-select" />
-        </div>
+        {isTranslating ? (
+          <div className="mb-2 flex shrink-0 items-center justify-end sm:mb-3">
+            <p className="text-xs text-ink-muted">{t('agents.translating')}</p>
+          </div>
+        ) : null}
 
-        <article className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[24px] border border-[#ede7de] bg-white shadow-[0_12px_45px_rgba(0,0,0,0.035)] sm:rounded-[28px]">
-          <div className="h-[3px] w-full shrink-0 bg-neutral-100/80">
+        <article className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[24px] border border-border-hairline bg-canvas-raised shadow-[0_12px_45px_rgba(0,0,0,0.035)] sm:rounded-[28px] dark:shadow-[0_12px_45px_rgba(0,0,0,0.35)]">
+          <div className="h-[3px] w-full shrink-0 bg-border-hairline/60">
             <div
-              className="h-full bg-neutral-900 transition-all duration-500 ease-out"
+              className="h-full bg-ink transition-all duration-500 ease-out"
               style={{ width: `${progress}%` }}
             />
           </div>
 
           <div className="flex min-h-0 flex-1 flex-col px-5 py-4 sm:px-8 sm:py-5 lg:px-10 lg:py-6">
-            <div className="flex shrink-0 flex-col gap-1 text-[11px] font-medium uppercase tracking-[0.16em] text-neutral-400 sm:flex-row sm:items-center sm:justify-between sm:text-xs">
+            <div className="flex shrink-0 flex-col gap-1 text-[11px] font-medium uppercase tracking-[0.16em] text-ink-muted sm:flex-row sm:items-center sm:justify-between sm:text-xs">
               <p>{sectionLabel}</p>
               <p className="normal-case tracking-normal">
-                <span className="text-neutral-400">{workspacePrefix}</span>
-                <span className="font-serif text-neutral-900">{workspaceTypeName}</span>
+                <span className="text-ink-muted">{workspacePrefix}</span>
+                <span className="font-serif text-ink">{workspaceTypeName}</span>
               </p>
             </div>
 
@@ -138,11 +143,11 @@ export function ProfilingStep({
             ) : null}
 
             <div className="mt-4 flex shrink-0 flex-wrap items-baseline gap-2 sm:mt-5">
-              <h1 className="font-serif text-[22px] font-bold leading-[1.18] tracking-[-0.03em] text-neutral-900 sm:text-[28px] md:text-[32px]">
+              <h1 className="font-serif text-[22px] font-bold leading-[1.18] tracking-[-0.03em] text-ink sm:text-[28px] md:text-[32px]">
                 {currentQuestion.question}
               </h1>
               {!currentQuestion.required ? (
-                <span className="rounded-full bg-neutral-100 px-3 py-1 text-xs font-medium uppercase tracking-wide text-neutral-500">
+                <span className="rounded-full bg-canvas px-3 py-1 text-xs font-medium uppercase tracking-wide text-ink-muted">
                   {t('profiling.optional')}
                 </span>
               ) : null}
@@ -155,7 +160,7 @@ export function ProfilingStep({
                 onNext()
               }}
             >
-              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-0.5">
+              <div className="mt-1 min-h-0 flex-1 overflow-y-auto overscroll-contain pr-0.5 sm:mt-2">
                 <ProfilingQuestionField
                   question={currentQuestion}
                   value={value}
@@ -166,40 +171,55 @@ export function ProfilingStep({
                 />
 
                 {fieldError ? (
-                  <p className="mt-3 text-sm text-red-600">{fieldError}</p>
+                  <p className="mt-3 text-sm text-red-600 dark:text-red-400">{fieldError}</p>
                 ) : null}
               </div>
 
-              <div className="mt-3 shrink-0 border-t border-neutral-100 pt-3 sm:mt-4 sm:pt-4">
+              <div className="mt-3 shrink-0 border-t border-border-hairline pt-3 sm:mt-4 sm:pt-4">
                 {showPressEnter ? (
-                  <p className="mb-3 text-xs text-neutral-400 sm:text-sm">{t('profiling.pressEnter')}</p>
+                  <p className="mb-3 text-xs text-ink-muted sm:text-sm">{t('profiling.pressEnter')}</p>
                 ) : null}
 
-                <div className="flex items-center justify-between gap-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
                   <button
                     type="button"
                     onClick={onBack}
                     disabled={disabled}
-                    className="inline-flex items-center gap-2 rounded-full px-2 py-2 text-sm font-medium text-neutral-500 transition-colors hover:text-neutral-900 disabled:cursor-not-allowed disabled:opacity-60 sm:px-3"
+                    className="inline-flex shrink-0 items-center gap-2 rounded-full px-2 py-2 text-sm font-medium text-ink-muted transition-colors hover:text-ink disabled:cursor-not-allowed disabled:opacity-60 sm:px-3"
                   >
                     {t('profiling.back')}
                   </button>
 
-                  <button
-                    type="button"
-                    onClick={() => onNext()}
-                    disabled={disabled}
-                    className="group inline-flex cursor-pointer items-center gap-2 rounded-full bg-[#9353ea] px-6 py-2.5 text-xs font-semibold uppercase tracking-wider text-white shadow-[0_10px_30px_rgba(147,83,234,0.4)] transition-all duration-300 hover:scale-105 hover:bg-[#823fe0] hover:shadow-[0_14px_35px_rgba(147,83,234,0.5)] active:scale-95 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100 sm:px-8 sm:py-3 sm:text-sm"
-                  >
-                    <span>
-                      {isSummarizing
-                        ? t('profiling.buildingSummary')
-                        : isSaving
-                          ? t('profiling.saving')
-                          : t('profiling.next')}
-                    </span>
-                    <ArrowIcon className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-1" />
-                  </button>
+                  <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-3">
+                    {showSaveDraft && onSaveDraft ? (
+                      <button
+                        type="button"
+                        onClick={onSaveDraft}
+                        disabled={disabled}
+                        className="inline-flex shrink-0 items-center rounded-full border border-border-hairline bg-canvas-raised px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-ink transition hover:bg-accent-primary-soft disabled:cursor-not-allowed disabled:opacity-60 sm:px-5 sm:py-3 sm:text-sm"
+                      >
+                        {isSavingDraft
+                          ? t('profiling.savingDraft')
+                          : t('profiling.saveDraft')}
+                      </button>
+                    ) : null}
+
+                    <button
+                      type="button"
+                      onClick={() => onNext()}
+                      disabled={disabled}
+                      className="group inline-flex shrink-0 cursor-pointer items-center gap-2 rounded-full bg-accent-primary px-6 py-2.5 text-xs font-semibold uppercase tracking-wider text-white shadow-[0_10px_30px_rgba(147,83,234,0.4)] transition-all duration-300 hover:scale-105 hover:bg-accent-primary-deep hover:shadow-[0_14px_35px_rgba(147,83,234,0.5)] active:scale-95 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100 sm:px-8 sm:py-3 sm:text-sm"
+                    >
+                      <span>
+                        {isSummarizing
+                          ? t('profiling.buildingSummary')
+                          : isSaving
+                            ? t('profiling.saving')
+                            : t('profiling.next')}
+                      </span>
+                      <ArrowIcon className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-1" />
+                    </button>
+                  </div>
                 </div>
               </div>
             </form>

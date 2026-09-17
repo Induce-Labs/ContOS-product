@@ -89,21 +89,24 @@ export function AgentTypePills({
 }: AgentTypePillsProps) {
   void _streaming
   return (
-    <div className="flex flex-wrap gap-2">
-      {options.map((option) => (
-        <button
-          key={option.value}
-          type="button"
-          onClick={() => onChange(option.value)}
-          className={`rounded-full px-3 py-1.5 text-sm transition ${
-            agentType === option.value
-              ? 'bg-accent-primary text-white'
-              : 'border border-border-hairline bg-white text-ink-muted hover:bg-accent-primary-soft'
-          }`}
-        >
-          {option.label}
-        </button>
-      ))}
+    <div className="inline-flex flex-wrap items-center justify-center gap-2 rounded-full bg-transparent p-0.5">
+      {options.map((option) => {
+        const isActive = agentType === option.value
+        return (
+          <button
+            key={option.value}
+            type="button"
+            onClick={() => onChange(option.value)}
+            className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition ${
+              isActive
+                ? 'bg-accent-primary text-white shadow-[0_8px_20px_rgba(116,79,185,0.28)]'
+                : 'border border-border-hairline bg-canvas-raised text-ink-muted hover:border-accent-primary/30 hover:bg-accent-primary-soft/50 hover:text-ink'
+            }`}
+          >
+            {option.label}
+          </button>
+        )
+      })}
     </div>
   )
 }

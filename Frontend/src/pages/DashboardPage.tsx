@@ -1,17 +1,45 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { useDashboardPolling } from '../hooks/useDashboardPolling'
 import { useDashboardShell } from '../hooks/useDashboardShell'
 import { updateProjectStatus } from '../lib/projects'
-import { enqueueCompetitorScrapeJobsOrThrow, stopCompetitorPipeline } from '../lib/api'
+import { enqueueCompetitorScrapeJobsOrThrow } from '../lib/api'
+import { MAX_COMPETITORS_PER_AVATAR, type Competitor } from '../lib/competitors'
 import { requeueOrphanedCompetitorScrapes } from '../lib/requeueOrphanedScrapes'
+import type { ProjectStatus } from '../types/contos'
 import { DashboardLayout, EmptyProjectsState } from '../components/dashboard/DashboardLayout'
 import { CompetitorProgressCard } from '../components/dashboard/CompetitorProgressCard'
 import { AddCompetitorPanel } from '../components/dashboard/AddCompetitorPanel'
 import { OverviewWorkspaceHeader } from '../components/dashboard/OverviewWorkspaceHeader'
 import { CompetitorWorkspacePanel } from '../components/dashboard/CompetitorWorkspacePanel'
-import type { Competitor } from '../lib/competitors'
+
+function deriveProjectStatusFromCompetitors(
+  competitors: Competitor[],
+  storedStatus: ProjectStatus | string,
+): ProjectStatus | string {
+  if (competitors.length === 0) {
+    return storedStatus
+  }
+
+  const hasInProgress = competitors.some(
+    (competitor) =>
+      competitor.pipeline_step !== 'done' && competitor.pipeline_step !== 'failed',
+  )
+  if (hasInProgress) {
+    return 'scraping'
+  }
+
+  if (competitors.every((competitor) => competitor.pipeline_step === 'failed')) {
+    return 'failed'
+  }
+
+  if (competitors.some((competitor) => competitor.pipeline_step === 'done')) {
+    return 'ready'
+  }
+
+  return storedStatus
+}
 
 export function DashboardPage() {
   const { t } = useTranslation()
@@ -26,14 +54,12 @@ export function DashboardPage() {
     sidebarOpen,
     setSidebarOpen,
     handleSignOut,
+    refreshProjects,
   } = useDashboardShell()
-  const navigate = useNavigate()
   const [selectedCompetitorId, setSelectedCompetitorId] = useState<string | null>(null)
   const [isAddCompetitorOpen, setIsAddCompetitorOpen] = useState(false)
   const [retryingCompetitorId, setRetryingCompetitorId] = useState<string | null>(null)
-  const [stoppingCompetitorId, setStoppingCompetitorId] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
-  const redirectedToAgentsRef = useRef<string | null>(null)
 
   const {
     competitors,
@@ -51,32 +77,51 @@ export function DashboardPage() {
     void requeueOrphanedCompetitorScrapes(activeProject.id, competitors)
   }, [activeProject?.id, competitors, dashboardLoading])
 
+  // Avatar.status can lag behind competitor pipeline_step (shell is not polled).
+  // Keep the row in sync when every competitor has finished.
   useEffect(() => {
-    if (!activeProject || dashboardLoading) {
+    if (!activeProject || dashboardLoading || competitors.length === 0) {
       return
     }
 
-    const hasInProgress = competitors.some(
-      (competitor) =>
-        competitor.pipeline_step !== 'done' && competitor.pipeline_step !== 'failed',
+    const derived = deriveProjectStatusFromCompetitors(
+      competitors,
+      activeProject.status,
     )
-    const hasCompleted = competitors.some(
-      (competitor) => competitor.pipeline_step === 'done',
-    )
-    const isReady =
-      activeProject.status === 'ready' || (hasCompleted && !hasInProgress)
-
-    if (!isReady || !hasCompleted) {
+    if (derived === activeProject.status) {
+      return
+    }
+    if (derived !== 'ready' && derived !== 'failed') {
       return
     }
 
-    if (redirectedToAgentsRef.current === activeProject.id) {
-      return
+    const avatarId = activeProject.id
+    const nextStatus = derived
+    let cancelled = false
+
+    async function syncStatus() {
+      try {
+        await updateProjectStatus(avatarId, nextStatus)
+        if (!cancelled) {
+          await refreshProjects()
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setActionError(
+            error instanceof Error
+              ? error.message
+              : t('dashboard.retryFailed'),
+          )
+        }
+      }
     }
 
-    redirectedToAgentsRef.current = activeProject.id
-    navigate(`/dashboard/${activeProject.id}/agents`, { replace: true })
-  }, [activeProject, competitors, dashboardLoading, navigate])
+    void syncStatus()
+
+    return () => {
+      cancelled = true
+    }
+  }, [activeProject, competitors, dashboardLoading, refreshProjects, t])
 
   async function handleRetryCompetitor(competitorId: string) {
     if (!activeProject) {
@@ -85,12 +130,12 @@ export function DashboardPage() {
 
     setActionError(null)
     setRetryingCompetitorId(competitorId)
-    redirectedToAgentsRef.current = null
 
     try {
       await updateProjectStatus(activeProject.id, 'scraping')
       await enqueueCompetitorScrapeJobsOrThrow(activeProject.id, [competitorId])
       await refresh()
+      await refreshProjects()
     } catch (error) {
       setActionError(
         error instanceof Error ? error.message : t('dashboard.retryFailed'),
@@ -100,45 +145,26 @@ export function DashboardPage() {
     }
   }
 
-  async function handleStopCompetitor(competitorId: string) {
-    if (!activeProject) {
-      return
-    }
-
-    setActionError(null)
-    setStoppingCompetitorId(competitorId)
-
-    try {
-      await stopCompetitorPipeline(activeProject.id, competitorId)
-      await refresh()
-    } catch (error) {
-      setActionError(
-        error instanceof Error ? error.message : t('dashboard.stopFailed'),
-      )
-    } finally {
-      setStoppingCompetitorId(null)
-    }
-  }
-
   const isLoading = projectsLoading || (activeProject !== null && dashboardLoading)
   const activeCompetitorId =
     selectedCompetitorId &&
     competitors.some((competitor) => competitor.id === selectedCompetitorId)
       ? selectedCompetitorId
       : (competitors[0]?.id ?? null)
-  const visibleCompetitors = activeCompetitorId
-    ? competitors.filter((competitor) => competitor.id === activeCompetitorId)
-    : competitors
   const failedCompetitorCount = competitors.filter(
     (competitor) => competitor.pipeline_step === 'failed',
   ).length
   const completedCompetitorCount = competitors.filter(
     (competitor) => competitor.pipeline_step === 'done',
   ).length
+  const displayStatus = activeProject
+    ? deriveProjectStatusFromCompetitors(competitors, activeProject.status)
+    : null
   const hasPartialFailure =
     failedCompetitorCount > 0 &&
     completedCompetitorCount > 0 &&
-    activeProject?.status === 'ready'
+    displayStatus === 'ready'
+  const remainingSlots = Math.max(0, MAX_COMPETITORS_PER_AVATAR - competitors.length)
 
   if (!isLoading && projects.length === 0) {
     return (
@@ -151,7 +177,7 @@ export function DashboardPage() {
         onSignOut={() => void handleSignOut()}
         sidebarOpen={sidebarOpen}
         onSidebarOpenChange={setSidebarOpen}
-        mainClassName="overflow-y-auto px-4 py-8 sm:px-8"
+        mainClassName="overflow-y-auto px-4 pb-8 pt-4 sm:px-8 sm:pt-6"
       >
         <EmptyProjectsState />
       </DashboardLayout>
@@ -169,7 +195,7 @@ export function DashboardPage() {
       sidebarOpen={sidebarOpen}
       onSidebarOpenChange={setSidebarOpen}
       isLoading={isLoading}
-      mainClassName="overflow-y-auto px-4 pb-8 sm:px-8"
+      mainClassName="overflow-y-auto px-4 pb-8 pt-4 sm:px-8 sm:pt-6"
     >
       {projectsError || dashboardError || actionError ? (
         <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -186,12 +212,20 @@ export function DashboardPage() {
 
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <p className="text-sm capitalize text-ink-muted">
-                {activeProject.type.replaceAll('_', ' ')}
-              </p>
-              <h2 className="text-xl font-semibold text-ink">{activeProject.name}</h2>
+              <h2 className="font-serif text-2xl leading-none text-ink sm:text-3xl">
+                {activeProject.name}
+              </h2>
               <p className="mt-1 text-sm text-ink-muted">
-                {t('dashboard.projectStatus', { status: activeProject.status })}
+                {t('dashboard.projectStatus', {
+                  status: displayStatus ?? activeProject.status,
+                })}
+              </p>
+              <p className="mt-1 text-sm text-ink-muted">
+                {t('analytics.tracked', {
+                  count: competitors.length,
+                  max: MAX_COMPETITORS_PER_AVATAR,
+                })}
+                {remainingSlots > 0 ? t('analytics.slotsLeft', { count: remainingSlots }) : ''}
               </p>
             </div>
             {completedCompetitorCount > 0 ? (
@@ -224,34 +258,31 @@ export function DashboardPage() {
               existingCompetitors={competitors}
               onClose={() => setIsAddCompetitorOpen(false)}
               onSuccess={() => {
-                redirectedToAgentsRef.current = null
                 void refresh()
               }}
             />
           ) : null}
 
           {competitors.length === 0 ? (
-            <section className="rounded-[2rem] border border-dashed border-border-hairline bg-white/80 p-8 text-center">
+            <section className="rounded-[2rem] border border-dashed border-border-hairline bg-canvas-raised/80 p-8 text-center">
               <p className="text-sm text-ink-muted">{t('dashboard.noCompetitors')}</p>
             </section>
           ) : (
             <div className="space-y-8">
-              {visibleCompetitors.map((competitor) => (
+              {competitors.map((competitor) => (
                 <CompetitorDashboardSection
                   key={competitor.id}
                   competitor={competitor}
                   projectId={activeProject.id}
                   onRetry={(competitorId) => void handleRetryCompetitor(competitorId)}
-                  onStop={(competitorId) => void handleStopCompetitor(competitorId)}
                   isRetrying={retryingCompetitorId === competitor.id}
-                  isStopping={stoppingCompetitorId === competitor.id}
                 />
               ))}
             </div>
           )}
         </div>
       ) : (
-        <section className="rounded-[2rem] border border-border-hairline bg-white p-8">
+        <section className="rounded-[2rem] border border-border-hairline bg-canvas-raised p-8">
           <p className="text-sm text-ink-muted">{t('dashboard.selectProject')}</p>
         </section>
       )}
@@ -263,30 +294,27 @@ type CompetitorDashboardSectionProps = {
   competitor: Competitor
   projectId: string
   onRetry?: (competitorId: string) => void
-  onStop?: (competitorId: string) => void
   isRetrying?: boolean
-  isStopping?: boolean
 }
 
 function CompetitorDashboardSection({
   competitor,
   projectId,
   onRetry,
-  onStop,
   isRetrying = false,
-  isStopping = false,
 }: CompetitorDashboardSectionProps) {
   const { t } = useTranslation()
 
   if (competitor.pipeline_step === 'done') {
     return (
-      <section className="rounded-[2rem] border border-white/80 bg-white p-6 shadow-[0_16px_40px_rgba(28,27,41,0.05)] sm:p-8">
+      <section className="rounded-[2rem] border border-border-hairline bg-canvas-raised p-6 shadow-[0_16px_40px_rgba(28,27,41,0.05)] sm:p-8">
         <p className="text-xs font-medium uppercase tracking-wide text-signal-positive">
           {t('dashboard.researchReadyEyebrow')}
         </p>
         <h2 className="mt-2 font-serif text-2xl text-ink">
           {t('dashboard.researchFinishedTitle')}
         </h2>
+        <p className="mt-1 text-sm font-medium text-ink">{competitor.handle_or_url}</p>
         <p className="mt-2 text-sm text-ink-muted">
           {competitor.error_message?.includes('stopped early')
             ? `${competitor.error_message}${t('dashboard.researchFinishedPartialSuffix')}`
@@ -306,9 +334,7 @@ function CompetitorDashboardSection({
     <CompetitorProgressCard
       competitor={competitor}
       onRetry={onRetry}
-      onStop={onStop}
       isRetrying={isRetrying}
-      isStopping={isStopping}
     />
   )
 }

@@ -7,12 +7,12 @@ type OverviewWorkspaceHeaderProps = {
 export function OverviewWorkspaceHeader({
   title,
   subtitle,
-  className = 'mb-8',
+  className = 'mb-6',
 }: OverviewWorkspaceHeaderProps) {
   return (
     <header className={className}>
-      <h1 className="font-serif text-4xl leading-tight text-ink sm:text-5xl">{title}</h1>
-      <p className="mt-3 max-w-2xl text-sm text-ink-muted sm:text-base">{subtitle}</p>
+      <h1 className="font-serif text-2xl leading-none text-ink sm:text-3xl">{title}</h1>
+      <p className="mt-1.5 max-w-2xl text-xs text-ink-muted sm:text-sm">{subtitle}</p>
     </header>
   )
 }

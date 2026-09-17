@@ -9,7 +9,8 @@
     "chatbot": "Chatbot",
     "chatHistory": "Historique des discussions",
     "calendar": "Calendrier",
-    "insights": "Aperçus"
+    "insights": "Aperçus",
+    "x": "X"
   },
   "topBar": {
     "openNavigationAria": "Ouvrir la navigation",
@@ -22,8 +23,18 @@
     "brandTagline": "CMO fractionnel",
     "loadingWorkspace": "Chargement de l'espace de travail…",
     "closeNavigationAria": "Fermer la navigation",
+    "collapseSidebarAria": "Réduire la barre latérale",
+    "expandSidebarAria": "Développer la barre latérale",
     "projectLimitReached": "Limite de projet atteinte ({{max}}).",
     "newProject": "+ Nouveau projet",
+    "userMenu": {
+      "openAria": "Ouvrir le menu du compte",
+      "appearance": "Apparence",
+      "light": "Clair",
+      "dark": "Sombre",
+      "language": "Langue",
+      "signOut": "Se déconnecter"
+    },
     "emptyProjects": {
       "step": "Étape 01",
       "title": "Créez votre premier projet",
@@ -58,6 +69,7 @@
     "orContinueWith": "ou continuez avec",
     "email": "Email",
     "password": "Mot de passe",
+    "language": "Langue",
     "login": {
       "title": "Se connecter",
       "subtitle": "Accédez à votre espace de travail d'intelligence concurrentielle.",
@@ -341,7 +353,17 @@
       "goodEvening": "Bonsoir",
       "greeting": "{{greeting}}, {{name}}",
       "fallbackName": "là",
+      "subtitle": "Demandez des stratégies et des idées de contenu à partir de votre recherche concurrentielle.",
       "legacyWelcome": "La recherche pour cet avatar est prête. Je peux transformer les données des concurrents en stratégies, idées de contenu ou comparaisons. Sur quoi voulez-vous vous concentrer — LinkedIn, Instagram ou un playbook de croissance ?"
+    },
+    "quickActions": {
+      "researchTitle": "Analyser les concurrents",
+      "researchBody": "Obtenez des insights IA",
+      "contentTitle": "Créer des idées de contenu",
+      "contentBody": "Adaptées à votre marque",
+      "contentPrompt": "Suggère des idées de contenu adaptées à ma marque et aux publications récentes des concurrents.",
+      "calendarTitle": "Planifier votre calendrier",
+      "calendarBody": "Programmez et restez régulier"
     },
     "output": {
       "noResponseYet": "Pas encore de réponse.",
@@ -396,6 +418,9 @@
     "pressEnter": "Appuyez sur Entrée ↵ pour continuer",
     "back": "← Retour",
     "next": "Suivant",
+    "saveDraft": "Enregistrer le brouillon",
+    "saveDraftExit": "Enregistrer le brouillon et quitter",
+    "savingDraft": "Enregistrement du brouillon…",
     "saving": "Enregistrement…",
     "buildingSummary": "Construction de votre résumé de profil…",
     "defaultSection": "FONDATIONS",

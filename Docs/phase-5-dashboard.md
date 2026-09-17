@@ -23,11 +23,11 @@ Give users a command center to switch projects, track competitor pipeline progre
 | --- | --- |
 | Project switcher | [`DashboardSidebar.tsx`](../Frontend/src/components/dashboard/DashboardSidebar.tsx) links to `/dashboard/:projectId` |
 | Competitor list | Sidebar lists competitors for active project with status hint |
-| Add competitor | [`AddCompetitorPanel.tsx`](../Frontend/src/components/dashboard/AddCompetitorPanel.tsx) — Overview workspace panel + Analytics tab; same validation as Phase 3; enqueues scrape for new IDs only |
+| Add competitor | [`AddCompetitorPanel.tsx`](../Frontend/src/components/dashboard/AddCompetitorPanel.tsx) — Overview workspace panel; same validation as Phase 3; enqueues scrape for new IDs only |
 | 10-competitor cap | Button disabled with tooltip when `MAX_COMPETITORS_PER_AVATAR` reached |
 | Progress cards | [`CompetitorProgressCard.tsx`](../Frontend/src/components/dashboard/CompetitorProgressCard.tsx) — step tracker: Queued → Scraping → Transcribing → Analyzing → Done |
 | Failed state | `error_message` shown inline on progress card |
-| Summary display | [`CompetitorSummaryCard.tsx`](../Frontend/src/components/dashboard/CompetitorSummaryCard.tsx) replaces progress when `pipeline_step = done` and summary exists |
+| Summary display | [`CompetitorSummaryCard.tsx`](../Frontend/src/components/dashboard/CompetitorSummaryCard.tsx) remains in codebase; Overview does not render summaries (Analytics route retired) |
 | Live updates | [`useDashboardPolling.ts`](../Frontend/src/hooks/useDashboardPolling.ts) polls Supabase every 5s |
 
 ## Pipeline step copy

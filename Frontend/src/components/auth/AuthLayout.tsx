@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
+import bgSign from '../../assets/bg-sign.jpg'
 
 type AuthLayoutProps = {
   title: string
@@ -15,16 +16,22 @@ export function AuthLayout({ title, subtitle, children, footer }: AuthLayoutProp
   return (
     <div className="flex min-h-dvh items-center justify-center overflow-y-auto bg-canvas p-3 sm:p-4">
       <div className="my-auto flex w-full max-w-[980px] max-h-[calc(100dvh-1.5rem)] flex-col overflow-hidden rounded-[2rem] bg-canvas-raised p-2 shadow-[0_8px_30px_rgb(0,0,0,0.04)] sm:rounded-[2.25rem] sm:p-3 md:max-h-[calc(100dvh-2rem)] md:flex-row">
-        <div className="relative hidden min-h-0 overflow-hidden rounded-[1.5rem] bg-gradient-to-br from-accent-primary-deep via-accent-primary to-accent-primary/90 p-6 md:flex md:w-[42%] md:flex-col md:justify-between lg:p-8">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_var(--tw-gradient-stops))] from-white/20 via-transparent to-transparent opacity-60 mix-blend-overlay" />
+        <div className="relative hidden min-h-0 overflow-hidden rounded-[1.5rem] md:flex md:w-[42%] md:flex-col md:justify-between">
+          <img
+            src={bgSign}
+            alt=""
+            aria-hidden="true"
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/15 to-black/25" />
 
-          <div className="relative z-10">
+          <div className="relative z-10 p-6 lg:p-8">
             <span className="text-xl font-bold tracking-tight text-white">
               {t('auth.brandName')}
             </span>
           </div>
 
-          <div className="relative z-10 mt-auto pt-8">
+          <div className="relative z-10 mt-auto p-6 pt-8 lg:p-8">
             <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-white/80">
               {t('auth.panelEyebrow')}
             </p>

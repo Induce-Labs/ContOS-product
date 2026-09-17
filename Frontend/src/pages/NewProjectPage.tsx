@@ -8,7 +8,6 @@ import {
   ProfilingStepLoading,
   ProfilingStepUnavailable,
 } from '../components/project-setup/ProfilingStep'
-import { useAuth } from '../hooks/useAuth'
 import { useCompetitorIntake } from '../hooks/useCompetitorIntake'
 import { useProfilingQuestionnaire } from '../hooks/useProfilingQuestionnaire'
 import {
@@ -31,6 +30,8 @@ function NewProjectProfiling({
   onBackToType: () => void
   onFinished: () => void
 }) {
+  const navigate = useNavigate()
+  const [isSavingDraft, setIsSavingDraft] = useState(false)
   const {
     avatar,
     questions,
@@ -46,6 +47,7 @@ function NewProjectProfiling({
     setAnswer,
     goNext,
     goBack,
+    saveDraftCurrentAnswer,
   } = useProfilingQuestionnaire({ avatarId, startAtBeginning: true })
 
   async function handleNext(answerOverride?: string) {
@@ -59,6 +61,19 @@ function NewProjectProfiling({
     const result = goBack()
     if (result === 'exit') {
       onBackToType()
+    }
+  }
+
+  async function handleSaveDraft() {
+    setIsSavingDraft(true)
+    try {
+      const result = await saveDraftCurrentAnswer()
+      if (result === 'blocked') {
+        return
+      }
+      navigate(`/dashboard/${avatarId}`, { replace: true })
+    } finally {
+      setIsSavingDraft(false)
     }
   }
 
@@ -85,30 +100,30 @@ function NewProjectProfiling({
       isSaving={isSaving}
       isSummarizing={isSummarizing}
       isTranslating={isTranslatingQuestions || isLocalizingAnswers}
+      isSavingDraft={isSavingDraft}
+      showSaveDraft
       onAnswerChange={setAnswer}
       onNext={(answerOverride) => void handleNext(answerOverride)}
       onBack={handleBack}
+      onSaveDraft={() => void handleSaveDraft()}
     />
   )
 }
 
 export function NewProjectPage() {
   const navigate = useNavigate()
-  const { signOut } = useAuth()
   const [step, setStep] = useState<WizardStep>('type')
   const [selectedType, setSelectedType] = useState<ProjectType | null>(null)
   const [avatar, setAvatar] = useState<Avatar | null>(null)
   const [fieldError, setFieldError] = useState<string | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isCreatingAvatar, setIsCreatingAvatar] = useState(false)
-  const [isSigningOut, setIsSigningOut] = useState(false)
 
   const {
     competitorInputs,
     fieldErrors: competitorFieldErrors,
     errorMessage: competitorErrorMessage,
     isSubmitting,
-    setErrorMessage: setCompetitorErrorMessage,
     updateCompetitorInput,
     updateCompetitorPlatform,
     addCompetitorField,
@@ -117,20 +132,6 @@ export function NewProjectPage() {
     minCompetitors,
     maxCompetitors,
   } = useCompetitorIntake()
-
-  async function handleSignOut() {
-    setIsSigningOut(true)
-    setCompetitorErrorMessage(null)
-    try {
-      await signOut({ force: true })
-      navigate('/login', { replace: true })
-    } catch (error) {
-      setIsSigningOut(false)
-      setCompetitorErrorMessage(
-        error instanceof Error ? error.message : 'Sign out failed.',
-      )
-    }
-  }
 
   async function handleTypeContinue() {
     setErrorMessage(null)
@@ -233,8 +234,6 @@ export function NewProjectPage() {
       onRemoveField={removeCompetitorField}
       onSubmit={(event) => void handleCompetitorsSubmit(event)}
       onBack={() => setStep('profiling')}
-      onSignOut={() => void handleSignOut()}
-      isSigningOut={isSigningOut}
     />
   )
 }

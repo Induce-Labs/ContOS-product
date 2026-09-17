@@ -35,10 +35,10 @@ export function PlaceholderFeaturePage({ titleKey, subtitleKey }: PlaceholderFea
       sidebarOpen={sidebarOpen}
       onSidebarOpenChange={setSidebarOpen}
       isLoading={projectsLoading}
-      mainClassName="overflow-y-auto px-4 pb-8 sm:px-8"
+      mainClassName="overflow-y-auto px-4 pb-8 pt-4 sm:px-8 sm:pt-6"
     >
       <OverviewWorkspaceHeader title={title} subtitle={subtitle} />
-      <section className="rounded-[2rem] border border-white/80 bg-white p-8 shadow-[0_16px_40px_rgba(28,27,41,0.05)] sm:p-10">
+      <section className="rounded-[2rem] border border-border-hairline bg-canvas-raised p-8 shadow-[0_16px_40px_rgba(28,27,41,0.05)] sm:p-10">
         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-accent-primary">
           {t('placeholder.comingSoon')}
         </p>

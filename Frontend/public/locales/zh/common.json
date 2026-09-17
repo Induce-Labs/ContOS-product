@@ -9,7 +9,8 @@
     "chatbot": "聊天机器人",
     "chatHistory": "聊天记录",
     "calendar": "日历",
-    "insights": "洞察"
+    "insights": "洞察",
+    "x": "X"
   },
   "topBar": {
     "openNavigationAria": "打开导航",
@@ -22,8 +23,18 @@
     "brandTagline": "部分首席营销官",
     "loadingWorkspace": "正在加载工作区…",
     "closeNavigationAria": "关闭导航",
+    "collapseSidebarAria": "折叠侧边栏",
+    "expandSidebarAria": "展开侧边栏",
     "projectLimitReached": "项目限制已达到 ({{max}})。",
     "newProject": "+ 新项目",
+    "userMenu": {
+      "openAria": "打开账户菜单",
+      "appearance": "外观",
+      "light": "浅色",
+      "dark": "深色",
+      "language": "语言",
+      "signOut": "退出登录"
+    },
     "emptyProjects": {
       "step": "步骤 01",
       "title": "创建您的第一个项目",
@@ -58,6 +69,7 @@
     "orContinueWith": "或继续使用",
     "email": "电子邮件",
     "password": "密码",
+    "language": "语言",
     "login": {
       "title": "登录",
       "subtitle": "访问您的竞争对手情报工作区。",
@@ -341,7 +353,17 @@
       "goodEvening": "晚上好",
       "greeting": "{{greeting}}, {{name}}",
       "fallbackName": "您好",
+      "subtitle": "根据竞品研究询问策略与内容创意。",
       "legacyWelcome": "此头像的研究已准备就绪。我可以将竞争对手数据转化为策略、内容创意或比较。您想专注于什么——LinkedIn、Instagram 还是增长剧本？"
+    },
+    "quickActions": {
+      "researchTitle": "研究竞争对手",
+      "researchBody": "获取 AI 洞察",
+      "contentTitle": "创建内容创意",
+      "contentBody": "贴合你的品牌",
+      "contentPrompt": "根据我的品牌和近期竞品帖子，推荐内容创意。",
+      "calendarTitle": "规划你的日历",
+      "calendarBody": "安排并保持节奏"
     },
     "output": {
       "noResponseYet": "尚无回应。",
@@ -396,6 +418,9 @@
     "pressEnter": "按 Enter ↵ 继续",
     "back": "← 返回",
     "next": "下一步",
+    "saveDraft": "保存草稿",
+    "saveDraftExit": "保存草稿并退出",
+    "savingDraft": "正在保存草稿…",
     "saving": "正在保存…",
     "buildingSummary": "正在构建您的个人资料摘要…",
     "defaultSection": "基础",

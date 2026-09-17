@@ -1,13 +1,12 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link, useParams, useSearchParams } from 'react-router-dom'
-import { avatarTypeLabel } from '../lib/avatars'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { avatarTypeLabel, MAX_AVATARS } from '../lib/avatars'
 import { fetchCompetitorsForProject, type Competitor } from '../lib/competitors'
 import type { Project } from '../lib/projects'
 import { DashboardLayout } from '../components/dashboard/DashboardLayout'
 import { IncompleteProfilingBanner } from '../components/dashboard/IncompleteProfilingBanner'
 import {
-  AgentChatHistoryPanel,
   AgentTypePills,
 } from '../components/agents/AgentChatHistoryPanel'
 import { useDashboardShell } from '../hooks/useDashboardShell'
@@ -38,7 +37,7 @@ import {
   type PlatformAgent,
 } from '../lib/agentPlatformRedirect'
 import contosMark from '../assets/contos-mark.png'
-import { AgentOutputRenderer } from '../components/agents/AgentOutputRenderer'
+import { ChatMessageBubble } from '../components/agents/ChatMessageBubble'
 import { buildChatHistoryForInvoke } from '../lib/agentChatMemory'
 import { resolveInvokeTaggedAvatarIds } from '../lib/agentMentions'
 import { resolveUiLanguage } from '../lib/profilingLocaleCore'
@@ -138,6 +137,7 @@ function resolveAssistantOutput(message: ChatMessage): unknown | null {
 export function AgentsPage() {
   const { t, i18n } = useTranslation()
   const { projectId } = useParams()
+  const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const {
     user,
@@ -173,7 +173,6 @@ export function AgentsPage() {
   const [input, setInput] = useState('')
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [chatStore, setChatStore] = useState<ChatStore | null>(null)
-  const [historyOpen, setHistoryOpen] = useState(false)
   const [streaming, setStreaming] = useState(false)
   const [awaitingCatchUp, setAwaitingCatchUp] = useState(() => {
     const pending = getPendingAgentCatchUp()
@@ -191,6 +190,7 @@ export function AgentsPage() {
   const skipPersistRef = useRef(false)
   const remoteSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const inputRef = useRef<HTMLInputElement | null>(null)
+  const handleNewChatRef = useRef<() => void>(() => {})
   const tRef = useRef(t)
   tRef.current = t
 
@@ -208,6 +208,28 @@ export function AgentsPage() {
       // ignore
     }
   }, [agentType])
+
+  useEffect(() => {
+    function onAgentTypeEvent(event: Event) {
+      const detail = (event as CustomEvent<{ agentType?: AgentType }>).detail
+      const next = detail?.agentType
+      if (next === 'linkedin' || next === 'instagram' || next === 'chatbot') {
+        setPendingPlatformRedirect(null)
+        setAgentType(next)
+      }
+    }
+
+    window.addEventListener('contos-agent-type', onAgentTypeEvent)
+    return () => window.removeEventListener('contos-agent-type', onAgentTypeEvent)
+  }, [])
+
+  useEffect(() => {
+    function onNewChat() {
+      handleNewChatRef.current()
+    }
+    window.addEventListener('contos-new-chat', onNewChat)
+    return () => window.removeEventListener('contos-new-chat', onNewChat)
+  }, [])
 
   const agentOptions: Array<{ value: AgentType; label: string }> = [
     { value: 'chatbot', label: t('agents.agentTypes.chat') },
@@ -304,7 +326,6 @@ export function AgentsPage() {
         } else {
           setMessages(storedMessages)
         }
-        setHistoryPanel(searchParams.get('panel') === 'history')
         setIsLoading(false)
 
         if (!user?.id) {
@@ -525,6 +546,9 @@ export function AgentsPage() {
     chatStoreRef.current = next
     setChatStore(next)
     saveChatStore(user.id, projectId, next)
+    window.dispatchEvent(
+      new CustomEvent('contos-chat-store-updated', { detail: { projectId } }),
+    )
     // Avoid writing every SSE token to Supabase — sync when stream settles.
     if (!showResponding) {
       queueRemoteSave(user.id, projectId, next)
@@ -532,17 +556,49 @@ export function AgentsPage() {
   }, [messages, user?.id, projectId, showResponding])
 
   useEffect(() => {
-    setHistoryOpen(searchParams.get('panel') === 'history')
-  }, [searchParams])
-
-  function setHistoryPanel(open: boolean) {
-    setHistoryOpen(open)
-    if (open) {
-      setSearchParams({ panel: 'history' }, { replace: true })
+    const sessionId = searchParams.get('session')
+    if (!sessionId || !chatStore) {
       return
     }
-    setSearchParams({}, { replace: true })
-  }
+
+    const clearSessionParam = () => {
+      const nextParams = new URLSearchParams(searchParams)
+      nextParams.delete('session')
+      nextParams.delete('panel')
+      setSearchParams(nextParams, { replace: true })
+    }
+
+    if (chatStore.activeSessionId === sessionId) {
+      clearSessionParam()
+      return
+    }
+
+    if (streaming) {
+      abortActiveAgentStream()
+      setStreaming(false)
+    }
+
+    try {
+      const next = switchChatSession(chatStore, sessionId)
+      skipPersistRef.current = true
+      chatStoreRef.current = next
+      setChatStore(next)
+      setMessages(getActiveSession(next).messages as ChatMessage[])
+      setSendError(null)
+      setPendingPlatformRedirect(null)
+      if (user?.id && projectId) {
+        saveChatStore(user.id, projectId, next)
+        window.dispatchEvent(
+          new CustomEvent('contos-chat-store-updated', { detail: { projectId } }),
+        )
+        queueRemoteSave(user.id, projectId, next)
+      }
+    } catch (error) {
+      setSendError(error instanceof Error ? error.message : t('agents.openChatFailed'))
+    } finally {
+      clearSessionParam()
+    }
+  }, [searchParams, chatStore, projectId, user?.id, streaming, t, setSearchParams])
 
   function handleNewChat() {
     if (streaming) {
@@ -558,12 +614,15 @@ export function AgentsPage() {
     setMessages(getActiveSession(next).messages as ChatMessage[])
     setSendError(null)
     setPendingPlatformRedirect(null)
-    setHistoryPanel(false)
     if (user?.id && projectId) {
       saveChatStore(user.id, projectId, next)
+      window.dispatchEvent(
+        new CustomEvent('contos-chat-store-updated', { detail: { projectId } }),
+      )
       queueRemoteSave(user.id, projectId, next)
     }
   }
+  handleNewChatRef.current = handleNewChat
 
   // Refresh empty-state welcome when the UI language changes.
   useEffect(() => {
@@ -580,34 +639,12 @@ export function AgentsPage() {
     })
   }, [i18n.language, t, user, streaming])
 
-  function handleSelectSession(sessionId: string) {
-    if (!chatStoreRef.current) {
-      return
-    }
-    if (streaming) {
-      abortActiveAgentStream()
-      setStreaming(false)
-    }
-    try {
-      const next = switchChatSession(chatStoreRef.current, sessionId)
-      skipPersistRef.current = true
-      chatStoreRef.current = next
-      setChatStore(next)
-      setMessages(getActiveSession(next).messages as ChatMessage[])
-      setSendError(null)
-      setHistoryPanel(false)
-      if (user?.id && projectId) {
-        saveChatStore(user.id, projectId, next)
-        queueRemoteSave(user.id, projectId, next)
-      }
-    } catch (error) {
-      setSendError(error instanceof Error ? error.message : t('agents.openChatFailed'))
-    }
-  }
-
   const researchReady =
     project?.status === 'ready' ||
     competitors.some((competitor) => competitor.pipeline_step === 'done')
+
+  const showResearchInProgressBanner =
+    competitors.length > 0 && !researchReady
 
   const mentionCandidates = projects.filter((avatar) => {
     if (taggedAvatarIds.includes(avatar.id)) {
@@ -900,6 +937,159 @@ export function AgentsPage() {
       (message) => message.role === 'assistant' && isAgentsWelcomeMessage(message.content),
     )?.content ?? makeWelcomeMessage(getUserFirstName(user), t).content
   const showClaudeStyleGreeting = conversationMessages.length === 0
+  const atAvatarCap = projects.length >= MAX_AVATARS
+  const headerActionClassName =
+    'inline-flex items-center gap-1.5 rounded-full bg-accent-primary-soft px-3.5 py-2 text-sm font-semibold text-accent-primary-deep transition hover:bg-accent-primary/20'
+
+  const headerActions = (
+    <div className="flex shrink-0 items-center gap-2">
+      <button
+        type="button"
+        onClick={() => {
+          window.dispatchEvent(new CustomEvent('contos-new-chat'))
+        }}
+        className={headerActionClassName}
+      >
+        <span aria-hidden="true">+</span>
+        <span>{t('agents.newChat').replace(/^\+\s*/u, '')}</span>
+      </button>
+      {!atAvatarCap ? (
+        <Link to="/projects/new" className={headerActionClassName}>
+          <span aria-hidden="true">+</span>
+          <span>{t('layout.newProject').replace(/^\+\s*/u, '')}</span>
+        </Link>
+      ) : null}
+    </div>
+  )
+
+  function MicIcon() {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" className="h-4 w-4" aria-hidden>
+        <path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3Z" />
+        <path d="M5 11a7 7 0 0 0 14 0M12 18v3" strokeLinecap="round" />
+      </svg>
+    )
+  }
+
+  function renderComposer(centeredTags = false) {
+    return (
+      <form className="w-full" onSubmit={(event) => void handleSend(event)}>
+        {taggedAvatarIds.length > 0 ? (
+          <div
+            className={`mb-2 flex flex-wrap gap-2 ${centeredTags ? 'justify-center' : ''}`}
+          >
+            {taggedAvatarIds.map((id) => {
+              const avatar = projects.find((entry) => entry.id === id)
+              if (!avatar) {
+                return null
+              }
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => toggleTaggedAvatar(id)}
+                  className="rounded-full bg-accent-primary-soft px-3 py-1 text-xs font-medium text-accent-primary-deep"
+                >
+                  {avatar.name} ×
+                </button>
+              )
+            })}
+          </div>
+        ) : null}
+
+        <div className="relative">
+          {mentionOpen && mentionCandidates.length > 0 ? (
+            <div
+              className={`absolute bottom-full z-10 mb-2 max-h-48 w-64 overflow-y-auto rounded-xl border border-border-hairline bg-canvas-raised text-left shadow-lg ${
+                centeredTags ? 'left-1/2 -translate-x-1/2' : 'left-0'
+              }`}
+            >
+              {mentionCandidates.map((avatar) => (
+                <button
+                  key={avatar.id}
+                  type="button"
+                  onClick={() => selectMention(avatar)}
+                  className="block w-full px-3 py-2 text-left text-sm text-ink hover:bg-accent-primary-soft"
+                >
+                  <span className="font-medium">@{avatar.name}</span>
+                  <span className="mt-0.5 block text-xs text-ink-muted capitalize">
+                    {avatarTypeLabel(avatar.type)}
+                  </span>
+                </button>
+              ))}
+            </div>
+          ) : null}
+
+          <div className="flex items-center gap-2 rounded-full border border-border-hairline bg-canvas-raised px-3 py-2 sm:px-4">
+            <button
+              type="button"
+              tabIndex={-1}
+              aria-hidden="true"
+              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-ink-muted"
+            >
+              <MicIcon />
+            </button>
+            <input
+              ref={inputRef}
+              value={input}
+              onChange={(event) => handleInputChange(event.target.value)}
+              disabled={showResponding}
+              placeholder={t('agents.placeholder')}
+              className="min-w-0 flex-1 bg-transparent px-1 py-2 text-sm text-ink outline-none placeholder:text-ink-muted"
+            />
+            <button
+              type="submit"
+              disabled={showResponding || !input.trim()}
+              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent-primary text-white transition hover:bg-accent-primary-deep disabled:opacity-60"
+              aria-label={showResponding ? t('agents.sendingAria') : t('agents.sendAria')}
+            >
+              ↑
+            </button>
+          </div>
+        </div>
+      </form>
+    )
+  }
+
+  const suggestionPills = (
+    <div className="flex flex-wrap items-center justify-center gap-2">
+      <button
+        type="button"
+        onClick={() => navigate(`/dashboard/${project.id}`)}
+        className="inline-flex items-center gap-2 rounded-full border border-border-hairline bg-canvas-raised px-3.5 py-2 text-sm font-medium text-accent-primary transition hover:border-accent-primary/30 hover:bg-accent-primary-soft/40"
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" className="h-4 w-4 shrink-0" aria-hidden>
+          <path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10c.8.8 1.2 1.6 1.2 2.5V17h5.6v-1.5c0-.9.4-1.7 1.2-2.5A6 6 0 0 0 12 3Z" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+        {t('agents.quickActions.researchTitle')}
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          handleInputChange(t('agents.quickActions.contentPrompt'))
+          inputRef.current?.focus()
+        }}
+        className="inline-flex items-center gap-2 rounded-full border border-border-hairline bg-canvas-raised px-3.5 py-2 text-sm font-medium text-accent-primary transition hover:border-accent-primary/30 hover:bg-accent-primary-soft/40"
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" className="h-4 w-4 shrink-0" aria-hidden>
+          <path d="M7 4h8l4 4v12a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Z" />
+          <path d="M14 4v5h5M9 13h6M9 17h4" strokeLinecap="round" />
+        </svg>
+        {t('agents.quickActions.contentTitle')}
+      </button>
+      <button
+        type="button"
+        onClick={() => navigate(`/dashboard/${project.id}/calendar`)}
+        className="inline-flex items-center gap-2 rounded-full border border-border-hairline bg-canvas-raised px-3.5 py-2 text-sm font-medium text-accent-primary transition hover:border-accent-primary/30 hover:bg-accent-primary-soft/40"
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" className="h-4 w-4 shrink-0" aria-hidden>
+          <rect x="3.5" y="5" width="17" height="15" rx="2" />
+          <path d="M8 3.5v3M16 3.5v3M3.5 10h17" strokeLinecap="round" />
+        </svg>
+        {t('agents.quickActions.calendarTitle')}
+      </button>
+    </div>
+  )
 
   return (
     <DashboardLayout
@@ -911,38 +1101,41 @@ export function AgentsPage() {
       onSignOut={() => void handleSignOut()}
       sidebarOpen={sidebarOpen}
       onSidebarOpenChange={setSidebarOpen}
-      mainClassName="flex min-h-0 flex-col overflow-hidden px-4 pb-2 pt-0 sm:px-8"
+      mainClassName="flex min-h-0 flex-col overflow-hidden px-4 pb-3 pt-4 sm:px-8 sm:pt-6"
     >
       <IncompleteProfilingBanner
         projectId={project.id}
         profilingCompleteness={project.profiling_completeness}
       />
 
-      <div className="flex shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-2 py-2">
-        <div className="min-w-0">
-          <h1 className="font-serif text-2xl leading-tight text-ink sm:text-3xl">{project.name}</h1>
-          <p className="mt-0.5 truncate text-xs text-ink-muted sm:text-sm">
+      {!showClaudeStyleGreeting ? (
+        <div className="mb-3 shrink-0">
+          <div className="flex items-center justify-between gap-4">
+            <h1 className="min-w-0 truncate font-serif text-2xl leading-none text-ink sm:text-3xl">
+              {project.name}
+            </h1>
+            {headerActions}
+          </div>
+          <p className="mt-1.5 truncate text-xs text-ink-muted sm:text-sm">
             {t('agents.pageSubtitle')}
           </p>
+          <div className="mt-3">
+            <AgentTypePills
+              agentType={agentType}
+              streaming={showResponding}
+              options={agentOptions}
+              onChange={(next) => {
+                setPendingPlatformRedirect(null)
+                setAgentType(next)
+              }}
+            />
+          </div>
         </div>
-        <button
-          type="button"
-          onClick={handleNewChat}
-          className="shrink-0 rounded-full bg-accent-primary px-4 py-2 text-sm font-medium text-white transition hover:bg-accent-primary-deep"
-        >
-          {t('agents.newChat')}
-        </button>
-      </div>
+      ) : (
+        <div className="mb-2 flex shrink-0 justify-end">{headerActions}</div>
+      )}
 
-      {historyOpen ? (
-        <AgentChatHistoryPanel
-          chatStore={chatStore}
-          onSelectSession={handleSelectSession}
-          onClose={() => setHistoryPanel(false)}
-        />
-      ) : null}
-
-      {!researchReady ? (
+      {showResearchInProgressBanner ? (
         <div className="mb-2 shrink-0 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-900">
           {t('agents.researchInProgress')}{' '}
           <Link className="font-medium underline" to={`/dashboard/${projectId}`}>
@@ -951,42 +1144,50 @@ export function AgentsPage() {
         </div>
       ) : null}
 
-      <div className="mb-2 shrink-0">
-        <AgentTypePills
-          agentType={agentType}
-          streaming={showResponding}
-          options={agentOptions}
-          onChange={(next) => {
-            setPendingPlatformRedirect(null)
-            setAgentType(next)
-          }}
-        />
-      </div>
+      {showClaudeStyleGreeting ? (
+        <section className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto px-1 pb-4 pt-2">
+          <div className="flex w-full max-w-3xl flex-col items-center rounded-[2rem] border border-border-hairline bg-canvas-raised px-5 py-8 text-center shadow-[0_18px_50px_rgba(28,27,41,0.08)] sm:px-10 sm:py-10">
+            <img
+              src={contosMark}
+              alt=""
+              aria-hidden="true"
+              className="mb-5 h-12 w-12 object-contain sm:mb-6 sm:h-14 sm:w-14"
+            />
+            <h2 className="font-serif text-3xl tracking-tight text-ink sm:text-4xl md:text-5xl">
+              {welcomeGreeting}
+            </h2>
+            <p className="mt-3 max-w-xl text-sm text-ink-muted sm:text-base">
+              {t('agents.welcome.subtitle')}
+            </p>
 
-      <section className="flex min-h-0 flex-1 flex-col rounded-[1.75rem] border border-white/80 bg-white/90 shadow-[0_18px_50px_rgba(28,27,41,0.06)]">
-        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4 sm:px-6">
-          {showClaudeStyleGreeting ? (
-            <div className="flex h-full min-h-[14rem] flex-col items-center justify-center px-4 text-center">
-              <h2 className="inline-flex items-center gap-3 font-serif text-3xl tracking-tight text-ink sm:gap-4 sm:text-4xl md:text-5xl">
-                <img
-                  src={contosMark}
-                  alt=""
-                  aria-hidden="true"
-                  className="h-8 w-8 shrink-0 object-contain sm:h-10 sm:w-10 md:h-12 md:w-12"
-                />
-                <span>{welcomeGreeting}</span>
-              </h2>
+            <div className="mt-6 sm:mt-8">
+              <AgentTypePills
+                agentType={agentType}
+                streaming={showResponding}
+                options={agentOptions}
+                onChange={(next) => {
+                  setPendingPlatformRedirect(null)
+                  setAgentType(next)
+                }}
+              />
             </div>
-          ) : (
-            conversationMessages
+
+            {sendError ? (
+              <p className="mt-4 w-full rounded-xl border border-red-100 bg-red-50 px-4 py-2 text-left text-sm text-red-700">
+                {sendError}
+              </p>
+            ) : null}
+
+            <div className="mt-6 w-full sm:mt-8">{renderComposer(true)}</div>
+            <div className="mt-6 w-full sm:mt-8">{suggestionPills}</div>
+          </div>
+        </section>
+      ) : (
+        <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[2rem] border border-border-hairline bg-canvas-raised shadow-[0_18px_50px_rgba(28,27,41,0.08)]">
+          <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-4 py-4 sm:px-6">
+            {conversationMessages
               .filter((message) => {
                 if (message.role === 'user') return true
-                // Keep the placeholder assistant bubble while we wait / catch up,
-                // otherwise the thread looks blank and the logo has nowhere to sit.
-                if (pendingAssistantId && message.id === pendingAssistantId) return true
-                if (showResponding && message.role === 'assistant' && !message.content.trim()) {
-                  return true
-                }
                 if (resolveAssistantOutput(message)) return true
                 return message.content.trim().length > 0
               })
@@ -994,139 +1195,52 @@ export function AgentsPage() {
                 const structuredOutput =
                   message.role === 'assistant' ? resolveAssistantOutput(message) : null
 
-                if (structuredOutput) {
-                  return (
-                    <div
-                      key={message.id}
-                      className="max-w-[95%] rounded-2xl bg-canvas px-4 py-3 text-ink"
-                    >
-                      <AgentOutputRenderer
-                        agentType={message.agentType}
-                        output={structuredOutput}
-                      />
-                    </div>
-                  )
-                }
-
                 return (
-                  <div
+                  <ChatMessageBubble
                     key={message.id}
-                    className={`max-w-[90%] rounded-2xl px-4 py-3 text-sm whitespace-pre-wrap ${
-                      message.role === 'user'
-                        ? 'ml-auto bg-accent-primary text-white'
-                        : 'bg-canvas text-ink'
-                    }`}
-                  >
-                    {message.taggedAvatarNames && message.taggedAvatarNames.length > 0 ? (
-                      <div className="mb-2 flex flex-wrap gap-1">
-                        {message.taggedAvatarNames.map((name) => (
-                          <span
-                            key={name}
-                            className={`rounded-full px-2 py-0.5 text-[11px] ${
-                              message.role === 'user'
-                                ? 'bg-white/20 text-white'
-                                : 'bg-accent-primary-soft text-accent-primary-deep'
-                            }`}
-                          >
-                            {name}
-                          </span>
-                        ))}
-                      </div>
-                    ) : null}
-                    {message.content}
-                  </div>
-                )
-              })
-          )}
-          {showResponding ? (
-            <div
-              className="flex items-center gap-2 py-1"
-              aria-live="polite"
-              aria-label={t('agents.respondingAria')}
-            >
-              <img
-                src={contosMark}
-                alt=""
-                aria-hidden="true"
-                className="contos-mark-loading h-7 w-7 object-contain"
-              />
-            </div>
-          ) : null}
-          <div ref={bottomRef} />
-        </div>
-
-        {sendError ? (
-          <p className="border-t border-red-100 bg-red-50 px-4 py-2 text-sm text-red-700">
-            {sendError}
-          </p>
-        ) : null}
-        {syncError ? (
-          <p className="border-t border-amber-100 bg-amber-50 px-4 py-2 text-sm text-amber-800">
-            {t('agents.chatSyncPrefix', { message: syncError })}
-          </p>
-        ) : null}
-
-        <form className="p-3 sm:p-4" onSubmit={(event) => void handleSend(event)}>
-          {taggedAvatarIds.length > 0 ? (
-            <div className="mb-2 flex flex-wrap gap-2">
-              {taggedAvatarIds.map((id) => {
-                const avatar = projects.find((entry) => entry.id === id)
-                if (!avatar) {
-                  return null
-                }
-                return (
-                  <button
-                    key={id}
-                    type="button"
-                    onClick={() => toggleTaggedAvatar(id)}
-                    className="rounded-full bg-accent-primary-soft px-3 py-1 text-xs font-medium text-accent-primary-deep"
-                  >
-                    {avatar.name} ×
-                  </button>
+                    role={message.role}
+                    content={message.content}
+                    taggedAvatarNames={message.taggedAvatarNames}
+                    agentType={message.agentType}
+                    structuredOutput={structuredOutput}
+                  />
                 )
               })}
-            </div>
-          ) : null}
-
-          <div className="relative">
-            {mentionOpen && mentionCandidates.length > 0 ? (
-              <div className="absolute bottom-full left-0 z-10 mb-2 max-h-48 w-64 overflow-y-auto rounded-xl border border-border-hairline bg-white shadow-lg">
-                {mentionCandidates.map((avatar) => (
-                  <button
-                    key={avatar.id}
-                    type="button"
-                    onClick={() => selectMention(avatar)}
-                    className="block w-full px-3 py-2 text-left text-sm text-ink hover:bg-accent-primary-soft"
-                  >
-                    <span className="font-medium">@{avatar.name}</span>
-                    <span className="mt-0.5 block text-xs text-ink-muted capitalize">
-                      {avatarTypeLabel(avatar.type)}
-                    </span>
-                  </button>
-                ))}
+            {showResponding ? (
+              <div
+                className="flex items-center gap-2.5 py-0.5"
+                aria-live="polite"
+                aria-label={t('agents.respondingAria')}
+              >
+                <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-canvas-raised shadow-[0_2px_8px_rgba(28,27,41,0.06)] ring-1 ring-border-hairline">
+                  <img
+                    src={contosMark}
+                    alt=""
+                    aria-hidden="true"
+                    className="contos-mark-loading h-5 w-5 object-contain"
+                  />
+                </span>
               </div>
             ) : null}
-            <div className="flex items-center gap-2 rounded-full border border-border-hairline bg-white px-4 py-2 shadow-[0_10px_30px_rgba(116,79,185,0.12)]">
-              <input
-                ref={inputRef}
-                value={input}
-                onChange={(event) => handleInputChange(event.target.value)}
-                disabled={showResponding}
-                placeholder={t('agents.placeholder')}
-                className="min-w-0 flex-1 bg-transparent px-2 py-2 text-sm text-ink outline-none"
-              />
-              <button
-                type="submit"
-                disabled={showResponding || !input.trim()}
-                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent-primary text-white transition hover:bg-accent-primary-deep disabled:opacity-60"
-                aria-label={showResponding ? t('agents.sendingAria') : t('agents.sendAria')}
-              >
-                ↑
-              </button>
-            </div>
+            <div ref={bottomRef} />
           </div>
-        </form>
-      </section>
+
+          {sendError ? (
+            <p className="border-t border-red-100 bg-red-50 px-4 py-2 text-sm text-red-700">
+              {sendError}
+            </p>
+          ) : null}
+          {syncError ? (
+            <p className="border-t border-amber-100 bg-amber-50 px-4 py-2 text-sm text-amber-800">
+              {t('agents.chatSyncPrefix', { message: syncError })}
+            </p>
+          ) : null}
+
+          <div className="shrink-0 border-t border-border-hairline px-3 py-3 sm:px-5 sm:py-4">
+            {renderComposer(false)}
+          </div>
+        </section>
+      )}
     </DashboardLayout>
   )
 }

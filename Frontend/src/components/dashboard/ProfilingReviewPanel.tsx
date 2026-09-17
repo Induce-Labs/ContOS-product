@@ -60,7 +60,7 @@ export function ProfilingReviewPanel({
         {sections.map(([sectionLabel, sectionQuestions]) => (
           <section
             key={sectionLabel}
-            className="rounded-[2rem] border border-border-hairline bg-white p-6 shadow-[0_18px_40px_rgba(28,27,41,0.05)] sm:p-8"
+            className="rounded-[2rem] border border-border-hairline bg-canvas-raised p-6 shadow-[0_18px_40px_rgba(28,27,41,0.05)] sm:p-8"
           >
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-ink-muted">
               {sectionLabel}
@@ -78,7 +78,7 @@ export function ProfilingReviewPanel({
                         {question.question}
                       </h2>
                       {!question.required ? (
-                        <span className="rounded-full bg-[#f3f0eb] px-3 py-1 text-xs font-medium uppercase tracking-wide text-ink-muted">
+                        <span className="rounded-full bg-canvas px-3 py-1 text-xs font-medium uppercase tracking-wide text-ink-muted">
                           {t('profiling.optional')}
                         </span>
                       ) : null}
@@ -105,7 +105,7 @@ export function ProfilingReviewPanel({
         ))}
       </div>
 
-      <div className="sticky bottom-0 border-t border-border-hairline bg-[#faf9f7]/95 py-4 backdrop-blur-sm">
+      <div className="sticky bottom-0 border-t border-border-hairline bg-canvas/95 py-4 backdrop-blur-sm">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-ink-muted">
             {isSummarizing

@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { AuthLayout, AuthLink } from '../components/auth/AuthLayout'
 import { AuthAlert, GoogleSignInButton, PrimaryButton } from '../components/auth/AuthButtons'
 import { AuthFormField } from '../components/auth/AuthFormField'
+import { LanguageSelector } from '../components/LanguageSelector'
 import { signInWithOAuthProvider, signUpWithEmail } from '../lib/auth'
 import { resolvePostAuthPath } from '../lib/projects'
 
@@ -92,6 +93,19 @@ export function SignUpPage() {
           value={password}
           onChange={(event) => setPassword(event.target.value)}
         />
+
+        <div className="space-y-1.5">
+          <label
+            htmlFor="signup-language-select"
+            className="block text-sm font-medium text-ink"
+          >
+            {t('auth.language')}
+          </label>
+          <LanguageSelector
+            id="signup-language-select"
+            className="w-full rounded-xl border border-border-hairline bg-canvas px-4 py-3 text-sm text-ink transition hover:border-border-hairline/80 hover:bg-canvas-raised"
+          />
+        </div>
 
         <PrimaryButton disabled={isSubmitting}>
           {isSubmitting ? t('auth.signup.submitting') : t('auth.signup.submit')}

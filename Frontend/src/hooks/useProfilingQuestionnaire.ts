@@ -293,6 +293,23 @@ export function useProfilingQuestionnaire({
     return 'exit'
   }
 
+  async function saveDraftCurrentAnswer(): Promise<'saved' | 'skipped' | 'blocked'> {
+    if (!currentCanonical || isSaving) {
+      return 'blocked'
+    }
+
+    const raw = (answers[currentCanonical.key] ?? '').trim()
+    if (!raw) {
+      setFieldError(null)
+      setErrorMessage(null)
+      return 'skipped'
+    }
+
+    setErrorMessage(null)
+    const saved = await saveCurrentAnswer()
+    return saved ? 'saved' : 'blocked'
+  }
+
   const combinedError =
     errorMessage ??
     (questionTranslationError
@@ -316,6 +333,7 @@ export function useProfilingQuestionnaire({
     setAnswer,
     goNext,
     goBack,
+    saveDraftCurrentAnswer,
     setErrorMessage,
   }
 }

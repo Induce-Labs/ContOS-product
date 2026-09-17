@@ -1,10 +1,15 @@
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { MAX_AVATARS } from '../../lib/avatars'
 import { DashboardSidebarNav } from './DashboardSidebarNav'
 import { DashboardTopBar } from './DashboardTopBar'
+import { ProjectSwitcher } from './ProjectSwitcher'
+import { SidebarUserMenu } from './SidebarUserMenu'
+import contosMark from '../../assets/contos-mark.png'
 import type { Project } from '../../lib/projects'
 import type { ReactNode } from 'react'
+
+const SIDEBAR_COLLAPSED_KEY = 'contos_sidebar_collapsed'
 
 type DashboardLayoutProps = {
   children: ReactNode
@@ -18,6 +23,35 @@ type DashboardLayoutProps = {
   onSidebarOpenChange: (open: boolean) => void
   mainClassName?: string
   isLoading?: boolean
+}
+
+function readCollapsedPreference() {
+  try {
+    return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+function SidebarCollapseIcon({ expanded }: { expanded: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      className="h-5 w-5"
+      aria-hidden
+    >
+      <rect x="3.5" y="4.5" width="17" height="15" rx="2.5" />
+      <path d="M9 4.5v15" strokeLinecap="round" />
+      {expanded ? (
+        <path d="M15.5 9.5 13 12l2.5 2.5" strokeLinecap="round" strokeLinejoin="round" />
+      ) : (
+        <path d="M13 9.5 15.5 12 13 14.5" strokeLinecap="round" strokeLinejoin="round" />
+      )}
+    </svg>
+  )
 }
 
 export function DashboardLayout({
@@ -35,18 +69,40 @@ export function DashboardLayout({
 }: DashboardLayoutProps) {
   const { t } = useTranslation()
   const projectId = activeProject?.id ?? null
-  const atAvatarCap = projects.length >= MAX_AVATARS
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(readCollapsedPreference)
+  const [isDesktop, setIsDesktop] = useState(() =>
+    typeof window !== 'undefined' ? window.matchMedia('(min-width: 1024px)').matches : true,
+  )
+  const railCollapsed = sidebarCollapsed && isDesktop
+
+  useEffect(() => {
+    const media = window.matchMedia('(min-width: 1024px)')
+    function syncDesktop(event?: MediaQueryListEvent) {
+      setIsDesktop(event ? event.matches : media.matches)
+    }
+    syncDesktop()
+    media.addEventListener('change', syncDesktop)
+    return () => media.removeEventListener('change', syncDesktop)
+  }, [])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(SIDEBAR_COLLAPSED_KEY, sidebarCollapsed ? '1' : '0')
+    } catch {
+      // Preference persistence is best-effort; layout still works without it.
+    }
+  }, [sidebarCollapsed])
 
   if (isLoading) {
     return (
-      <div className="flex min-h-dvh items-center justify-center bg-canvas text-ink-muted">
+      <div className="flex min-h-dvh items-center justify-center bg-canvas font-sans text-ink-muted">
         {t('layout.loadingWorkspace')}
       </div>
     )
   }
 
   return (
-    <div className="flex h-dvh overflow-hidden bg-[radial-gradient(circle_at_bottom_left,_#f3ecff_0%,_#faf9f7_42%,_#ffffff_100%)]">
+    <div className="flex h-dvh overflow-hidden bg-canvas font-sans">
       {sidebarOpen ? (
         <button
           type="button"
@@ -57,47 +113,120 @@ export function DashboardLayout({
       ) : null}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r border-border-hairline bg-white transition-transform lg:static lg:translate-x-0 ${
-          sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
-        }`}
+        className={`fixed inset-y-0 left-0 z-40 flex flex-col border-r border-border-hairline bg-canvas-raised transition-[width,transform] duration-200 lg:static lg:translate-x-0 ${
+          railCollapsed ? 'w-[72px]' : 'w-[260px]'
+        } ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}
       >
-        <div className="px-6 pb-2 pt-7">
-          <p className="font-serif text-2xl leading-none text-ink">{t('layout.brandName')}</p>
-          <p className="mt-2 text-xs tracking-wide text-ink-muted">{t('layout.brandTagline')}</p>
+        <div
+          className={
+            railCollapsed
+              ? 'flex w-full flex-col items-center gap-2 px-0 pb-2 pt-5'
+              : 'flex items-start justify-between gap-2 px-4 pb-3 pt-5'
+          }
+        >
+          <div
+            className={`flex min-w-0 items-center ${
+              railCollapsed ? 'w-full justify-center' : 'gap-2.5'
+            }`}
+          >
+            <img
+              src={contosMark}
+              alt=""
+              aria-hidden="true"
+              className="h-8 w-8 shrink-0 object-contain"
+            />
+            {!railCollapsed ? (
+              <div className="min-w-0">
+                <p className="truncate text-base font-semibold leading-tight text-ink">
+                  {t('layout.brandName')}
+                </p>
+                <p className="truncate text-[11px] tracking-wide text-ink-muted">
+                  {t('layout.brandTagline')}
+                </p>
+              </div>
+            ) : null}
+          </div>
+
+          <div
+            className={`flex shrink-0 items-center justify-center gap-1 ${
+              railCollapsed ? 'w-full' : ''
+            }`}
+          >
+            <button
+              type="button"
+              onClick={() => setSidebarCollapsed((current) => !current)}
+              className="hidden h-8 w-8 items-center justify-center rounded-lg text-ink-muted transition hover:bg-canvas hover:text-ink lg:inline-flex"
+              aria-label={
+                sidebarCollapsed
+                  ? t('layout.expandSidebarAria')
+                  : t('layout.collapseSidebarAria')
+              }
+              title={
+                sidebarCollapsed
+                  ? t('layout.expandSidebarAria')
+                  : t('layout.collapseSidebarAria')
+              }
+            >
+              <SidebarCollapseIcon expanded={!sidebarCollapsed} />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => onSidebarOpenChange(false)}
+              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-ink-muted transition hover:bg-canvas hover:text-ink lg:hidden"
+              aria-label={t('layout.closeNavigationAria')}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.75"
+                className="h-4 w-4"
+                aria-hidden
+              >
+                <path d="M4 6h10M4 12h16M4 18h10" strokeLinecap="round" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <div
+          className={
+            railCollapsed
+              ? 'flex w-full justify-center px-0 pb-1 pt-3'
+              : 'px-3 pb-3'
+          }
+        >
+          <ProjectSwitcher
+            projects={projects}
+            activeProject={activeProject}
+            onAvatarsChanged={onAvatarsChanged}
+            collapsed={railCollapsed}
+          />
         </div>
 
         <DashboardSidebarNav
           projectId={projectId}
           onNavigate={() => onSidebarOpenChange(false)}
+          collapsed={railCollapsed}
         />
 
-        <div className="px-4 pb-6">
-          {atAvatarCap ? (
-            <p className="mb-3 text-center text-xs text-ink-muted">
-              {t('layout.projectLimitReached', { max: MAX_AVATARS })}
-            </p>
-          ) : (
-            <Link
-              to="/projects/new"
-              onClick={() => onSidebarOpenChange(false)}
-              className="flex w-full items-center justify-center gap-2 rounded-full bg-accent-primary px-4 py-3 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(116,79,185,0.28)] transition hover:bg-accent-primary-deep"
-            >
-              {t('layout.newProject')}
-            </Link>
-          )}
+        <div
+          className={`mt-auto border-t border-border-hairline ${
+            railCollapsed ? 'flex w-full justify-center py-3' : ''
+          }`}
+        >
+          <SidebarUserMenu
+            userEmail={userEmail}
+            isSigningOut={isSigningOut}
+            onSignOut={onSignOut}
+            collapsed={railCollapsed}
+          />
         </div>
       </aside>
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        <DashboardTopBar
-          projects={projects}
-          activeProject={activeProject}
-          onAvatarsChanged={onAvatarsChanged}
-          userEmail={userEmail}
-          isSigningOut={isSigningOut}
-          onSignOut={onSignOut}
-          onOpenSidebar={() => onSidebarOpenChange(true)}
-        />
+      <div className="flex min-w-0 flex-1 flex-col bg-canvas">
+        <DashboardTopBar onOpenSidebar={() => onSidebarOpenChange(true)} />
         <main className={`min-h-0 min-w-0 flex-1 ${mainClassName}`}>{children}</main>
       </div>
     </div>
@@ -107,7 +236,7 @@ export function DashboardLayout({
 export function EmptyProjectsState() {
   const { t } = useTranslation()
   return (
-    <section className="mx-auto max-w-xl rounded-[2rem] border border-border-hairline bg-white p-10 text-center shadow-[0_18px_40px_rgba(28,27,41,0.06)]">
+    <section className="mx-auto max-w-xl rounded-[2rem] border border-border-hairline bg-canvas-raised p-10 text-center font-sans shadow-[0_18px_40px_rgba(28,27,41,0.06)]">
       <p className="text-sm font-medium uppercase tracking-wide text-accent-primary">
         {t('layout.emptyProjects.step')}
       </p>

@@ -13,12 +13,14 @@ type ProjectSwitcherProps = {
   projects: Project[]
   activeProject: Project | null
   onAvatarsChanged: (projects: Project[]) => void
+  collapsed?: boolean
 }
 
 export function ProjectSwitcher({
   projects,
   activeProject,
   onAvatarsChanged,
+  collapsed = false,
 }: ProjectSwitcherProps) {
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -105,20 +107,36 @@ export function ProjectSwitcher({
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
-        className="inline-flex max-w-[220px] items-center gap-2 rounded-full border border-border-hairline bg-white px-4 py-2 text-sm text-ink shadow-sm transition hover:border-accent-primary/40 sm:max-w-xs"
+        title={t('projectSwitcher.projectPrefix', {
+          name: activeProject?.name ?? t('projectSwitcher.selectProject'),
+        })}
+        aria-label={t('projectSwitcher.selectProject')}
+        className={
+          collapsed
+            ? 'flex h-10 w-10 items-center justify-center rounded-xl border border-border-hairline bg-canvas text-sm font-semibold text-ink transition hover:border-accent-primary/40'
+            : 'inline-flex w-full max-w-full items-center gap-2 rounded-full border border-border-hairline bg-canvas px-3.5 py-2 text-sm text-ink transition hover:border-accent-primary/40'
+        }
       >
-        <span className="truncate">
-          {t('projectSwitcher.projectPrefix', {
-            name: activeProject?.name ?? t('projectSwitcher.selectProject'),
-          })}
-        </span>
-        <span aria-hidden="true" className="text-ink-muted">
-          ▾
-        </span>
+        {collapsed ? (
+          <span aria-hidden="true">
+            {(activeProject?.name?.trim()?.[0] ?? 'P').toUpperCase()}
+          </span>
+        ) : (
+          <>
+            <span className="truncate">
+              {t('projectSwitcher.projectPrefix', {
+                name: activeProject?.name ?? t('projectSwitcher.selectProject'),
+              })}
+            </span>
+            <span aria-hidden="true" className="text-ink-muted">
+              ▾
+            </span>
+          </>
+        )}
       </button>
 
       {open ? (
-        <div className="absolute left-0 z-30 mt-2 w-72 rounded-2xl border border-border-hairline bg-white p-2 shadow-[0_18px_40px_rgba(28,27,41,0.12)]">
+        <div className="absolute left-0 z-30 mt-2 w-72 rounded-2xl border border-border-hairline bg-canvas-raised p-2 shadow-[0_18px_40px_rgba(28,27,41,0.12)]">
           {projects.length === 0 ? (
             <p className="px-3 py-4 text-sm text-ink-muted">{t('projectSwitcher.noProjectsYet')}</p>
           ) : (
