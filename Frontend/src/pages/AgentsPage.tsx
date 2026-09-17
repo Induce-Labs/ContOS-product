@@ -195,11 +195,6 @@ export function AgentsPage() {
   tRef.current = t
 
   const showResponding = streaming || awaitingCatchUp
-  const pendingCatchUp = getPendingAgentCatchUp()
-  const pendingAssistantId =
-    pendingCatchUp && pendingCatchUp.projectId === projectId
-      ? pendingCatchUp.assistantId
-      : null
 
   useEffect(() => {
     try {
