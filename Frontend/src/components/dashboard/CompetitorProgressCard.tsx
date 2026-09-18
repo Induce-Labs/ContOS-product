@@ -7,22 +7,28 @@ import {
   isPipelineStepComplete,
 } from '../../lib/pipeline'
 import { displayCompetitorHandle } from '../../lib/instagram-display'
+import { TrashIcon } from '../icons/ActionIcons'
 
 type CompetitorProgressCardProps = {
   competitor: Competitor
   onRetry?: (competitorId: string) => void
+  onDelete?: (competitorId: string) => void
   isRetrying?: boolean
+  isDeleting?: boolean
 }
 
 export function CompetitorProgressCard({
   competitor,
   onRetry,
+  onDelete,
   isRetrying = false,
+  isDeleting = false,
 }: CompetitorProgressCardProps) {
   const { t } = useTranslation()
   const pipelineStep = competitor.pipeline_step as PipelineStep
   const isFailed = pipelineStep === 'failed'
   const canStartOrRetry = isFailed || pipelineStep === 'queued'
+  const actionsBusy = isRetrying || isDeleting
   const platform = competitor.platform
   const steps = getPipelineStepsForPlatform(platform)
   const gridClass =
@@ -34,7 +40,7 @@ export function CompetitorProgressCard({
     <section className="rounded-[2rem] border border-border-hairline bg-canvas-raised p-6 sm:p-8">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-xs font-medium uppercase tracking-wide text-accent-primary">
+          <p className="text-xs font-medium uppercase tracking-wide text-accent-primary-deep">
             {t('competitors.progressCard.eyebrow')}
           </p>
           <div className="mt-1 flex flex-wrap items-center gap-2">
@@ -59,24 +65,37 @@ export function CompetitorProgressCard({
         </div>
       ) : null}
 
-      {canStartOrRetry && onRetry ? (
-        <div className="mt-6">
-          <button
-            type="button"
-            onClick={() => onRetry(competitor.id)}
-            disabled={isRetrying}
-            className={`rounded-xl border px-4 py-2 text-sm font-medium transition disabled:opacity-60 ${
-              isFailed
-                ? 'border-red-200 bg-white text-red-700 hover:bg-red-50'
-                : 'border-border-hairline bg-white text-ink hover:bg-accent-primary-soft'
-            }`}
-          >
-            {isRetrying
-              ? t('competitors.progressCard.starting')
-              : isFailed
-                ? t('competitors.progressCard.retryResearch')
-                : t('competitors.progressCard.startResearch')}
-          </button>
+      {canStartOrRetry || onDelete ? (
+        <div className="mt-6 flex flex-wrap gap-3">
+          {canStartOrRetry && onRetry ? (
+            <button
+              type="button"
+              onClick={() => onRetry(competitor.id)}
+              disabled={actionsBusy}
+              className={`contos-btn contos-btn--rect ${
+                isFailed ? 'contos-btn--secondary border-red-200 text-red-700 hover:bg-red-50' : 'contos-btn--secondary'
+              }`}
+            >
+              {isRetrying
+                ? t('competitors.progressCard.starting')
+                : isFailed
+                  ? t('competitors.progressCard.retryResearch')
+                  : t('competitors.progressCard.startResearch')}
+            </button>
+          ) : null}
+          {onDelete ? (
+            <button
+              type="button"
+              onClick={() => onDelete(competitor.id)}
+              disabled={actionsBusy}
+              className="contos-btn contos-btn--rect contos-btn--secondary text-ink-muted hover:border-red-200 hover:bg-red-50 hover:text-red-700"
+            >
+              <TrashIcon />
+              {isDeleting
+                ? t('competitors.progressCard.deleting')
+                : t('competitors.progressCard.delete')}
+            </button>
+          ) : null}
         </div>
       ) : null}
 

@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import {
   getOnboardingStep,
   isOnboardingComplete,
+  needsLanguageSelection,
+  ONBOARDING_LANGUAGE_PATH,
   resolveOnboardingPath,
   type OnboardingStep,
 } from '../lib/onboarding'
@@ -36,6 +38,14 @@ export function useOnboardingStepGuard({
         if (completed) {
           const dashboardPath = await resolveDashboardPath()
           setState({ status: 'redirect', path: dashboardPath })
+          return
+        }
+
+        if (await needsLanguageSelection()) {
+          if (!isMounted) {
+            return
+          }
+          setState({ status: 'redirect', path: ONBOARDING_LANGUAGE_PATH })
           return
         }
 

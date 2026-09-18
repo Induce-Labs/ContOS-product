@@ -907,7 +907,7 @@ export function AgentsPage() {
         mainClassName="overflow-y-auto px-6 py-10"
       >
         <p className="text-sm text-red-700">{loadError ?? t('agents.projectUnavailable')}</p>
-        <Link to="/dashboard" className="mt-4 inline-block text-sm text-accent-primary">
+        <Link to="/dashboard" className="mt-4 inline-block text-sm text-accent-primary-deep">
           {t('agents.backToDashboard')}
         </Link>
       </DashboardLayout>
@@ -923,8 +923,7 @@ export function AgentsPage() {
     )?.content ?? makeWelcomeMessage(getUserFirstName(user), t).content
   const showClaudeStyleGreeting = conversationMessages.length === 0
   const atAvatarCap = projects.length >= MAX_AVATARS
-  const headerActionClassName =
-    'inline-flex items-center gap-1.5 rounded-full bg-accent-primary-soft px-3.5 py-2 text-sm font-semibold text-accent-primary-deep transition hover:bg-accent-primary/20'
+  const headerActionClassName = 'contos-btn contos-btn--pill contos-btn--secondary'
 
   const headerActions = (
     <div className="flex shrink-0 items-center gap-2">
@@ -1010,7 +1009,7 @@ export function AgentsPage() {
               type="button"
               tabIndex={-1}
               aria-hidden="true"
-              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-ink-muted"
+              className="contos-btn contos-btn--icon contos-btn--icon-sm contos-btn--ghost"
             >
               <MicIcon />
             </button>
@@ -1025,7 +1024,7 @@ export function AgentsPage() {
             <button
               type="submit"
               disabled={showResponding || !input.trim()}
-              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent-primary text-white transition hover:bg-accent-primary-deep disabled:opacity-60"
+              className="contos-btn contos-btn--icon contos-btn--primary"
               aria-label={showResponding ? t('agents.sendingAria') : t('agents.sendAria')}
             >
               ↑
@@ -1041,7 +1040,7 @@ export function AgentsPage() {
       <button
         type="button"
         onClick={() => navigate(`/dashboard/${project.id}`)}
-        className="inline-flex items-center gap-2 rounded-full border border-border-hairline bg-canvas-raised px-3.5 py-2 text-sm font-medium text-accent-primary transition hover:border-accent-primary/30 hover:bg-accent-primary-soft/40"
+        className="contos-btn contos-btn--pill contos-btn--ghost contos-btn--accent-label"
       >
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" className="h-4 w-4 shrink-0" aria-hidden>
           <path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10c.8.8 1.2 1.6 1.2 2.5V17h5.6v-1.5c0-.9.4-1.7 1.2-2.5A6 6 0 0 0 12 3Z" strokeLinecap="round" strokeLinejoin="round" />
@@ -1054,7 +1053,7 @@ export function AgentsPage() {
           handleInputChange(t('agents.quickActions.contentPrompt'))
           inputRef.current?.focus()
         }}
-        className="inline-flex items-center gap-2 rounded-full border border-border-hairline bg-canvas-raised px-3.5 py-2 text-sm font-medium text-accent-primary transition hover:border-accent-primary/30 hover:bg-accent-primary-soft/40"
+        className="contos-btn contos-btn--pill contos-btn--ghost contos-btn--accent-label"
       >
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" className="h-4 w-4 shrink-0" aria-hidden>
           <path d="M7 4h8l4 4v12a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Z" />
@@ -1065,7 +1064,7 @@ export function AgentsPage() {
       <button
         type="button"
         onClick={() => navigate(`/dashboard/${project.id}/calendar`)}
-        className="inline-flex items-center gap-2 rounded-full border border-border-hairline bg-canvas-raised px-3.5 py-2 text-sm font-medium text-accent-primary transition hover:border-accent-primary/30 hover:bg-accent-primary-soft/40"
+        className="contos-btn contos-btn--pill contos-btn--ghost contos-btn--accent-label"
       >
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" className="h-4 w-4 shrink-0" aria-hidden>
           <rect x="3.5" y="5" width="17" height="15" rx="2" />

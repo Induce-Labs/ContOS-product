@@ -365,6 +365,7 @@ export type Database = {
           onboarding_completed_at: string | null
           onboarding_project_type: string | null
           onboarding_step: string
+          preferred_language: string | null
           updated_at: string
           user_id: string
         }
@@ -374,6 +375,7 @@ export type Database = {
           onboarding_completed_at?: string | null
           onboarding_project_type?: string | null
           onboarding_step?: string
+          preferred_language?: string | null
           updated_at?: string
           user_id: string
         }
@@ -383,6 +385,7 @@ export type Database = {
           onboarding_completed_at?: string | null
           onboarding_project_type?: string | null
           onboarding_step?: string
+          preferred_language?: string | null
           updated_at?: string
           user_id?: string
         }

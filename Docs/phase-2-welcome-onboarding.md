@@ -10,17 +10,21 @@ Guide new ContOS users through first-run setup after sign-in: product introducti
 flowchart TD
   signIn[Sign in] --> resolvePath[resolvePostAuthPath]
   resolvePath -->|completed| dashboard[Dashboard]
+  resolvePath -->|no preferred_language| language[Choose language]
   resolvePath -->|welcome| welcome[Welcome to ContOS]
   resolvePath -->|project_type| projectType[Start a New Project]
   resolvePath -->|profiling| profiling[Profiling Questionnaire]
   resolvePath -->|competitors| competitors[Competitor Intake]
+  language -->|Continue| welcome
   welcome -->|Lets go| projectType
   projectType -->|Continue| profiling
   profiling -->|Finish| competitors
   competitors -->|Submit| dashboard
 ```
 
-Users who drop mid-flow resume at their saved `onboarding_step` on next login. Within profiling, answers already saved on the avatar hydrate and the UI resumes at the first unanswered **required** question.
+After sign-up (or any incomplete onboarding without a saved language), ContOS opens [`/onboarding/language`](../Frontend/src/pages/OnboardingLanguagePage.tsx). The choice is stored on `user_profiles.preferred_language`, applied via i18n, then onboarding continues from **Welcome**.
+
+Users who drop mid-flow resume at their saved `onboarding_step` on next login (after language is set). Within profiling, answers already saved on the avatar hydrate and the UI resumes at the first unanswered **required** question.
 
 ## Profiling questionnaire
 

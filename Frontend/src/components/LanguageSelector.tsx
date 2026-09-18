@@ -13,6 +13,8 @@ type LanguageSelectorProps = {
   className?: string
   /** Prefer opening the menu above the trigger when space allows. */
   menuPlacement?: 'up' | 'down'
+  /** `settings` = square icon box + bordered profile-card row. */
+  variant?: 'default' | 'settings'
 }
 
 function resolveCurrentLanguage(language: string): SupportedLanguage {
@@ -31,8 +33,9 @@ type MenuCoords = {
 
 export function LanguageSelector({
   id,
-  className = 'rounded-full border border-border-hairline bg-canvas-raised px-3 py-2 text-sm text-ink transition hover:bg-accent-primary-soft',
+  className,
   menuPlacement = 'down',
+  variant = 'default',
 }: LanguageSelectorProps) {
   const { t, i18n } = useTranslation()
   const generatedId = useId()
@@ -44,6 +47,17 @@ export function LanguageSelector({
   const [open, setOpen] = useState(false)
   const [coords, setCoords] = useState<MenuCoords | null>(null)
   const currentLanguage = resolveCurrentLanguage(i18n.language)
+
+  const resolvedClassName =
+    className ??
+    (variant === 'settings'
+      ? 'w-full rounded-2xl border border-border-hairline bg-canvas-raised px-2.5 py-2 text-sm text-ink transition hover:border-accent-primary/30 hover:bg-accent-primary-soft/40'
+      : 'rounded-full border border-border-hairline bg-canvas-raised px-3 py-2 text-sm text-ink transition hover:bg-accent-primary-soft')
+
+  const iconBoxClass =
+    variant === 'settings'
+      ? 'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-accent-primary-soft text-accent-primary-deep'
+      : 'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent-primary-soft text-accent-primary-deep'
 
   function updateMenuPosition() {
     const trigger = triggerRef.current
@@ -159,9 +173,9 @@ export function LanguageSelector({
           }
           openMenu()
         }}
-        className={`inline-flex w-full items-center gap-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-accent-primary/30 ${className}`}
+        className={`inline-flex w-full items-center gap-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-accent-primary/30 ${resolvedClassName}`}
       >
-        <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent-primary-soft text-accent-primary">
+        <span className={iconBoxClass}>
           <svg
             viewBox="0 0 24 24"
             fill="none"
@@ -228,7 +242,7 @@ export function LanguageSelector({
                       fill="none"
                       stroke="currentColor"
                       strokeWidth="2"
-                      className="h-4 w-4 shrink-0 text-accent-primary"
+                      className="h-4 w-4 shrink-0 text-accent-primary-deep"
                       aria-hidden
                     >
                       <path

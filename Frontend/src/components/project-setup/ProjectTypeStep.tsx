@@ -254,7 +254,7 @@ export function ProjectTypeStep({
             type="button"
             onClick={onContinue}
             disabled={isSubmitting}
-            className="group inline-flex cursor-pointer items-center gap-2.5 rounded-full bg-[#9353ea] px-7 py-3 text-sm font-semibold text-white shadow-[0_8px_25px_rgba(147,83,234,0.4)] transition-all duration-300 hover:scale-105 hover:bg-[#823fe0] hover:shadow-[0_12px_30px_rgba(147,83,234,0.5)] active:scale-95 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100 sm:px-8 sm:py-3.5 sm:text-[14.5px]"
+            className="contos-btn contos-btn--pill contos-btn--primary group sm:px-8 sm:py-3.5 sm:text-[14.5px]"
           >
             <span>
               {isSubmitting

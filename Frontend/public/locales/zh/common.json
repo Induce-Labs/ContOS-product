@@ -1,4 +1,4 @@
-﻿{
+{
   "nav": {
     "createProjectToUnlock": "åˆ›å»ºé¡¹ç›®ä»¥è§£é”å¯¼èˆªã€‚",
     "projects": "é¡¹ç›®",
@@ -33,7 +33,12 @@
       "light": "æµ…è‰²",
       "dark": "æ·±è‰²",
       "language": "è¯­è¨€",
-      "signOut": "é€€å‡ºç™»å½•"
+      "signOut": "é€€å‡ºç™»å½•",
+      "account": "账户",
+      "productBadge": "ContOS",
+      "darkMode": "深色模式",
+      "darkModeHint": "更柔和的深色体验",
+      "signOutHint": "再见！"
     },
     "emptyProjects": {
       "step": "æ­¥éª¤ 01",
@@ -182,6 +187,16 @@
     },
     "profiling": {
       "questionsUnavailable": "åˆ†æžé—®é¢˜ä¸å¯ç”¨ã€‚"
+    },
+    "language": {
+      "eyebrow": "语言",
+      "title": "选择你的语言",
+      "subtitle": "ContOS 将在引导与仪表板中使用该语言。之后可在设置中更改。",
+      "continue": "继续",
+      "saving": "正在保存…",
+      "loadFailed": "加载语言偏好失败。",
+      "previewFailed": "预览此语言失败。",
+      "saveFailed": "保存语言偏好失败。"
     }
   },
   "pipeline": {
@@ -213,7 +228,7 @@
     "workspaceSubtitle": "è·Ÿè¸ªç«žäº‰å¯¹æ‰‹ç ”ç©¶è¿›åº¦ï¼Œç„¶åŽåœ¨æŠ“å–å®ŒæˆåŽè¿›å…¥èŠå¤©ã€‚",
     "projectStatus": "é¡¹ç›®çŠ¶æ€: {{status}}",
     "openChat": "æ‰“å¼€èŠå¤©",
-    "partialFailure": "ä¸€äº›ç«žäº‰å¯¹æ‰‹å®Œæˆäº†ç ”ç©¶ï¼Œä½† {{count}} å¤±è´¥ã€‚ä½¿ç”¨å¤±è´¥å¡ä¸Šçš„é‡è¯•ï¼Œæˆ–æ‰“å¼€å·²å®Œæˆç«žäº‰å¯¹æ‰‹çš„èŠå¤©ã€‚",
+    "partialFailure": "部分竞争对手已完成研究，但有 {{count}} 个失败。可重试失败项、删除它们，或为已完成的竞争对手打开聊天。",
     "noCompetitors": "æ­¤é¡¹ç›®ä¸­è¿˜æ²¡æœ‰ç«žäº‰å¯¹æ‰‹ã€‚ä½¿ç”¨æ·»åŠ ç«žäº‰å¯¹æ‰‹å¼€å§‹ç ”ç©¶ã€‚",
     "selectProject": "ä»Žå¤´éƒ¨åˆ‡æ¢å™¨ä¸­é€‰æ‹©ä¸€ä¸ªé¡¹ç›®ã€‚",
     "researchReadyEyebrow": "ç ”ç©¶å‡†å¤‡å°±ç»ª",
@@ -221,7 +236,12 @@
     "researchFinishedBody": "æ‰“å¼€èŠå¤©ä»¥è¯·æ±‚åŸºäºŽæ­¤ç«žäº‰å¯¹æ‰‹æ•°æ®çš„ç­–ç•¥ã€å†…å®¹åˆ›æ„æˆ–æ¯”è¾ƒã€‚",
     "researchFinishedPartialSuffix": " æ‰“å¼€èŠå¤©ä»¥ä½¿ç”¨è¯¥éƒ¨åˆ†ç ”ç©¶ã€‚",
     "retryFailed": "é‡è¯•ç«žäº‰å¯¹æ‰‹ç ”ç©¶å¤±è´¥ã€‚",
-    "stopFailed": "åœæ­¢ç«žäº‰å¯¹æ‰‹ç ”ç©¶å¤±è´¥ã€‚"
+    "stopFailed": "åœæ­¢ç«žäº‰å¯¹æ‰‹ç ”ç©¶å¤±è´¥ã€‚",
+    "allFailed": "{{count}} 个竞争对手研究失败。可重试抓取或删除以释放名额。",
+    "allFailed_plural": "{{count}} 个竞争对手研究失败。可重试抓取或删除以释放名额。",
+    "deleteFailed": "删除竞争对手失败。",
+    "retryAllFailed": "重试全部失败",
+    "deleteAllFailed": "删除全部失败"
   },
   "analytics": {
     "title": "åˆ†æž",
@@ -243,7 +263,9 @@
       "retryResearch": "é‡è¯•ç ”ç©¶",
       "starting": "æ­£åœ¨å¼€å§‹â€¦",
       "stop": "åœæ­¢",
-      "stopping": "åœæ­¢ä¸­â€¦"
+      "stopping": "åœæ­¢ä¸­â€¦",
+      "delete": "删除竞争对手",
+      "deleting": "正在删除…"
     },
     "workspacePanel": {
       "heading": "ç«žäº‰å¯¹æ‰‹",
@@ -311,7 +333,19 @@
       "validationFailed": "ç«žäº‰å¯¹æ‰‹éªŒè¯æ„å¤–å¤±è´¥ã€‚",
       "startResearchFailed": "å¯åŠ¨ç«žäº‰å¯¹æ‰‹ç ”ç©¶å¤±è´¥ã€‚"
     },
-    "limitReached": "å·²è¾¾åˆ°ç«žäº‰å¯¹æ‰‹ä¸Šé™ï¼ˆ{{max}}ï¼‰"
+    "limitReached": "å·²è¾¾åˆ°ç«žäº‰å¯¹æ‰‹ä¸Šé™ï¼ˆ{{max}}ï¼‰",
+    "confirmDelete": "删除 {{handle}}？将移除此竞争对手的抓取帖子与摘要。",
+    "confirmDeleteFailed": "删除 {{count}} 个失败的竞争对手？将移除其抓取数据与摘要。",
+    "confirmDeleteFailed_plural": "删除 {{count}} 个失败的竞争对手？将移除其抓取数据与摘要。",
+    "deleteDialog": {
+      "title": "删除竞争对手？",
+      "titleFailed": "删除失败的竞争对手？",
+      "body": "将永久删除 {{handle}} 的抓取帖子与摘要。此操作不可撤销。",
+      "bodyFailed": "将永久删除 {{count}} 个失败竞争对手的抓取数据与摘要。此操作不可撤销。",
+      "bodyFailed_plural": "将永久删除 {{count}} 个失败竞争对手的抓取数据与摘要。此操作不可撤销。",
+      "confirm": "删除竞争对手",
+      "confirmFailed": "删除失败项"
+    }
   },
   "agents": {
     "pageSubtitle": "è¯·æ±‚æ¥è‡ªæ‚¨ç«žäº‰å¯¹æ‰‹ç ”ç©¶çš„ç­–ç•¥å’Œå†…å®¹åˆ›æ„ã€‚",
@@ -498,7 +532,9 @@
       "instagram": "Instagram",
       "linkedin": "LinkedIn",
       "twitter": "X / Twitter"
-    }
+    },
+    "cancel": "取消",
+    "confirm": "确认"
   },
   "errors": {
     "profileSummary": {
@@ -539,5 +575,3 @@
     }
   }
 }
-
-

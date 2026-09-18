@@ -210,7 +210,7 @@ export function AddCompetitorPanel({
                 <button
                   type="button"
                   onClick={() => removeInputField(index)}
-                  className="rounded-xl border border-border-hairline px-3 py-2 text-sm text-ink-muted hover:bg-accent-primary-soft"
+                  className="contos-btn contos-btn--rect contos-btn--secondary text-ink-muted"
                 >
                   {t('common.remove')}
                 </button>
@@ -237,7 +237,7 @@ export function AddCompetitorPanel({
           <button
             type="button"
             onClick={addInputField}
-            className="rounded-xl border border-dashed border-border-hairline px-4 py-2 text-sm font-medium text-accent-primary hover:bg-accent-primary-soft"
+            className="contos-btn contos-btn--rect contos-btn--secondary border-dashed text-accent-primary-deep"
           >
             {t('competitors.addPanel.addAnother')}
           </button>

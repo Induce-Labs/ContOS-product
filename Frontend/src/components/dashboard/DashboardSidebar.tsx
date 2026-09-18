@@ -11,6 +11,7 @@ import {
   deleteAvatar,
   setDefaultAvatar,
 } from '../../lib/avatars'
+import { PlusIcon } from '../icons/ActionIcons'
 
 type DashboardSidebarProps = {
   projects: Project[]
@@ -97,7 +98,7 @@ export function DashboardSidebar({
   return (
     <aside className="flex h-full w-56 shrink-0 flex-col border-r border-border-hairline bg-canvas-raised sm:w-64 lg:w-72">
       <div className="border-b border-border-hairline p-4">
-        <p className="text-xs font-medium uppercase tracking-wide text-accent-primary">Avatars</p>
+        <p className="text-xs font-medium uppercase tracking-wide text-accent-primary-deep">Avatars</p>
         <nav className="mt-3 space-y-1">
           {projects.map((project) => {
             const isActive = activeProject?.id === project.id
@@ -134,7 +135,7 @@ export function DashboardSidebar({
                       type="button"
                       disabled={busyAvatarId === project.id}
                       onClick={() => void handleSetDefault(project.id)}
-                      className="rounded-lg px-2 py-0.5 text-[11px] text-accent-primary hover:bg-canvas"
+                      className="rounded-lg px-2 py-0.5 text-[11px] text-accent-primary-deep hover:bg-canvas"
                     >
                       Set default
                     </button>
@@ -166,7 +167,7 @@ export function DashboardSidebar({
         ) : (
           <Link
             to="/projects/new"
-            className="mt-3 block rounded-xl border border-dashed border-border-hairline px-3 py-2 text-center text-xs font-medium text-accent-primary hover:bg-accent-primary-soft"
+            className="mt-3 block rounded-xl border border-dashed border-border-hairline px-3 py-2 text-center text-xs font-medium text-accent-primary-deep hover:bg-accent-primary-soft"
           >
             + Create Avatar
           </Link>
@@ -176,7 +177,7 @@ export function DashboardSidebar({
       {activeProject ? (
         <div className="flex min-h-0 flex-1 flex-col p-4">
           <div className="mb-3 flex items-center justify-between gap-2">
-            <p className="text-xs font-medium uppercase tracking-wide text-accent-primary">
+            <p className="text-xs font-medium uppercase tracking-wide text-accent-primary-deep">
               Competitors
             </p>
             <span className="text-xs text-ink-muted">
@@ -189,17 +190,17 @@ export function DashboardSidebar({
               <button
                 type="button"
                 onClick={chatActions.onNewChat}
-                className="block w-full rounded-xl bg-accent-primary px-3 py-2.5 text-center text-sm font-medium text-white transition hover:bg-accent-primary-deep"
+                className="contos-btn contos-btn--rect contos-btn--primary contos-btn--block"
               >
                 New chat
               </button>
               <button
                 type="button"
                 onClick={chatActions.onToggleHistory}
-                className={`block w-full rounded-xl border px-3 py-2.5 text-center text-sm font-medium transition ${
+                className={`contos-btn contos-btn--rect contos-btn--block ${
                   chatActions.historyOpen
-                    ? 'border-accent-primary bg-accent-primary-soft text-accent-primary-deep'
-                    : 'border-border-hairline text-ink hover:bg-accent-primary-soft'
+                    ? 'contos-btn--selected'
+                    : 'contos-btn--secondary'
                 }`}
               >
                 Previous chats
@@ -211,7 +212,7 @@ export function DashboardSidebar({
           ) : (
             <Link
               to={`/dashboard/${activeProject.id}/agents`}
-              className="mb-3 block rounded-xl border border-border-hairline px-3 py-2.5 text-center text-sm font-medium text-accent-primary transition hover:bg-accent-primary-soft"
+              className="contos-btn contos-btn--rect contos-btn--secondary contos-btn--block text-accent-primary-deep"
             >
               Open chat
             </Link>
@@ -231,7 +232,7 @@ export function DashboardSidebar({
                     onClick={() => onSelectCompetitor(competitor.id)}
                     className={`w-full rounded-xl px-3 py-2 text-left text-sm transition ${
                       isSelected
-                        ? 'bg-accent-primary text-white'
+                        ? 'bg-accent-primary text-btn-primary-fg'
                         : 'text-ink hover:bg-accent-primary-soft'
                     }`}
                   >
@@ -240,7 +241,7 @@ export function DashboardSidebar({
                     </span>
                     <span
                       className={`mt-0.5 block text-xs capitalize ${
-                        isSelected ? 'text-white/80' : 'text-ink-muted'
+                        isSelected ? 'text-btn-primary-fg/70' : 'text-ink-muted'
                       }`}
                     >
                       {competitor.platform === 'linkedin' ? 'LinkedIn · ' : 'Instagram · '}
@@ -268,8 +269,9 @@ export function DashboardSidebar({
                     })
                   : t('competitors.addCompetitor')
               }
-              className="w-full rounded-xl bg-accent-primary px-3 py-2.5 text-sm font-medium text-white transition hover:bg-accent-primary-deep disabled:cursor-not-allowed disabled:opacity-50"
+              className="contos-btn contos-btn--rect contos-btn--primary contos-btn--block"
             >
+              <PlusIcon />
               {isAddCompetitorOpen
                 ? t('competitors.addingCompetitor')
                 : t('competitors.addCompetitor')}

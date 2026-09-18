@@ -43,6 +43,12 @@ English (`target_lang == source_lang`) is always a no-op.
 
 Storage key: `contos_locale` (same `contos_*` pattern as last avatar).
 
+### Post-signup preference
+
+New users without `user_profiles.preferred_language` are routed to [`/onboarding/language`](../Frontend/src/pages/OnboardingLanguagePage.tsx) before Welcome. Continue saves the allowlisted locale (`en|hi|zh|fr|es`) on the profile and calls `changeAppLanguage`. Returning sessions hydrate i18n from `preferred_language` in `resolvePostAuthPath` when set. Dashboard LanguageSelector still updates localStorage for mid-session switches; profile write from the selector is out of scope for this phase.
+
+Migration: [`supabase/migrations/20260918220000_user_profiles_preferred_language.sql`](../supabase/migrations/20260918220000_user_profiles_preferred_language.sql).
+
 ### Profiling questionnaire flow
 
 1. Questions load from Supabase in English (`profiling_questionnaires`).
@@ -146,15 +152,15 @@ Declared in [`Agents/backend/.env.example`](../Agents/backend/.env.example).
 
 ## Known limitations
 
-- Locale is client-only (`localStorage`); not synced to `user_profiles`
 - Live SSE token streams are not translated mid-flight
 - Profiling questionnaire rows stay English in Supabase; UI translates on demand
 - Catalog files for hi/zh/fr/es may lag `en` until `scripts/translate_ui_strings.py` is re-run for new keys
 - `profile_summary` / `website_summary` are not rendered in the UI today (English remains fine for agents)
 - Requires `public.translation_cache` migration applied; without it `/api/translate` fails and Profiling/Analytics stay English
+- Dashboard LanguageSelector updates `localStorage` only; it does not yet write back to `user_profiles.preferred_language`
 
 ## Future improvements
 
-- Persist preferred language on `user_profiles`
+- Sync LanguageSelector changes to `user_profiles.preferred_language`
 - Dedicated Celery `translate` queue if website rate limits contend
 - Eager optional pre-translation for top summaries after scrape

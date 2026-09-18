@@ -1,5 +1,9 @@
 import { supabase } from './supabase'
-import { isOnboardingComplete, resolveCurrentOnboardingPath } from './onboarding'
+import {
+  ensureUserProfile,
+  hydrateAppLanguageFromProfile,
+  resolveCurrentOnboardingPath,
+} from './onboarding'
 import type { Tables, TablesInsert } from '../types/database'
 import type { ProjectType } from '../types/contos'
 
@@ -151,9 +155,10 @@ export async function resolveDashboardPath(): Promise<string> {
 }
 
 export async function resolvePostAuthPath(): Promise<string> {
-  const completed = await isOnboardingComplete()
+  const profile = await ensureUserProfile()
+  await hydrateAppLanguageFromProfile(profile)
 
-  if (!completed) {
+  if (profile.onboarding_completed_at === null) {
     return resolveCurrentOnboardingPath()
   }
 

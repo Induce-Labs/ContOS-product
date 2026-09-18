@@ -49,13 +49,15 @@ export function AgentChatHistoryPanel({
                   type="button"
                   onClick={() => onSelectSession(session.id)}
                   className={`w-full rounded-xl px-3 py-2.5 text-left transition ${
-                    isActive ? 'bg-accent-primary text-white' : 'hover:bg-accent-primary-soft'
+                    isActive
+                      ? 'bg-accent-primary text-btn-primary-fg'
+                      : 'hover:bg-accent-primary-soft'
                   }`}
                 >
                   <span className="block truncate text-sm font-medium">{session.title}</span>
                   <span
                     className={`mt-0.5 block text-xs ${
-                      isActive ? 'text-white/80' : 'text-ink-muted'
+                      isActive ? 'text-btn-primary-fg/70' : 'text-ink-muted'
                     }`}
                   >
                     {formatSessionTime(session.updatedAt)}
@@ -97,10 +99,8 @@ export function AgentTypePills({
             key={option.value}
             type="button"
             onClick={() => onChange(option.value)}
-            className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition ${
-              isActive
-                ? 'bg-accent-primary text-white shadow-[0_8px_20px_rgba(116,79,185,0.28)]'
-                : 'border border-border-hairline bg-canvas-raised text-ink-muted hover:border-accent-primary/30 hover:bg-accent-primary-soft/50 hover:text-ink'
+            className={`contos-btn contos-btn--pill ${
+              isActive ? 'contos-btn--selected' : 'contos-btn--ghost'
             }`}
           >
             {option.label}

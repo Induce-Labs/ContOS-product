@@ -1,4 +1,4 @@
-﻿{
+{
   "nav": {
     "createProjectToUnlock": "Crea un proyecto para desbloquear la navegaciÃ³n.",
     "projects": "Proyectos",
@@ -33,7 +33,12 @@
       "light": "Claro",
       "dark": "Oscuro",
       "language": "Idioma",
-      "signOut": "Cerrar sesiÃ³n"
+      "signOut": "Cerrar sesiÃ³n",
+      "account": "Cuenta",
+      "productBadge": "ContOS",
+      "darkMode": "Modo oscuro",
+      "darkModeHint": "Una experiencia oscura mas suave",
+      "signOutHint": "Hasta pronto!"
     },
     "emptyProjects": {
       "step": "Paso 01",
@@ -182,6 +187,16 @@
     },
     "profiling": {
       "questionsUnavailable": "Las preguntas de perfilado no estÃ¡n disponibles."
+    },
+    "language": {
+      "eyebrow": "Idioma",
+      "title": "Elige tu idioma",
+      "subtitle": "ContOS usará este idioma en el onboarding y el panel. Puedes cambiarlo después en la configuración.",
+      "continue": "Continuar",
+      "saving": "Guardando…",
+      "loadFailed": "No se pudieron cargar las preferencias de idioma.",
+      "previewFailed": "No se pudo previsualizar este idioma.",
+      "saveFailed": "No se pudo guardar tu idioma preferido."
     }
   },
   "pipeline": {
@@ -213,7 +228,7 @@
     "workspaceSubtitle": "Rastrea el progreso de la investigaciÃ³n de competidores, luego pasa al chat una vez que la recopilaciÃ³n estÃ© completa.",
     "projectStatus": "Estado del proyecto: {{status}}",
     "openChat": "Abrir chat",
-    "partialFailure": "Algunos competidores terminaron la investigaciÃ³n, pero {{count}} fallaron. Usa Reintentar en las tarjetas fallidas, o abre el chat para los competidores completados.",
+    "partialFailure": "Algunos competidores terminaron la investigación, pero {{count}} fallaron. Reintenta los fallidos, elimínalos o abre el chat para los completados.",
     "noCompetitors": "No hay competidores en este proyecto aÃºn. Usa Agregar competidor para comenzar la investigaciÃ³n.",
     "selectProject": "Selecciona un proyecto del conmutador de encabezado.",
     "researchReadyEyebrow": "InvestigaciÃ³n lista",
@@ -221,7 +236,12 @@
     "researchFinishedBody": "Abre el chat para pedir estrategias, ideas de contenido o comparaciones basadas en los datos de este competidor.",
     "researchFinishedPartialSuffix": " Abre el chat para usar esa investigaciÃ³n parcial.",
     "retryFailed": "Error al reintentar la investigaciÃ³n de competidores.",
-    "stopFailed": "Error al detener la investigaciÃ³n de competidores."
+    "stopFailed": "Error al detener la investigaciÃ³n de competidores.",
+    "allFailed": "{{count}} competidor falló en la investigación. Reintenta el scrape o elimínalos para liberar espacios.",
+    "allFailed_plural": "{{count}} competidores fallaron en la investigación. Reintenta los scrapes o elimínalos para liberar espacios.",
+    "deleteFailed": "Error al eliminar el competidor.",
+    "retryAllFailed": "Reintentar todos los fallidos",
+    "deleteAllFailed": "Eliminar todos los fallidos"
   },
   "analytics": {
     "title": "AnalÃ­tica",
@@ -243,7 +263,9 @@
       "retryResearch": "Reintentar investigaciÃ³n",
       "starting": "Iniciandoâ€¦",
       "stop": "Detener",
-      "stopping": "Deteniendoâ€¦"
+      "stopping": "Deteniendoâ€¦",
+      "delete": "Eliminar competidor",
+      "deleting": "Eliminando…"
     },
     "workspacePanel": {
       "heading": "Competidores",
@@ -311,7 +333,19 @@
       "validationFailed": "La validaciÃ³n del competidor fallÃ³ inesperadamente.",
       "startResearchFailed": "Error al iniciar la investigaciÃ³n de competidores."
     },
-    "limitReached": "LÃ­mite de competidores alcanzado ({{max}})"
+    "limitReached": "LÃ­mite de competidores alcanzado ({{max}})",
+    "confirmDelete": "¿Eliminar {{handle}}? Se borrarán las publicaciones y resúmenes de este competidor.",
+    "confirmDeleteFailed": "¿Eliminar {{count}} competidor fallido? Se borrarán sus datos y resúmenes.",
+    "confirmDeleteFailed_plural": "¿Eliminar {{count}} competidores fallidos? Se borrarán sus datos y resúmenes.",
+    "deleteDialog": {
+      "title": "¿Eliminar competidor?",
+      "titleFailed": "¿Eliminar competidores fallidos?",
+      "body": "Esto elimina permanentemente las publicaciones y resúmenes de {{handle}}. No se puede deshacer.",
+      "bodyFailed": "Esto elimina permanentemente los datos y resúmenes de {{count}} competidor fallido. No se puede deshacer.",
+      "bodyFailed_plural": "Esto elimina permanentemente los datos y resúmenes de {{count}} competidores fallidos. No se puede deshacer.",
+      "confirm": "Eliminar competidor",
+      "confirmFailed": "Eliminar fallidos"
+    }
   },
   "agents": {
     "pageSubtitle": "Pide estrategias e ideas de contenido de tu investigaciÃ³n de competidores.",
@@ -498,7 +532,9 @@
       "instagram": "Instagram",
       "linkedin": "LinkedIn",
       "twitter": "X / Twitter"
-    }
+    },
+    "cancel": "Cancelar",
+    "confirm": "Confirmar"
   },
   "errors": {
     "profileSummary": {
@@ -539,5 +575,3 @@
     }
   }
 }
-
-

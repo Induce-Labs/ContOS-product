@@ -37,7 +37,7 @@ function asStringList(value: unknown): string[] {
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="space-y-2">
-      <h4 className="text-xs font-semibold uppercase tracking-wide text-accent-primary">
+      <h4 className="text-xs font-semibold uppercase tracking-wide text-accent-primary-deep">
         {title}
       </h4>
       {children}
@@ -227,7 +227,7 @@ function InstagramRichOutputView({ output }: { output: UnknownRecord }) {
                 <div className="flex flex-wrap items-center gap-2 text-xs text-ink-muted">
                   <span>{t('agents.output.day', { n: row.day })}</span>
                   {row.date ? <span>· {row.date}</span> : null}
-                  <span className="rounded-md bg-accent-primary-soft px-2 py-0.5 font-medium text-accent-primary">
+                  <span className="rounded-md bg-accent-primary-soft px-2 py-0.5 font-medium text-accent-primary-deep">
                     {row.contentType}
                   </span>
                 </div>
@@ -236,7 +236,7 @@ function InstagramRichOutputView({ output }: { output: UnknownRecord }) {
                   <p className="mt-2 whitespace-pre-wrap text-sm text-ink-muted">{row.caption}</p>
                 ) : null}
                 {row.hashtags.length > 0 ? (
-                  <p className="mt-2 text-xs text-accent-primary">
+                  <p className="mt-2 text-xs text-accent-primary-deep">
                     {row.hashtags
                       .map((tag) => (tag.startsWith('#') ? tag : `#${tag}`))
                       .join(' ')}
@@ -323,7 +323,7 @@ function LinkedInOutputView({ output }: { output: UnknownRecord }) {
                 key={`li-${index}`}
                 className="rounded-xl border border-border-hairline bg-canvas-raised px-3 py-3"
               >
-                <p className="text-xs uppercase tracking-wide text-accent-primary">
+                <p className="text-xs uppercase tracking-wide text-accent-primary-deep">
                   {idea.contentType}
                 </p>
                 <h5 className="mt-1 font-medium text-ink">{idea.topic}</h5>
@@ -381,7 +381,7 @@ function PlaybookOutputView({ output }: { output: UnknownRecord }) {
         <span className="text-xs uppercase tracking-wide text-ink-muted">
           {t('agents.output.audit')}
         </span>
-        <span className="rounded-md bg-accent-primary-soft px-2 py-0.5 text-xs font-semibold text-accent-primary">
+        <span className="rounded-md bg-accent-primary-soft px-2 py-0.5 text-xs font-semibold text-accent-primary-deep">
           {asString(output.audit_result) || 'N/A'}
         </span>
       </div>
@@ -441,7 +441,7 @@ function TwitterOutputView({ output }: { output: UnknownRecord }) {
                 key={`tw-${index}`}
                 className="rounded-xl border border-border-hairline bg-canvas-raised px-3 py-3"
               >
-                <p className="text-xs uppercase tracking-wide text-accent-primary">{tweet.type}</p>
+                <p className="text-xs uppercase tracking-wide text-accent-primary-deep">{tweet.type}</p>
                 {tweet.hook ? <p className="mt-2 font-medium text-ink">{tweet.hook}</p> : null}
                 {tweet.fullTweet ? (
                   <p className="mt-2 whitespace-pre-wrap text-sm text-ink-muted">

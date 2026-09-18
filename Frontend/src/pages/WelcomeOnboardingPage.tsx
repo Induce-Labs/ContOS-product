@@ -5,7 +5,7 @@ import welcomeCard1 from '../assets/welcome-card-1.png'
 import welcomeCard2 from '../assets/welcome-card-2.png'
 import welcomeCard3 from '../assets/welcome-card-3.png'
 import welcomeCard4 from '../assets/welcome-card-4.png'
-import { isOnboardingComplete, advanceOnboardingStep, getOnboardingStep, resolveOnboardingPath } from '../lib/onboarding'
+import { isOnboardingComplete, advanceOnboardingStep, getOnboardingStep, needsLanguageSelection, ONBOARDING_LANGUAGE_PATH, resolveOnboardingPath } from '../lib/onboarding'
 import { resolveDashboardPath } from '../lib/projects'
 
 type OnboardingModule = {
@@ -130,6 +130,11 @@ export function WelcomeOnboardingPage() {
           return
         }
 
+        if (await needsLanguageSelection()) {
+          navigate(ONBOARDING_LANGUAGE_PATH, { replace: true })
+          return
+        }
+
         const currentStep = await getOnboardingStep()
 
         if (currentStep !== 'welcome') {
@@ -224,7 +229,7 @@ export function WelcomeOnboardingPage() {
             type="button"
             onClick={() => void handleContinue()}
             disabled={isSubmitting}
-            className="group inline-flex cursor-pointer items-center gap-2.5 rounded-full bg-[#9353ea] px-8 py-3 text-sm font-medium tracking-normal text-white shadow-[0_10px_30px_rgba(147,83,234,0.4)] transition-all duration-300 hover:scale-105 hover:bg-[#823fe0] hover:shadow-[0_14px_35px_rgba(147,83,234,0.5)] active:scale-95 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100 sm:px-9 sm:py-3.5 sm:text-[15px]"
+            className="contos-btn contos-btn--pill contos-btn--primary group sm:px-9 sm:py-3.5 sm:text-[15px]"
           >
             <span>{isSubmitting ? t('onboarding.welcome.starting') : t('onboarding.welcome.cta')}</span>
             <ArrowIcon className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-1" />

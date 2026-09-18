@@ -188,12 +188,12 @@ function ChatHistoryDropdown({
   const triggerClass = collapsed
     ? `flex h-10 w-10 items-center justify-center rounded-xl transition ${
         open
-          ? 'bg-accent-primary text-white'
+          ? 'bg-accent-primary text-btn-primary-fg shadow-[0_1px_4px_color-mix(in_srgb,var(--color-accent-primary)_35%,transparent)]'
           : 'text-ink-muted hover:bg-canvas hover:text-ink'
       }`
     : `flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition ${
         open
-          ? 'bg-accent-primary text-white'
+          ? 'bg-accent-primary text-btn-primary-fg shadow-[0_1px_4px_color-mix(in_srgb,var(--color-accent-primary)_35%,transparent)]'
           : 'text-ink-muted hover:bg-accent-primary-soft/60 hover:text-ink'
       }`
 
@@ -387,7 +387,7 @@ export function DashboardSidebarNav({
           aria-label={item.label}
           className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition ${
             isActive
-              ? 'bg-accent-primary text-white'
+              ? 'bg-accent-primary text-btn-primary-fg shadow-[0_1px_4px_color-mix(in_srgb,var(--color-accent-primary)_35%,transparent)]'
               : 'text-ink-muted hover:bg-canvas hover:text-ink'
           }`}
         >
@@ -403,7 +403,7 @@ export function DashboardSidebarNav({
         onClick={() => handleNavClick(item)}
         className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition ${
           isActive
-            ? 'bg-accent-primary text-white'
+            ? 'bg-accent-primary text-btn-primary-fg shadow-[0_1px_4px_color-mix(in_srgb,var(--color-accent-primary)_35%,transparent)]'
             : 'text-ink-muted hover:bg-accent-primary-soft/60 hover:text-ink'
         }`}
       >

@@ -1,6 +1,11 @@
 import { supabase } from './supabase'
 import type { Tables } from '../types/database'
 import type { ProjectType } from '../types/contos'
+import {
+  changeAppLanguage,
+  isSupportedLanguage,
+  type SupportedLanguage,
+} from '../i18n'
 
 export type UserProfile = Tables<'user_profiles'>
 
@@ -25,6 +30,8 @@ export class OnboardingServiceError extends Error {
     }
   }
 }
+
+export const ONBOARDING_LANGUAGE_PATH = '/onboarding/language'
 
 const ONBOARDING_STEP_PATHS: Record<OnboardingStep, string> = {
   welcome: '/welcome',
@@ -66,6 +73,12 @@ function parseOnboardingStep(value: string | null | undefined): OnboardingStep {
   }
 
   return 'welcome'
+}
+
+export function parsePreferredLanguage(
+  value: string | null | undefined,
+): SupportedLanguage | null {
+  return isSupportedLanguage(value) ? value : null
 }
 
 export async function fetchUserProfile(): Promise<UserProfile | null> {
@@ -112,6 +125,48 @@ export async function ensureUserProfile(): Promise<UserProfile> {
   return data
 }
 
+export async function hydrateAppLanguageFromProfile(
+  profile?: UserProfile | null,
+): Promise<SupportedLanguage | null> {
+  const resolved = profile ?? (await ensureUserProfile())
+  const preferred = parsePreferredLanguage(resolved.preferred_language)
+  if (!preferred) {
+    return null
+  }
+  await changeAppLanguage(preferred)
+  return preferred
+}
+
+export async function savePreferredLanguage(
+  language: SupportedLanguage,
+): Promise<UserProfile> {
+  if (!isSupportedLanguage(language)) {
+    throw new OnboardingServiceError(
+      `Unsupported preferred language "${language}". Expected one of: en, hi, zh, fr, es.`,
+    )
+  }
+
+  const userId = await getAuthenticatedUserId()
+  await ensureUserProfile()
+
+  const { data, error } = await supabase
+    .from('user_profiles')
+    .update({ preferred_language: language })
+    .eq('user_id', userId)
+    .select()
+    .single()
+
+  if (error) {
+    throw new OnboardingServiceError(
+      `Failed to save preferred language: ${error.message}`,
+      error,
+    )
+  }
+
+  await changeAppLanguage(language)
+  return data
+}
+
 export async function getOnboardingStep(): Promise<OnboardingStep> {
   const profile = await ensureUserProfile()
 
@@ -127,13 +182,30 @@ export function resolveOnboardingPath(step: OnboardingStep): string {
 }
 
 export async function resolveCurrentOnboardingPath(): Promise<string> {
-  const step = await getOnboardingStep()
-  return resolveOnboardingPath(step)
+  const profile = await ensureUserProfile()
+
+  if (profile.onboarding_completed_at !== null) {
+    return resolveOnboardingPath('completed')
+  }
+
+  if (!parsePreferredLanguage(profile.preferred_language)) {
+    return ONBOARDING_LANGUAGE_PATH
+  }
+
+  return resolveOnboardingPath(parseOnboardingStep(profile.onboarding_step))
 }
 
 export async function isOnboardingComplete(): Promise<boolean> {
   const profile = await ensureUserProfile()
   return profile.onboarding_completed_at !== null
+}
+
+export async function needsLanguageSelection(): Promise<boolean> {
+  const profile = await ensureUserProfile()
+  if (profile.onboarding_completed_at !== null) {
+    return false
+  }
+  return !parsePreferredLanguage(profile.preferred_language)
 }
 
 export async function advanceOnboardingStep(

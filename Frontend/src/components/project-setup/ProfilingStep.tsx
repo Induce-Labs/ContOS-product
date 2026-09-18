@@ -196,7 +196,7 @@ export function ProfilingStep({
                         type="button"
                         onClick={onSaveDraft}
                         disabled={disabled}
-                        className="inline-flex shrink-0 items-center rounded-full border border-border-hairline bg-canvas-raised px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-ink transition hover:bg-accent-primary-soft disabled:cursor-not-allowed disabled:opacity-60 sm:px-5 sm:py-3 sm:text-sm"
+                        className="contos-btn contos-btn--pill contos-btn--secondary shrink-0 uppercase tracking-wider sm:px-5 sm:py-3 sm:text-sm"
                       >
                         {isSavingDraft
                           ? t('profiling.savingDraft')
@@ -208,7 +208,7 @@ export function ProfilingStep({
                       type="button"
                       onClick={() => onNext()}
                       disabled={disabled}
-                      className="group inline-flex shrink-0 cursor-pointer items-center gap-2 rounded-full bg-accent-primary px-6 py-2.5 text-xs font-semibold uppercase tracking-wider text-white shadow-[0_10px_30px_rgba(147,83,234,0.4)] transition-all duration-300 hover:scale-105 hover:bg-accent-primary-deep hover:shadow-[0_14px_35px_rgba(147,83,234,0.5)] active:scale-95 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100 sm:px-8 sm:py-3 sm:text-sm"
+                      className="contos-btn contos-btn--pill contos-btn--primary group shrink-0 uppercase tracking-wider sm:px-8 sm:py-3 sm:text-sm"
                     >
                       <span>
                         {isSummarizing

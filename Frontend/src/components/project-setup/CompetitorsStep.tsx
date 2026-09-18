@@ -306,7 +306,7 @@ export function CompetitorsStep({
 
       <main className="relative z-20 mx-auto flex w-full max-w-4xl flex-col px-4 py-10 sm:px-6 sm:py-14 lg:px-8">
         <header className="mx-auto mb-8 max-w-2xl text-center sm:mb-10">
-          <span className="mb-3 inline-flex items-center gap-1.5 rounded-full border border-purple-200/60 bg-purple-50 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-[#9353ea]">
+          <span className="mb-3 inline-flex items-center gap-1.5 rounded-full border border-accent-primary/40 bg-accent-primary-soft px-3 py-1 text-xs font-semibold uppercase tracking-wider text-accent-primary-deep">
             <SparklesIcon className="h-3.5 w-3.5" />
             {t('layout.brandName')}
           </span>
@@ -332,7 +332,7 @@ export function CompetitorsStep({
             <span className="text-neutral-400" aria-hidden="true">
               •
             </span>
-            <span className={atRecommended ? 'font-medium text-emerald-600' : 'font-medium text-[#9353ea]'}>
+            <span className={atRecommended ? 'font-medium text-emerald-600' : 'font-medium text-accent-primary-deep'}>
               {atRecommended
                 ? `${RECOMMENDED_COMPETITORS_PER_AVATAR}+`
                 : `Recommend ${RECOMMENDED_COMPETITORS_PER_AVATAR}`}
@@ -349,9 +349,9 @@ export function CompetitorsStep({
                   key={idx}
                   className={`h-2.5 w-2.5 rounded-full transition-all ${
                     isFilled
-                      ? 'scale-110 bg-[#9353ea] shadow-sm'
+                      ? 'scale-110 bg-accent-primary shadow-sm'
                       : isRecommendedSlot
-                        ? 'border-2 border-[#9353ea] bg-purple-100'
+                        ? 'border-2 border-accent-primary bg-accent-primary-soft'
                         : 'bg-neutral-200'
                   }`}
                 />
@@ -423,7 +423,7 @@ export function CompetitorsStep({
                               ? t('onboarding.competitors.placeholderTwitter')
                               : t('onboarding.competitors.placeholderInstagram')
                         }
-                        className="w-full rounded-xl border border-neutral-200 bg-[#faf9fd] px-4 py-2.5 font-mono text-xs text-neutral-900 placeholder:text-neutral-400 transition-all focus:border-[#9353ea] focus:outline-none focus:ring-2 focus:ring-[#9353ea]/10 disabled:opacity-60 sm:text-sm"
+                        className="w-full rounded-xl border border-neutral-200 bg-[#faf9fd] px-4 py-2.5 font-mono text-xs text-neutral-900 placeholder:text-neutral-400 transition-all focus:border-accent-primary focus:outline-none focus:ring-2 focus:ring-accent-primary/20 disabled:opacity-60 sm:text-sm"
                       />
                       {fieldError ? (
                         <p className="mt-1.5 text-xs text-red-600">{fieldError}</p>
@@ -454,7 +454,7 @@ export function CompetitorsStep({
                 type="button"
                 onClick={onAddField}
                 disabled={disabled}
-                className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-neutral-300 py-3.5 text-xs font-medium text-neutral-600 transition-all duration-200 hover:border-[#9353ea] hover:bg-purple-50/40 hover:text-[#9353ea] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60 sm:text-sm"
+                className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-neutral-300 py-3.5 text-xs font-medium text-neutral-600 transition-all duration-200 hover:border-accent-primary hover:bg-accent-primary-soft/40 hover:text-accent-primary-deep active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60 sm:text-sm"
               >
                 <PlusIcon className="h-4 w-4" />
                 <span>
@@ -482,7 +482,7 @@ export function CompetitorsStep({
             <button
               type="submit"
               disabled={disabled}
-              className="group inline-flex w-full cursor-pointer items-center justify-center gap-2.5 rounded-full bg-[#9353ea] px-8 py-3.5 text-xs font-semibold text-white shadow-[0_10px_30px_rgba(147,83,234,0.4)] transition-all duration-300 hover:scale-105 hover:bg-[#823fe0] hover:shadow-[0_14px_35px_rgba(147,83,234,0.5)] active:scale-95 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100 sm:w-auto sm:px-10 sm:py-4 sm:text-sm"
+              className="contos-btn contos-btn--pill contos-btn--primary group w-full sm:w-auto sm:px-10 sm:py-4 sm:text-sm"
             >
               <span>{submitDisplay}</span>
               {!isSubmitting ? (

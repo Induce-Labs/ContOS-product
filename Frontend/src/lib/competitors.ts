@@ -124,6 +124,38 @@ export async function createCompetitors(
   return [...reused, ...data]
 }
 
+export function failedCompetitorIds(competitors: Competitor[]): string[] {
+  return competitors
+    .filter((competitor) => competitor.pipeline_step === 'failed')
+    .map((competitor) => competitor.id)
+}
+
+export async function deleteCompetitor(competitorId: string): Promise<void> {
+  const { error } = await supabase.from('competitors').delete().eq('id', competitorId)
+
+  if (error) {
+    throw new CompetitorsServiceError(
+      `Failed to delete competitor: ${error.message}`,
+      error,
+    )
+  }
+}
+
+export async function deleteCompetitors(competitorIds: string[]): Promise<void> {
+  if (competitorIds.length === 0) {
+    return
+  }
+
+  const { error } = await supabase.from('competitors').delete().in('id', competitorIds)
+
+  if (error) {
+    throw new CompetitorsServiceError(
+      `Failed to delete competitors: ${error.message}`,
+      error,
+    )
+  }
+}
+
 function mapCompetitorCapError(message: string): string {
   if (message.includes('competitor_cap_exceeded')) {
     return 'This avatar already has the maximum of 10 competitors.'

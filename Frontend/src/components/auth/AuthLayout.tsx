@@ -45,7 +45,7 @@ export function AuthLayout({ title, subtitle, children, footer }: AuthLayoutProp
           <div className="mx-auto w-full max-w-[380px]">
             <div className="mb-5 space-y-1.5 sm:mb-6">
               <div className="mb-4 flex items-center md:hidden">
-                <span className="text-xl font-bold tracking-tight text-accent-primary">
+                <span className="text-xl font-bold tracking-tight text-accent-primary-deep">
                   {t('auth.brandName')}
                 </span>
               </div>
@@ -72,7 +72,7 @@ export function AuthLink({ to, children }: AuthLinkProps) {
   return (
     <Link
       to={to}
-      className="font-semibold text-accent-primary transition-colors hover:text-accent-primary-deep hover:underline underline-offset-4"
+      className="font-semibold text-accent-primary-deep transition-colors hover:opacity-80 hover:underline underline-offset-4"
     >
       {children}
     </Link>

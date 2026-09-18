@@ -5,6 +5,7 @@ import { DashboardSidebarNav } from './DashboardSidebarNav'
 import { DashboardTopBar } from './DashboardTopBar'
 import { ProjectSwitcher } from './ProjectSwitcher'
 import { SidebarUserMenu } from './SidebarUserMenu'
+import bgRightContent from '../../assets/bg-right-content.png'
 import contosMark from '../../assets/contos-mark.png'
 import type { Project } from '../../lib/projects'
 import type { ReactNode } from 'react'
@@ -225,9 +226,17 @@ export function DashboardLayout({
         </div>
       </aside>
 
-      <div className="flex min-w-0 flex-1 flex-col bg-[#FFFFFF] dark:bg-canvas">
-        <DashboardTopBar onOpenSidebar={() => onSidebarOpenChange(true)} />
-        <main className={`min-h-0 min-w-0 flex-1 ${mainClassName}`}>{children}</main>
+      <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden bg-[#FFFFFF] dark:bg-canvas">
+        <img
+          src={bgRightContent}
+          alt=""
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 z-0 h-full w-full object-cover dark:hidden"
+        />
+        <div className="relative z-10 flex min-h-0 min-w-0 flex-1 flex-col">
+          <DashboardTopBar onOpenSidebar={() => onSidebarOpenChange(true)} />
+          <main className={`min-h-0 min-w-0 flex-1 ${mainClassName}`}>{children}</main>
+        </div>
       </div>
     </div>
   )
@@ -237,7 +246,7 @@ export function EmptyProjectsState() {
   const { t } = useTranslation()
   return (
     <section className="mx-auto max-w-xl rounded-[2rem] border border-border-hairline bg-canvas-raised p-10 text-center font-sans shadow-[0_18px_40px_rgba(28,27,41,0.06)]">
-      <p className="text-sm font-medium uppercase tracking-wide text-accent-primary">
+      <p className="text-sm font-medium uppercase tracking-wide text-accent-primary-deep">
         {t('layout.emptyProjects.step')}
       </p>
       <h2 className="mt-3 font-serif text-3xl text-ink">{t('layout.emptyProjects.title')}</h2>
@@ -246,7 +255,7 @@ export function EmptyProjectsState() {
       </p>
       <Link
         to="/projects/new"
-        className="mt-8 inline-block rounded-full bg-accent-primary px-6 py-3 text-sm font-semibold text-white transition hover:bg-accent-primary-deep"
+        className="contos-btn contos-btn--pill contos-btn--primary mt-8"
       >
         {t('layout.emptyProjects.cta')}
       </Link>

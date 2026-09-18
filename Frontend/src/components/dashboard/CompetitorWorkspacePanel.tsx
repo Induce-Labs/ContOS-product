@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next'
 import { MAX_COMPETITORS_PER_AVATAR } from '../../lib/competitors'
 import { displayCompetitorHandle } from '../../lib/instagram-display'
 import type { Competitor } from '../../lib/competitors'
+import { PlusIcon } from '../icons/ActionIcons'
 
 type CompetitorWorkspacePanelProps = {
   competitors: Competitor[]
@@ -44,8 +45,9 @@ export function CompetitorWorkspacePanel({
               ? t('onboarding.competitors.maxReached', { max: MAX_COMPETITORS_PER_AVATAR })
               : undefined
           }
-          className="rounded-full bg-accent-primary px-4 py-2 text-sm font-medium text-white transition hover:bg-accent-primary-deep disabled:cursor-not-allowed disabled:opacity-50"
+          className="contos-btn contos-btn--pill contos-btn--primary"
         >
+          <PlusIcon />
           {isAddCompetitorOpen ? t('competitors.addingCompetitor') : t('competitors.addCompetitor')}
         </button>
       </div>
@@ -74,10 +76,8 @@ export function CompetitorWorkspacePanel({
                 key={competitor.id}
                 type="button"
                 onClick={() => onSelectCompetitor(competitor.id)}
-                className={`shrink-0 rounded-full px-4 py-2 text-left text-sm transition ${
-                  isSelected
-                    ? 'bg-accent-primary text-white'
-                    : 'border border-border-hairline bg-canvas text-ink hover:bg-accent-primary-soft'
+                className={`contos-btn contos-btn--pill shrink-0 text-left ${
+                  isSelected ? 'contos-btn--selected' : 'contos-btn--ghost'
                 }`}
               >
                 <span className="block truncate font-medium">

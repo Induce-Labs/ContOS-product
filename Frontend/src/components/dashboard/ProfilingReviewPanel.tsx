@@ -119,7 +119,7 @@ export function ProfilingReviewPanel({
             type="button"
             onClick={onSave}
             disabled={disabled || !hasChanges}
-            className="inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-accent-primary to-[#8d67cf] px-8 py-3.5 text-sm font-semibold uppercase tracking-wide text-white shadow-[0_12px_28px_rgba(116,79,185,0.32)] transition hover:from-accent-primary-deep hover:to-accent-primary disabled:cursor-not-allowed disabled:opacity-60"
+            className="contos-btn contos-btn--pill contos-btn--primary px-8 py-3.5 uppercase tracking-wide"
           >
             {isSummarizing
               ? t('profiling.review.updatingSummary')

@@ -4,15 +4,33 @@ import { Link } from 'react-router-dom'
 import { useDashboardPolling } from '../hooks/useDashboardPolling'
 import { useDashboardShell } from '../hooks/useDashboardShell'
 import { updateProjectStatus } from '../lib/projects'
-import { enqueueCompetitorScrapeJobsOrThrow } from '../lib/api'
-import { MAX_COMPETITORS_PER_AVATAR, type Competitor } from '../lib/competitors'
+import {
+  enqueueCompetitorScrapeJobsOrThrow,
+  stopCompetitorPipeline,
+} from '../lib/api'
+import {
+  deleteCompetitor,
+  MAX_COMPETITORS_PER_AVATAR,
+  type Competitor,
+} from '../lib/competitors'
 import { requeueOrphanedCompetitorScrapes } from '../lib/requeueOrphanedScrapes'
-import type { ProjectStatus } from '../types/contos'
+import type { PipelineStep, ProjectStatus } from '../types/contos'
 import { DashboardLayout, EmptyProjectsState } from '../components/dashboard/DashboardLayout'
 import { CompetitorProgressCard } from '../components/dashboard/CompetitorProgressCard'
 import { AddCompetitorPanel } from '../components/dashboard/AddCompetitorPanel'
 import { OverviewWorkspaceHeader } from '../components/dashboard/OverviewWorkspaceHeader'
 import { CompetitorWorkspacePanel } from '../components/dashboard/CompetitorWorkspacePanel'
+import { ConfirmDialog } from '../components/ConfirmDialog'
+import { ChatIcon, TrashIcon } from '../components/icons/ActionIcons'
+
+type DeleteDialogState = {
+  competitorId: string
+  handle: string
+} | null
+
+function isPipelineInProgress(step: string): boolean {
+  return step !== 'done' && step !== 'failed' && step !== 'queued'
+}
 
 function deriveProjectStatusFromCompetitors(
   competitors: Competitor[],
@@ -59,7 +77,9 @@ export function DashboardPage() {
   const [selectedCompetitorId, setSelectedCompetitorId] = useState<string | null>(null)
   const [isAddCompetitorOpen, setIsAddCompetitorOpen] = useState(false)
   const [retryingCompetitorId, setRetryingCompetitorId] = useState<string | null>(null)
+  const [deletingCompetitorId, setDeletingCompetitorId] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
+  const [deleteDialog, setDeleteDialog] = useState<DeleteDialogState>(null)
 
   const {
     competitors,
@@ -145,25 +165,63 @@ export function DashboardPage() {
     }
   }
 
+  function requestDeleteCompetitor(competitorId: string) {
+    const competitor = competitors.find((entry) => entry.id === competitorId)
+    setDeleteDialog({
+      competitorId,
+      handle: competitor?.handle_or_url ?? competitorId,
+    })
+  }
+
+  async function executeDeleteCompetitor(competitorId: string) {
+    if (!activeProject) {
+      return
+    }
+
+    const competitor = competitors.find((entry) => entry.id === competitorId)
+
+    setActionError(null)
+    setDeletingCompetitorId(competitorId)
+
+    try {
+      if (competitor && isPipelineInProgress(competitor.pipeline_step as PipelineStep)) {
+        try {
+          await stopCompetitorPipeline(activeProject.id, competitorId)
+        } catch {
+          // Best-effort stop; delete still removes the row and CASCADE context.
+        }
+      }
+
+      await deleteCompetitor(competitorId)
+
+      if (selectedCompetitorId === competitorId) {
+        setSelectedCompetitorId(null)
+      }
+
+      setDeleteDialog(null)
+      await refresh()
+      await refreshProjects()
+    } catch (error) {
+      setActionError(
+        error instanceof Error ? error.message : t('dashboard.deleteFailed'),
+      )
+    } finally {
+      setDeletingCompetitorId(null)
+    }
+  }
+
   const isLoading = projectsLoading || (activeProject !== null && dashboardLoading)
   const activeCompetitorId =
     selectedCompetitorId &&
     competitors.some((competitor) => competitor.id === selectedCompetitorId)
       ? selectedCompetitorId
       : (competitors[0]?.id ?? null)
-  const failedCompetitorCount = competitors.filter(
-    (competitor) => competitor.pipeline_step === 'failed',
-  ).length
   const completedCompetitorCount = competitors.filter(
     (competitor) => competitor.pipeline_step === 'done',
   ).length
   const displayStatus = activeProject
     ? deriveProjectStatusFromCompetitors(competitors, activeProject.status)
     : null
-  const hasPartialFailure =
-    failedCompetitorCount > 0 &&
-    completedCompetitorCount > 0 &&
-    displayStatus === 'ready'
   const remainingSlots = Math.max(0, MAX_COMPETITORS_PER_AVATAR - competitors.length)
 
   if (!isLoading && projects.length === 0) {
@@ -231,8 +289,9 @@ export function DashboardPage() {
             {completedCompetitorCount > 0 ? (
               <Link
                 to={`/dashboard/${activeProject.id}/agents`}
-                className="rounded-full bg-accent-primary px-4 py-2.5 text-sm font-medium text-white hover:bg-accent-primary-deep"
+                className="contos-btn contos-btn--pill contos-btn--primary"
               >
+                <ChatIcon />
                 {t('dashboard.openChat')}
               </Link>
             ) : null}
@@ -245,12 +304,6 @@ export function DashboardPage() {
             onAddCompetitor={() => setIsAddCompetitorOpen(true)}
             isAddCompetitorOpen={isAddCompetitorOpen}
           />
-
-          {hasPartialFailure ? (
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-              {t('dashboard.partialFailure', { count: failedCompetitorCount })}
-            </div>
-          ) : null}
 
           {isAddCompetitorOpen ? (
             <AddCompetitorPanel
@@ -275,7 +328,9 @@ export function DashboardPage() {
                   competitor={competitor}
                   projectId={activeProject.id}
                   onRetry={(competitorId) => void handleRetryCompetitor(competitorId)}
+                  onDelete={requestDeleteCompetitor}
                   isRetrying={retryingCompetitorId === competitor.id}
+                  isDeleting={deletingCompetitorId === competitor.id}
                 />
               ))}
             </div>
@@ -286,6 +341,28 @@ export function DashboardPage() {
           <p className="text-sm text-ink-muted">{t('dashboard.selectProject')}</p>
         </section>
       )}
+
+      <ConfirmDialog
+        open={deleteDialog !== null}
+        title={t('competitors.deleteDialog.title')}
+        description={t('competitors.deleteDialog.body', {
+          handle: deleteDialog?.handle ?? '',
+        })}
+        confirmLabel={t('competitors.deleteDialog.confirm')}
+        confirming={
+          deleteDialog !== null && deletingCompetitorId === deleteDialog.competitorId
+        }
+        onConfirm={() => {
+          if (deleteDialog) {
+            void executeDeleteCompetitor(deleteDialog.competitorId)
+          }
+        }}
+        onCancel={() => {
+          if (!deletingCompetitorId) {
+            setDeleteDialog(null)
+          }
+        }}
+      />
     </DashboardLayout>
   )
 }
@@ -294,14 +371,18 @@ type CompetitorDashboardSectionProps = {
   competitor: Competitor
   projectId: string
   onRetry?: (competitorId: string) => void
+  onDelete?: (competitorId: string) => void
   isRetrying?: boolean
+  isDeleting?: boolean
 }
 
 function CompetitorDashboardSection({
   competitor,
   projectId,
   onRetry,
+  onDelete,
   isRetrying = false,
+  isDeleting = false,
 }: CompetitorDashboardSectionProps) {
   const { t } = useTranslation()
 
@@ -320,12 +401,28 @@ function CompetitorDashboardSection({
             ? `${competitor.error_message}${t('dashboard.researchFinishedPartialSuffix')}`
             : t('dashboard.researchFinishedBody')}
         </p>
-        <Link
-          to={`/dashboard/${projectId}/agents`}
-          className="mt-6 inline-block rounded-full bg-accent-primary px-4 py-2.5 text-sm font-medium text-white hover:bg-accent-primary-deep"
-        >
-          {t('dashboard.openChat')}
-        </Link>
+        <div className="mt-6 flex flex-wrap gap-3">
+          <Link
+            to={`/dashboard/${projectId}/agents`}
+            className="contos-btn contos-btn--pill contos-btn--primary"
+          >
+            <ChatIcon />
+            {t('dashboard.openChat')}
+          </Link>
+          {onDelete ? (
+            <button
+              type="button"
+              onClick={() => onDelete(competitor.id)}
+              disabled={isDeleting}
+              className="contos-btn contos-btn--pill contos-btn--secondary text-ink-muted hover:border-red-200 hover:bg-red-50 hover:text-red-700"
+            >
+              <TrashIcon />
+              {isDeleting
+                ? t('competitors.progressCard.deleting')
+                : t('competitors.progressCard.delete')}
+            </button>
+          ) : null}
+        </div>
       </section>
     )
   }
@@ -334,7 +431,9 @@ function CompetitorDashboardSection({
     <CompetitorProgressCard
       competitor={competitor}
       onRetry={onRetry}
+      onDelete={onDelete}
       isRetrying={isRetrying}
+      isDeleting={isDeleting}
     />
   )
 }

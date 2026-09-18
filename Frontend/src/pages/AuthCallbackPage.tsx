@@ -46,7 +46,7 @@ export function AuthCallbackPage() {
           <p className="mt-3 text-sm text-red-600">{errorMessage}</p>
           <Link
             to="/login"
-            className="mt-6 inline-block text-sm font-medium text-accent-primary hover:text-accent-primary-deep"
+            className="mt-6 inline-block text-sm font-medium text-accent-primary-deep hover:opacity-80"
           >
             {t('auth.callback.backToSignIn')}
           </Link>

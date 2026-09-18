@@ -14,7 +14,7 @@ export function GoogleSignInButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="flex w-full items-center justify-center gap-3 rounded-xl border border-border-hairline bg-canvas px-4 py-3 text-sm font-medium text-ink transition hover:bg-canvas-raised hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-60"
+      className="contos-btn contos-btn--rect contos-btn--secondary contos-btn--block gap-3"
     >
       <svg className="h-5 w-5" viewBox="0 0 24 24">
         <path
@@ -57,7 +57,7 @@ export function PrimaryButton({
       type={type}
       onClick={onClick}
       disabled={disabled}
-      className="w-full rounded-xl bg-accent-primary px-4 py-3 text-sm font-semibold text-white shadow-[0_2px_10px_rgba(116,79,185,0.2)] transition-all hover:bg-accent-primary-deep hover:shadow-[0_4px_15px_rgba(78,51,128,0.3)] disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none"
+      className="contos-btn contos-btn--rect contos-btn--primary contos-btn--block"
     >
       {children}
     </button>

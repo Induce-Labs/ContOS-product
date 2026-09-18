@@ -29,11 +29,16 @@
     "newProject": "+ New Project",
     "userMenu": {
       "openAria": "Open account menu",
+      "account": "Account",
+      "productBadge": "ContOS",
       "appearance": "Appearance",
       "light": "Light",
       "dark": "Dark",
+      "darkMode": "Dark mode",
+      "darkModeHint": "A softer dark experience",
       "language": "Language",
-      "signOut": "Sign out"
+      "signOut": "Sign out",
+      "signOutHint": "See you soon!"
     },
     "emptyProjects": {
       "step": "Step 01",
@@ -103,6 +108,16 @@
   },
   "onboarding": {
     "preparingWorkspace": "Preparing your workspace…",
+    "language": {
+      "eyebrow": "Language",
+      "title": "Choose your language",
+      "subtitle": "ContOS will use this for onboarding and your dashboard. You can change it later in settings.",
+      "continue": "Continue",
+      "saving": "Saving…",
+      "loadFailed": "Failed to load language preferences.",
+      "previewFailed": "Failed to preview this language.",
+      "saveFailed": "Failed to save your language preference."
+    },
     "welcome": {
       "title": "Welcome to ContOS.",
       "subtitle": "Your fractional CMO workspace. Let's set up your strategic foundation.",
@@ -213,7 +228,9 @@
     "workspaceSubtitle": "Track competitor research progress, then move into chat once scraping is complete.",
     "projectStatus": "Project status: {{status}}",
     "openChat": "Open chat",
-    "partialFailure": "Some competitors finished research, but {{count}} failed. Use Retry on failed cards, or open chat for completed competitors.",
+    "partialFailure": "Some competitors finished research, but {{count}} failed. Retry failed scrapes, delete them, or open chat for completed competitors.",
+    "allFailed": "{{count}} competitor failed research. Retry the scrape or delete them to free slots.",
+    "allFailed_plural": "{{count}} competitors failed research. Retry the scrapes or delete them to free slots.",
     "noCompetitors": "No competitors in this project yet. Use Add competitor to start research.",
     "selectProject": "Select a project from the header switcher.",
     "researchReadyEyebrow": "Research ready",
@@ -221,6 +238,9 @@
     "researchFinishedBody": "Open chat to ask for strategies, content ideas, or comparisons grounded in this competitor's data.",
     "researchFinishedPartialSuffix": " Open chat to use that partial research.",
     "retryFailed": "Failed to retry competitor research.",
+    "deleteFailed": "Failed to delete competitor.",
+    "retryAllFailed": "Retry all failed",
+    "deleteAllFailed": "Delete all failed",
     "stopFailed": "Failed to stop competitor research."
   },
   "analytics": {
@@ -237,12 +257,26 @@
     "addCompetitor": "Add competitor",
     "addingCompetitor": "Adding competitor…",
     "limitReached": "Competitor limit reached ({{max}})",
+    "confirmDelete": "Delete {{handle}}? Scraped posts and summaries for this competitor will be removed.",
+    "confirmDeleteFailed": "Delete {{count}} failed competitor? Their scraped data and summaries will be removed.",
+    "confirmDeleteFailed_plural": "Delete {{count}} failed competitors? Their scraped data and summaries will be removed.",
+    "deleteDialog": {
+      "title": "Delete competitor?",
+      "titleFailed": "Delete failed competitors?",
+      "body": "This permanently removes scraped posts and summaries for {{handle}}. This cannot be undone.",
+      "bodyFailed": "This permanently removes scraped data and summaries for {{count}} failed competitor. This cannot be undone.",
+      "bodyFailed_plural": "This permanently removes scraped data and summaries for {{count}} failed competitors. This cannot be undone.",
+      "confirm": "Delete competitor",
+      "confirmFailed": "Delete failed"
+    },
     "progressCard": {
       "eyebrow": "Research in progress",
       "stoppingHint": "Stopping… ContOS will keep scraped posts and summarize what it has so far.",
       "startResearch": "Start research",
       "retryResearch": "Retry research",
       "starting": "Starting…",
+      "delete": "Delete competitor",
+      "deleting": "Deleting…",
       "stop": "Stop",
       "stopping": "Stopping…"
     },
@@ -488,6 +522,8 @@
     "signOut": "Sign out",
     "signingOut": "Signing out…",
     "close": "Close",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
     "back": "Back",
     "continue": "Continue",
     "remove": "Remove",

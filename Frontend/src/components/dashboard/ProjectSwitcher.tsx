@@ -163,7 +163,7 @@ export function ProjectSwitcher({
                           type="button"
                           disabled={busyAvatarId === project.id}
                           onClick={() => void handleSetDefault(project.id)}
-                          className="rounded-lg px-2 py-0.5 text-[11px] text-accent-primary hover:bg-accent-primary-soft"
+                          className="rounded-lg px-2 py-0.5 text-[11px] text-accent-primary-deep hover:bg-accent-primary-soft"
                         >
                           {t('projectSwitcher.setDefault')}
                         </button>
@@ -200,7 +200,7 @@ export function ProjectSwitcher({
             <Link
               to="/projects/new"
               onClick={() => setOpen(false)}
-              className="mt-2 block rounded-xl px-3 py-2 text-sm font-medium text-accent-primary hover:bg-accent-primary-soft"
+              className="mt-2 block rounded-xl px-3 py-2 text-sm font-medium text-accent-primary-deep hover:bg-accent-primary-soft"
             >
               {t('projectSwitcher.newProject')}
             </Link>

@@ -13,6 +13,7 @@ import { LoginPage } from './pages/LoginPage'
 import { NewProjectPage } from './pages/NewProjectPage'
 import { SignUpPage } from './pages/SignUpPage'
 import { WelcomeOnboardingPage } from './pages/WelcomeOnboardingPage'
+import { OnboardingLanguagePage } from './pages/OnboardingLanguagePage'
 import { OnboardingCompetitorsPage } from './pages/OnboardingCompetitorsPage'
 import { OnboardingProfilingPage } from './pages/OnboardingProfilingPage'
 import { OnboardingProjectTypePage } from './pages/OnboardingProjectTypePage'
@@ -42,6 +43,7 @@ function App() {
 
             <Route element={<ProtectedRoute />}>
               <Route path="/welcome" element={<WelcomeOnboardingPage />} />
+              <Route path="/onboarding/language" element={<OnboardingLanguagePage />} />
               <Route path="/onboarding/project" element={<OnboardingProjectTypePage />} />
               <Route path="/onboarding/profiling" element={<OnboardingProfilingPage />} />
               <Route path="/onboarding/competitors" element={<OnboardingCompetitorsPage />} />

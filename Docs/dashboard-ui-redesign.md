@@ -25,7 +25,7 @@ Sidebar chrome matches the ContOS home design:
 - Primary: Chatbot, **Chat History** (sidebar dropdown of past chats — selecting one opens that session in the chatbot; no right-panel history view), Calendar, Insights
 - **PROJECTS:** Profiling, Overview
 - **CONTENT AGENT:** LinkedIn, Instagram, X (opens Agents; LinkedIn/Instagram set existing agent-type session)
-- Bottom **account menu**: avatar + name trigger; upward popover with user row, **Appearance (Light / Dark)**, language selector, and sign out (reuses existing `onSignOut`)
+- Bottom **account menu**: initials + name trigger; upward **profile card** popover with **Account** (name, `@handle` from email local-part, ContOS pill — no photo yet), **Appearance** (Dark mode toggle), **Language** (settings-row selector), and **Sign out** (subtitle “See you soon!”; reuses existing `onSignOut`)
 
 ## Theme (light / dark)
 
@@ -34,9 +34,9 @@ Sidebar chrome matches the ContOS home design:
 - Applied as `class="dark"` on `<html>` (FOUC script in `index.html` + `ThemeProvider`).
 - **Dark is dashboard-only:** honored on `/dashboard/*`. Auth (`/login`, `/signup`), welcome, `/onboarding/*`, and New Project wizards (`/projects/new`, `/avatars/new`) always render light even if the stored preference is dark.
 - Choosing Dark in the account menu persists for that user across later logins on the same browser.
-- Design tokens in `Frontend/src/index.css`: light defaults in `@theme`, dark overrides under `.dark` (main `#0d0d0d`, sidebar/cards `#161618`, ink white / muted `#a1a1aa`, hairline `#2d2d30`, accent soft `#25164d`).
-- Light-mode **main column** (right of sidebar) uses `#FFFFFF` (`DashboardLayout`); sidebar stays `canvas-raised`. Dark mode main column still uses `canvas` (`#0d0d0d`).
-- Toggle lives in the sidebar account menu only (not a top-bar control).
+- Design tokens in `Frontend/src/index.css`: light defaults in `@theme`, dark overrides under `.dark` (main `#0d0d0d`, sidebar/cards `#161618`, ink white / muted `#a1a1aa`, hairline `#2d2d30`). Accent buttons use soft pastel lavender (`#D8C7F5` / dark `#BFA4F5`) with deep purple label on the fill (`btn-primary-fg`); see [button-system.md](./button-system.md).
+- Light-mode **main column** (right of sidebar) uses `#FFFFFF` with `bg-right-content.png` as a full-bleed soft lavender wash behind the top bar and page content (`DashboardLayout`); sidebar stays `canvas-raised` with no background image. Dark mode main column still uses solid `canvas` (`#0d0d0d`) and hides the wash.
+- Toggle lives in the sidebar account menu only (not a top-bar control): a single **Dark mode** switch (on = dark, off = light).
 
 Top bar: mobile hamburger only. On Agents, **+ New chat** and **+ New Project** sit in the page header on the same row as the project title (right-aligned), so they share vertical alignment with the heading; agent pills stay on the row below.
 
@@ -46,7 +46,8 @@ Agents chat sits flat on the page canvas (no nested raised chat card). Message b
 
 - Empty state: ContOS mark, greeting, agent pills, suggestion **pills** (research / content / calendar — same handlers as before), shared composer — no bordered card wrapper
 - Active thread: project title + agent pills above the messages; assistant rows keep the ContOS mark avatar; messages scroll on the page canvas with composer pinned below a hairline divider
-- Composer: decorative mic on the left (no `+`), text field, purple circular send — mentions and send behavior unchanged; mic is not wired
+- Composer: decorative mic on the left (no `+`), text field, pastel circular send (`.contos-btn--icon.contos-btn--primary`) — mentions and send behavior unchanged; mic is not wired
+- Agent type pills (Chat / LinkedIn / Instagram): selected = pastel lavender + deep purple text; idle = ghost outline
 - No message timestamps (messages do not store `createdAt`)
 - **Research in progress** amber banner (with **View progress**) only when the project has at least one competitor and research is not finished (`status !== ready` and no competitor `pipeline_step === done`). Hidden when there are no competitors.
 

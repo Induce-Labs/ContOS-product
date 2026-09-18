@@ -1,4 +1,4 @@
-﻿{
+{
   "nav": {
     "createProjectToUnlock": "CrÃ©ez un projet pour dÃ©verrouiller la navigation.",
     "projects": "Projets",
@@ -33,7 +33,12 @@
       "light": "Clair",
       "dark": "Sombre",
       "language": "Langue",
-      "signOut": "Se dÃ©connecter"
+      "signOut": "Se dÃ©connecter",
+      "account": "Compte",
+      "productBadge": "ContOS",
+      "darkMode": "Mode sombre",
+      "darkModeHint": "Une experience sombre plus douce",
+      "signOutHint": "A bientot !"
     },
     "emptyProjects": {
       "step": "Ã‰tape 01",
@@ -182,6 +187,16 @@
     },
     "profiling": {
       "questionsUnavailable": "Les questions de profilage sont indisponibles."
+    },
+    "language": {
+      "eyebrow": "Langue",
+      "title": "Choisissez votre langue",
+      "subtitle": "ContOS utilisera cette langue pour l’onboarding et le tableau de bord. Vous pourrez la modifier plus tard.",
+      "continue": "Continuer",
+      "saving": "Enregistrement…",
+      "loadFailed": "Échec du chargement des préférences de langue.",
+      "previewFailed": "Échec de l’aperçu de cette langue.",
+      "saveFailed": "Échec de l’enregistrement de votre langue."
     }
   },
   "pipeline": {
@@ -213,7 +228,7 @@
     "workspaceSubtitle": "Suivez l'avancement de la recherche concurrentielle, puis passez au chat une fois le scraping terminÃ©.",
     "projectStatus": "Statut du projet : {{status}}",
     "openChat": "Ouvrir le chat",
-    "partialFailure": "Certains concurrents ont terminÃ© la recherche, mais {{count}} ont Ã©chouÃ©. Utilisez RÃ©essayer sur les cartes Ã©chouÃ©es, ou ouvrez le chat pour les concurrents terminÃ©s.",
+    "partialFailure": "Certains concurrents ont terminé la recherche, mais {{count}} ont échoué. Réessayez les échecs, supprimez-les ou ouvrez le chat pour les concurrents terminés.",
     "noCompetitors": "Pas encore de concurrents dans ce projet. Utilisez Ajouter un concurrent pour commencer la recherche.",
     "selectProject": "SÃ©lectionnez un projet dans le sÃ©lecteur d'en-tÃªte.",
     "researchReadyEyebrow": "Recherche prÃªte",
@@ -221,7 +236,12 @@
     "researchFinishedBody": "Ouvrez le chat pour demander des stratÃ©gies, des idÃ©es de contenu ou des comparaisons basÃ©es sur les donnÃ©es de ce concurrent.",
     "researchFinishedPartialSuffix": " Ouvrez le chat pour utiliser cette recherche partielle.",
     "retryFailed": "Ã‰chec de la rÃ©essai de la recherche concurrentielle.",
-    "stopFailed": "Ã‰chec de l'arrÃªt de la recherche concurrentielle."
+    "stopFailed": "Ã‰chec de l'arrÃªt de la recherche concurrentielle.",
+    "allFailed": "{{count}} concurrent a échoué. Réessayez le scrape ou supprimez-le pour libérer des places.",
+    "allFailed_plural": "{{count}} concurrents ont échoué. Réessayez les scrapes ou supprimez-les pour libérer des places.",
+    "deleteFailed": "Échec de la suppression du concurrent.",
+    "retryAllFailed": "Réessayer tous les échecs",
+    "deleteAllFailed": "Supprimer tous les échecs"
   },
   "analytics": {
     "title": "Analytique",
@@ -243,7 +263,9 @@
       "retryResearch": "RÃ©essayer la recherche",
       "starting": "DÃ©marrageâ€¦",
       "stop": "ArrÃªter",
-      "stopping": "ArrÃªtâ€¦"
+      "stopping": "ArrÃªtâ€¦",
+      "delete": "Supprimer le concurrent",
+      "deleting": "Suppression…"
     },
     "workspacePanel": {
       "heading": "Concurrents",
@@ -311,7 +333,19 @@
       "validationFailed": "Ã‰chec de la validation des concurrents de maniÃ¨re inattendue.",
       "startResearchFailed": "Ã‰chec du dÃ©marrage de la recherche concurrentielle."
     },
-    "limitReached": "Limite de concurrents atteinte ({{max}})"
+    "limitReached": "Limite de concurrents atteinte ({{max}})",
+    "confirmDelete": "Supprimer {{handle}} ? Les publications et résumés de ce concurrent seront effacés.",
+    "confirmDeleteFailed": "Supprimer {{count}} concurrent en échec ? Ses données et résumés seront effacés.",
+    "confirmDeleteFailed_plural": "Supprimer {{count}} concurrents en échec ? Leurs données et résumés seront effacés.",
+    "deleteDialog": {
+      "title": "Supprimer le concurrent ?",
+      "titleFailed": "Supprimer les échecs ?",
+      "body": "Cela supprime définitivement les publications et résumés de {{handle}}. Action irréversible.",
+      "bodyFailed": "Cela supprime définitivement les données et résumés de {{count}} concurrent en échec. Action irréversible.",
+      "bodyFailed_plural": "Cela supprime définitivement les données et résumés de {{count}} concurrents en échec. Action irréversible.",
+      "confirm": "Supprimer le concurrent",
+      "confirmFailed": "Supprimer les échecs"
+    }
   },
   "agents": {
     "pageSubtitle": "Demandez des stratÃ©gies et des idÃ©es de contenu Ã  partir de votre recherche concurrentielle.",
@@ -498,7 +532,9 @@
       "instagram": "Instagram",
       "linkedin": "LinkedIn",
       "twitter": "X / Twitter"
-    }
+    },
+    "cancel": "Annuler",
+    "confirm": "Confirmer"
   },
   "errors": {
     "profileSummary": {
@@ -539,5 +575,3 @@
     }
   }
 }
-
-
