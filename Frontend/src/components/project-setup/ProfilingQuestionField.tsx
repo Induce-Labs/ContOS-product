@@ -130,17 +130,17 @@ function SingleSelectControls({
                   onSubmit?.(option)
                 }
               }}
-              className={`flex w-full cursor-pointer items-center justify-between rounded-xl p-3 text-left transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-60 sm:rounded-2xl sm:p-3.5 ${
+              className={`flex w-full cursor-pointer items-start justify-between gap-3 rounded-xl p-3 text-left transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-60 sm:rounded-2xl sm:p-3.5 ${
                 selected
                   ? 'border-2 border-accent-primary bg-accent-primary-soft/50 text-ink shadow-sm'
                   : 'border border-border-hairline bg-canvas text-ink-muted hover:border-accent-primary/40 hover:text-ink'
               }`}
             >
-              <span className="pr-3 text-xs font-medium leading-snug sm:text-sm sm:leading-relaxed">
+              <span className="min-w-0 flex-1 break-words pr-1 text-xs font-medium leading-snug sm:text-sm sm:leading-relaxed">
                 {option}
               </span>
               <span
-                className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-all ${
+                className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-all ${
                   selected
                     ? 'border-accent-primary bg-accent-primary text-btn-primary-fg'
                     : 'border-border-hairline bg-transparent'

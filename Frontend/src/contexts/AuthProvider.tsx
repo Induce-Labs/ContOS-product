@@ -9,6 +9,7 @@ import {
   clearAgentChatsForUser,
 } from '../lib/agentChatStorage'
 import { flushLocalAgentChatsToRemote } from '../lib/agentChatRemote'
+import { validateStoredSessionOrRedirectToSignUp } from '../lib/auth'
 import { supabase } from '../lib/supabase'
 import { AuthContext, type AuthContextValue } from './auth-context'
 
@@ -24,18 +25,30 @@ export function AuthProvider({ children }: AuthProviderProps) {
     let isMounted = true
 
     async function initializeSession() {
-      const { data, error } = await supabase.auth.getSession()
+      try {
+        const nextSession = await validateStoredSessionOrRedirectToSignUp()
 
-      if (!isMounted) {
-        return
+        if (!isMounted) {
+          return
+        }
+
+        setSession(nextSession)
+        setIsLoading(false)
+      } catch (error) {
+        if (!isMounted) {
+          return
+        }
+
+        // Redirect-to-signup throws AuthServiceError after navigation starts.
+        setSession(null)
+        setIsLoading(false)
+        if (
+          error instanceof Error &&
+          error.name !== 'AuthServiceError'
+        ) {
+          throw new Error(`Failed to initialize auth session: ${error.message}`)
+        }
       }
-
-      if (error) {
-        throw new Error(`Failed to initialize auth session: ${error.message}`)
-      }
-
-      setSession(data.session)
-      setIsLoading(false)
     }
 
     void initializeSession()

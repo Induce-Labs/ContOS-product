@@ -57,7 +57,11 @@ export function useProfilingReview({ avatarId }: UseProfilingReviewOptions) {
   } = useLocalizedQuestionnaire(canonicalQuestions)
 
   const questions =
-    displayQuestions.length > 0 ? displayQuestions : canonicalQuestions
+    isTranslatingQuestions && displayQuestions.length === 0
+      ? []
+      : displayQuestions.length > 0
+        ? displayQuestions
+        : canonicalQuestions
 
   const hasChanges = dirtyKeys.size > 0
 
@@ -313,18 +317,16 @@ export function useProfilingReview({ avatarId }: UseProfilingReviewOptions) {
     }
   }
 
-  const combinedError =
-    errorMessage ??
-    (questionTranslationError ? t('agents.translationFailed') : null)
-
   return {
     avatar,
     questions,
     sections,
     draftAnswers,
     fieldErrors,
-    errorMessage: combinedError,
-    isLoading: isLoading || isLocalizingAnswers,
+    errorMessage,
+    /** Non-null when display questions fell back to English after translate failure. */
+    translationError: questionTranslationError,
+    isLoading: isLoading || isLocalizingAnswers || isTranslatingQuestions,
     isSaving,
     isSummarizing,
     isTranslatingQuestions,

@@ -1,4 +1,9 @@
 import { supabase } from './supabase'
+import {
+  clearInvalidSessionAndRedirectToSignUp,
+  isInvalidOrDeletedUserError,
+  requireAuthenticatedUserId,
+} from './auth'
 import type { Tables } from '../types/database'
 import type { ProjectType } from '../types/contos'
 import {
@@ -42,23 +47,16 @@ const ONBOARDING_STEP_PATHS: Record<OnboardingStep, string> = {
 }
 
 async function getAuthenticatedUserId(): Promise<string> {
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser()
-
-  if (error) {
+  try {
+    return await requireAuthenticatedUserId()
+  } catch (error) {
     throw new OnboardingServiceError(
-      `Failed to read authenticated user: ${error.message}`,
+      error instanceof Error
+        ? error.message
+        : 'You must be signed in to access onboarding.',
       error,
     )
   }
-
-  if (!user) {
-    throw new OnboardingServiceError('You must be signed in to access onboarding.')
-  }
-
-  return user.id
 }
 
 function parseOnboardingStep(value: string | null | undefined): OnboardingStep {
@@ -100,14 +98,26 @@ export async function fetchUserProfile(): Promise<UserProfile | null> {
   return data
 }
 
-export async function ensureUserProfile(): Promise<UserProfile> {
-  const existingProfile = await fetchUserProfile()
+function isUniqueConflict(error: { code?: string; message?: string }): boolean {
+  const code = error.code ?? ''
+  const message = (error.message ?? '').toLowerCase()
+  return (
+    code === '23505' ||
+    code === 'PGRST116' ||
+    message.includes('duplicate') ||
+    message.includes('conflict') ||
+    message.includes('unique')
+  )
+}
 
+/** Coalesce parallel ensure calls (e.g. React Strict Mode) for the same user. */
+const ensureProfileInFlight = new Map<string, Promise<UserProfile>>()
+
+async function createOrLoadUserProfile(userId: string): Promise<UserProfile> {
+  const existingProfile = await fetchUserProfile()
   if (existingProfile) {
     return existingProfile
   }
-
-  const userId = await getAuthenticatedUserId()
 
   const { data, error } = await supabase
     .from('user_profiles')
@@ -115,14 +125,43 @@ export async function ensureUserProfile(): Promise<UserProfile> {
     .select()
     .single()
 
-  if (error) {
-    throw new OnboardingServiceError(
+  if (!error && data) {
+    return data
+  }
+
+  // Row already exists (auth trigger or concurrent ensure) — load it.
+  if (error && isUniqueConflict(error)) {
+    const raced = await fetchUserProfile()
+    if (raced) {
+      return raced
+    }
+  }
+
+  // Auth user was deleted in Supabase while a local JWT remained.
+  if (error && isInvalidOrDeletedUserError(error)) {
+    return await clearInvalidSessionAndRedirectToSignUp(
       `Failed to create user profile: ${error.message}`,
-      error,
     )
   }
 
-  return data
+  throw new OnboardingServiceError(
+    `Failed to create user profile: ${error?.message ?? 'unknown error'}`,
+    error,
+  )
+}
+
+export async function ensureUserProfile(): Promise<UserProfile> {
+  const userId = await getAuthenticatedUserId()
+  const pending = ensureProfileInFlight.get(userId)
+  if (pending) {
+    return pending
+  }
+
+  const task = createOrLoadUserProfile(userId).finally(() => {
+    ensureProfileInFlight.delete(userId)
+  })
+  ensureProfileInFlight.set(userId, task)
+  return task
 }
 
 export async function hydrateAppLanguageFromProfile(

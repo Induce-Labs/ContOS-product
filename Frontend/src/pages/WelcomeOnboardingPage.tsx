@@ -86,7 +86,7 @@ function OnboardingModuleCard({ module }: { module: OnboardingModule }) {
   const { t } = useTranslation()
 
   return (
-    <article className="welcome-module-card flex w-[272px] shrink-0 flex-col rounded-[24px] border border-[#ede7de] bg-white p-4 shadow-[0_8px_30px_rgba(0,0,0,0.03)] sm:w-[280px] sm:p-5">
+    <article className="welcome-module-card flex w-[min(100%,300px)] min-w-[260px] shrink-0 flex-col rounded-[24px] border border-[#ede7de] bg-white p-4 shadow-[0_8px_30px_rgba(0,0,0,0.03)] sm:w-[300px] sm:min-w-[280px] sm:p-5">
       <span className="relative z-[1] mb-3 block font-mono text-[13px] font-medium tracking-wider text-neutral-400">
         {module.number}
       </span>
@@ -95,11 +95,11 @@ function OnboardingModuleCard({ module }: { module: OnboardingModule }) {
         <ModuleIllustration type={module.illustration} />
       </div>
 
-      <h2 className="relative z-[1] mb-2 font-sans text-[18px] font-bold leading-[1.22] tracking-[-0.02em] text-neutral-900 sm:text-[19px]">
+      <h2 className="relative z-[1] mb-2 break-words text-balance font-sans text-[18px] font-bold leading-[1.22] tracking-[-0.02em] text-neutral-900 sm:text-[19px]">
         {t(`onboarding.welcome.modules.${module.number}.title`)}
       </h2>
 
-      <p className="relative z-[1] text-[13px] leading-[1.5] text-neutral-500">
+      <p className="relative z-[1] break-words text-[13px] leading-[1.5] text-neutral-500">
         {t(`onboarding.welcome.modules.${module.number}.description`)}
       </p>
     </article>
@@ -199,10 +199,10 @@ export function WelcomeOnboardingPage() {
 
       <main className="relative z-20 mx-auto flex min-h-dvh w-full max-w-[1320px] flex-col items-center justify-center px-4 py-8 sm:px-6 sm:py-10">
         <header className="mx-auto max-w-3xl shrink-0 text-center">
-          <h1 className="font-sans text-[32px] font-bold leading-[1.1] tracking-[-0.03em] text-neutral-900 sm:text-[40px] md:text-[46px]">
+          <h1 className="break-words text-balance font-sans text-[32px] font-bold leading-[1.1] tracking-[-0.03em] text-neutral-900 sm:text-[40px] md:text-[46px]">
             {t('onboarding.welcome.title')}
           </h1>
-          <p className="mx-auto mt-2 max-w-xl text-sm font-normal leading-relaxed text-neutral-500 sm:text-base">
+          <p className="mx-auto mt-2 max-w-xl break-words text-sm font-normal leading-relaxed text-neutral-500 sm:text-base">
             {t('onboarding.welcome.subtitle')}
           </p>
         </header>
@@ -216,8 +216,8 @@ export function WelcomeOnboardingPage() {
           </div>
         ) : null}
 
-        <div className="mt-8 w-full max-w-full overflow-x-auto overscroll-x-contain sm:mt-10">
-          <div className="mx-auto flex w-max items-stretch gap-4 px-2 py-3 sm:gap-5">
+        <div className="scrollbar-none mt-8 w-full max-w-full overflow-x-auto overscroll-x-contain sm:mt-10">
+          <div className="mx-auto flex w-max items-stretch gap-4 px-2 py-1 sm:gap-5">
             {ONBOARDING_MODULES.map((module) => (
               <OnboardingModuleCard key={module.number} module={module} />
             ))}
@@ -229,9 +229,9 @@ export function WelcomeOnboardingPage() {
             type="button"
             onClick={() => void handleContinue()}
             disabled={isSubmitting}
-            className="contos-btn contos-btn--pill contos-btn--primary group sm:px-9 sm:py-3.5 sm:text-[15px]"
+            className="contos-btn contos-btn--pill contos-btn--primary group max-w-full whitespace-normal sm:px-9 sm:py-3.5 sm:text-[15px]"
           >
-            <span>{isSubmitting ? t('onboarding.welcome.starting') : t('onboarding.welcome.cta')}</span>
+            <span className="text-left">{isSubmitting ? t('onboarding.welcome.starting') : t('onboarding.welcome.cta')}</span>
             <ArrowIcon className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-1" />
           </button>
         </div>

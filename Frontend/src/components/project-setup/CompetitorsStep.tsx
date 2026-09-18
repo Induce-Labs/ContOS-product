@@ -200,7 +200,7 @@ function PlatformPicker({
   const selected = options.find((option) => option.value === platform) ?? options[0]
 
   return (
-    <div ref={rootRef} className="relative w-full shrink-0 sm:w-48">
+    <div ref={rootRef} className="relative w-full shrink-0 sm:min-w-[12rem] sm:w-auto sm:max-w-[16rem]">
       <button
         type="button"
         disabled={disabled}
@@ -208,11 +208,11 @@ function PlatformPicker({
         aria-expanded={open}
         aria-controls={listId}
         onClick={() => setOpen((prev) => !prev)}
-        className="flex w-full cursor-pointer items-center justify-between rounded-xl border border-neutral-200 bg-[#faf9fd] px-4 py-2.5 text-left text-xs font-medium text-neutral-800 transition-all hover:border-neutral-300 disabled:cursor-not-allowed disabled:opacity-60 sm:text-sm"
+        className="flex w-full cursor-pointer items-center justify-between gap-2 rounded-xl border border-neutral-200 bg-[#faf9fd] px-4 py-2.5 text-left text-xs font-medium text-neutral-800 transition-all hover:border-neutral-300 disabled:cursor-not-allowed disabled:opacity-60 sm:text-sm"
       >
-        <span className="flex min-w-0 items-center gap-2 truncate">
+        <span className="flex min-w-0 items-center gap-2">
           {selected.icon}
-          <span className="truncate">{selected.label}</span>
+          <span className="break-words">{selected.label}</span>
         </span>
         <ChevronDownIcon className="h-3.5 w-3.5 shrink-0 text-neutral-400" />
       </button>
@@ -311,11 +311,11 @@ export function CompetitorsStep({
             {t('layout.brandName')}
           </span>
 
-          <h1 className="mb-3.5 font-serif text-[32px] font-bold leading-[1.12] tracking-[-0.03em] text-neutral-900 sm:text-[42px] md:text-[48px]">
+          <h1 className="mb-3.5 break-words text-balance font-serif text-[32px] font-bold leading-[1.12] tracking-[-0.03em] text-neutral-900 sm:text-[42px] md:text-[48px]">
             {t('onboarding.competitors.title')}
           </h1>
 
-          <p className="mx-auto max-w-xl text-sm leading-relaxed text-neutral-500 sm:text-base">
+          <p className="mx-auto max-w-xl break-words text-sm leading-relaxed text-neutral-500 sm:text-base">
             {t('onboarding.competitors.body', {
               min: minCompetitors,
               max: maxCompetitors,
@@ -482,7 +482,7 @@ export function CompetitorsStep({
             <button
               type="submit"
               disabled={disabled}
-              className="contos-btn contos-btn--pill contos-btn--primary group w-full sm:w-auto sm:px-10 sm:py-4 sm:text-sm"
+            className="contos-btn contos-btn--pill contos-btn--primary group w-full whitespace-normal sm:w-auto sm:px-10 sm:py-4 sm:text-sm"
             >
               <span>{submitDisplay}</span>
               {!isSubmitting ? (

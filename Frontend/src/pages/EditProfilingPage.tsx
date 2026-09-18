@@ -38,6 +38,7 @@ function EditProfilingWizard({
     questionIndex,
     answers,
     errorMessage,
+    translationError,
     fieldError,
     isLoading,
     isSaving,
@@ -93,6 +94,7 @@ function EditProfilingWizard({
       questionIndex={questionIndex}
       answers={answers}
       errorMessage={errorMessage}
+      translationError={translationError}
       fieldError={fieldError}
       isSaving={isSaving}
       isSummarizing={isSummarizing}
@@ -173,6 +175,7 @@ function EditProfilingReview({ avatarId }: { avatarId: string }) {
     draftAnswers,
     fieldErrors,
     errorMessage,
+    translationError,
     isLoading,
     isSaving,
     isSummarizing,
@@ -213,6 +216,7 @@ function EditProfilingReview({ avatarId }: { avatarId: string }) {
           draftAnswers={draftAnswers}
           fieldErrors={fieldErrors}
           errorMessage={errorMessage}
+          translationError={translationError}
           hasChanges={hasChanges}
           isSaving={isSaving}
           isSummarizing={isSummarizing}

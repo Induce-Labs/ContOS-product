@@ -56,7 +56,12 @@ export function useProfilingQuestionnaire({
     translationError: questionTranslationError,
   } = useLocalizedQuestionnaire(canonicalQuestions)
 
-  const questions = displayQuestions.length > 0 ? displayQuestions : canonicalQuestions
+  const questions =
+    isTranslatingQuestions && displayQuestions.length === 0
+      ? []
+      : displayQuestions.length > 0
+        ? displayQuestions
+        : canonicalQuestions
   const currentQuestion = questions[questionIndex] ?? null
   const currentCanonical = canonicalQuestions[questionIndex] ?? null
 
@@ -310,12 +315,6 @@ export function useProfilingQuestionnaire({
     return saved ? 'saved' : 'blocked'
   }
 
-  const combinedError =
-    errorMessage ??
-    (questionTranslationError
-      ? t('agents.translationFailed')
-      : null)
-
   return {
     avatar,
     questions,
@@ -323,9 +322,11 @@ export function useProfilingQuestionnaire({
     questionIndex,
     answers,
     currentQuestion,
-    errorMessage: combinedError,
+    errorMessage,
+    /** Non-null when display questions fell back to English after translate failure. */
+    translationError: questionTranslationError,
     fieldError,
-    isLoading: isLoading || isLocalizingAnswers,
+    isLoading: isLoading || isLocalizingAnswers || isTranslatingQuestions,
     isSaving,
     isSummarizing,
     isTranslatingQuestions,

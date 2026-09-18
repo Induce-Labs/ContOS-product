@@ -189,10 +189,10 @@ export function ProjectTypeStep({
 
         <div className="flex flex-1 flex-col items-center justify-center py-10 sm:py-14">
           <header className="mx-auto max-w-2xl shrink-0 text-center">
-            <h1 className="mb-3 font-serif text-[34px] font-bold leading-[1.12] tracking-[-0.03em] text-neutral-900 sm:text-[44px] md:text-[50px]">
+            <h1 className="mb-3 break-words text-balance font-serif text-[34px] font-bold leading-[1.12] tracking-[-0.03em] text-neutral-900 sm:text-[44px] md:text-[50px]">
               {t('onboarding.projectType.title')}
             </h1>
-            <p className="mx-auto max-w-lg text-sm leading-relaxed text-neutral-500 sm:text-base">
+            <p className="mx-auto max-w-lg break-words text-sm leading-relaxed text-neutral-500 sm:text-base">
               {t('onboarding.projectType.subtitle')}
             </p>
           </header>
@@ -203,8 +203,8 @@ export function ProjectTypeStep({
             </div>
           ) : null}
 
-          <div className="mt-10 w-full max-w-full overflow-x-auto overscroll-x-contain sm:mt-12">
-            <div className="mx-auto flex w-max items-stretch gap-5 px-2 py-3 sm:gap-6">
+          <div className="scrollbar-none mt-10 w-full max-w-full overflow-x-auto overscroll-x-contain sm:mt-12">
+            <div className="mx-auto flex w-max items-stretch gap-5 px-2 py-1 sm:gap-6">
               {PROJECT_TYPE_OPTIONS.map((option) => {
                 const isSelected = selectedType === option.value
                 const keys = projectTypeOptionKeys(option.value)
@@ -215,7 +215,7 @@ export function ProjectTypeStep({
                     type="button"
                     onClick={() => onSelect(option.value)}
                     aria-pressed={isSelected}
-                    className={`contos-glow-card flex w-[260px] shrink-0 cursor-pointer flex-col rounded-[28px] bg-white p-7 text-left transition-shadow duration-300 sm:w-[280px] sm:p-8 ${
+                    className={`contos-glow-card flex w-[min(100%,300px)] min-w-[260px] shrink-0 cursor-pointer flex-col rounded-[28px] bg-white p-7 text-left transition-shadow duration-300 sm:w-[300px] sm:min-w-[280px] sm:p-8 ${
                       isSelected
                         ? 'contos-glow-card--selected border-2 border-neutral-900 shadow-[0_12px_32px_rgba(0,0,0,0.06)]'
                         : 'border border-transparent shadow-[0_8px_30px_rgba(0,0,0,0.04)]'
@@ -231,11 +231,11 @@ export function ProjectTypeStep({
                       <ProjectTypeIcon icon={option.icon} />
                     </div>
 
-                    <h2 className="relative z-[1] mb-2.5 font-serif text-[22px] font-bold leading-[1.2] tracking-[-0.02em] text-neutral-900 sm:text-[24px]">
+                    <h2 className="relative z-[1] mb-2.5 break-words text-balance font-serif text-[22px] font-bold leading-[1.2] tracking-[-0.02em] text-neutral-900 sm:text-[24px]">
                       {t(keys.title)}
                     </h2>
 
-                    <p className="relative z-[1] text-[13.5px] leading-relaxed text-neutral-500 sm:text-[14px]">
+                    <p className="relative z-[1] break-words text-[13.5px] leading-relaxed text-neutral-500 sm:text-[14px]">
                       {t(keys.description)}
                     </p>
                   </button>
@@ -254,9 +254,9 @@ export function ProjectTypeStep({
             type="button"
             onClick={onContinue}
             disabled={isSubmitting}
-            className="contos-btn contos-btn--pill contos-btn--primary group sm:px-8 sm:py-3.5 sm:text-[14.5px]"
+            className="contos-btn contos-btn--pill contos-btn--primary group max-w-full whitespace-normal sm:px-8 sm:py-3.5 sm:text-[14.5px]"
           >
-            <span>
+            <span className="text-left">
               {isSubmitting
                 ? t('onboarding.projectType.creating')
                 : t('onboarding.projectType.continue')}

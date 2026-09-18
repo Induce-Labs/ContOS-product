@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { ProfilingQuestionDef } from '../config/onboardingProfilingQuestions'
 import {
@@ -26,10 +26,12 @@ export function useLocalizedQuestionnaire(
   const { i18n, t } = useTranslation()
   const locale = resolveUiLanguage(i18n.language)
   const [localized, setLocalized] = useState<LocalizedQuestionnaire>(() => ({
-    displayQuestions: canonicalQuestions,
+    displayQuestions: locale === 'en' ? canonicalQuestions : [],
     optionMaps: {},
   }))
-  const [isTranslating, setIsTranslating] = useState(false)
+  const [isTranslating, setIsTranslating] = useState(
+    () => locale !== 'en' && canonicalQuestions.length > 0,
+  )
   const [translationError, setTranslationError] = useState<string | null>(null)
   const requestIdRef = useRef(0)
 
@@ -38,7 +40,8 @@ export function useLocalizedQuestionnaire(
     [canonicalQuestions],
   )
 
-  useEffect(() => {
+  // useLayoutEffect so isTranslating is true before paint — no English flash.
+  useLayoutEffect(() => {
     let cancelled = false
     const requestId = ++requestIdRef.current
 
@@ -62,8 +65,8 @@ export function useLocalizedQuestionnaire(
 
     setIsTranslating(true)
     setTranslationError(null)
-    // Show English immediately while translating.
-    setLocalized({ displayQuestions: canonicalQuestions, optionMaps: {} })
+    // Hold empty until translated so gated UIs never flash English.
+    setLocalized({ displayQuestions: [], optionMaps: {} })
 
     void (async () => {
       try {
@@ -100,7 +103,6 @@ export function useLocalizedQuestionnaire(
     return () => {
       cancelled = true
     }
-    // canonicalKey tracks identity of the question set
   }, [canonicalKey, canonicalQuestions, locale, t])
 
   return {

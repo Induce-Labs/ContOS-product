@@ -59,6 +59,7 @@ function OnboardingProfilingContent() {
     questionIndex,
     answers,
     errorMessage,
+    translationError,
     fieldError,
     isLoading,
     isSaving,
@@ -106,6 +107,7 @@ function OnboardingProfilingContent() {
       questionIndex={questionIndex}
       answers={answers}
       errorMessage={errorMessage}
+      translationError={translationError}
       fieldError={fieldError}
       isSaving={isSaving}
       isSummarizing={isSummarizing}

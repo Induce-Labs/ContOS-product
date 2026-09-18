@@ -19,6 +19,61 @@ export function getAuthRedirectUrl(): string {
   return `${window.location.origin}/auth/callback`
 }
 
+const SIGNUP_INVALID_SESSION_PATH = '/signup?session=invalid'
+
+/** True when Auth/DB errors mean the account was deleted or the refresh token is dead. */
+export function isInvalidOrDeletedUserError(error: {
+  message?: string
+  code?: string
+  status?: number
+} | null | undefined): boolean {
+  if (!error) {
+    return false
+  }
+
+  const message = (error.message ?? '').toLowerCase()
+  const code = (error.code ?? '').toLowerCase()
+  const status = error.status
+
+  return (
+    status === 401 ||
+    status === 403 ||
+    code === '23503' ||
+    code === 'user_not_found' ||
+    message.includes('invalid refresh token') ||
+    message.includes('refresh token not found') ||
+    message.includes('user not found') ||
+    message.includes('user from sub claim') ||
+    message.includes('session from session_id claim') ||
+    message.includes('foreign key') ||
+    message.includes('user_profiles_user_id_fkey')
+  )
+}
+
+/**
+ * Clear the ghost local session (e.g. after the Auth user was deleted in Supabase)
+ * and send the browser to sign-up.
+ */
+export async function clearInvalidSessionAndRedirectToSignUp(
+  reason = 'Your account is no longer available. Please sign up again.',
+): Promise<never> {
+  try {
+    await supabase.auth.signOut({ scope: 'local' })
+  } catch {
+    // Local clear is best-effort.
+  }
+
+  if (
+    typeof window !== 'undefined' &&
+    !window.location.pathname.startsWith('/signup') &&
+    !window.location.pathname.startsWith('/login')
+  ) {
+    window.location.replace(SIGNUP_INVALID_SESSION_PATH)
+  }
+
+  throw new AuthServiceError(reason)
+}
+
 export async function signInWithEmail(email: string, password: string): Promise<void> {
   const { error } = await supabase.auth.signInWithPassword({ email, password })
 
@@ -110,50 +165,94 @@ export async function completeOAuthCallback(): Promise<void> {
 const TOKEN_REFRESH_SKEW_MS = 60_000
 
 /**
+ * Return a fresh session from storage, refreshing when the access token is
+ * missing or near expiry. If the Auth user was deleted (or the refresh token
+ * is dead), clears local storage and redirects to sign-up.
+ */
+async function ensureFreshSession() {
+  const {
+    data: { session },
+    error: sessionError,
+  } = await supabase.auth.getSession()
+
+  if (sessionError) {
+    if (isInvalidOrDeletedUserError(sessionError)) {
+      return await clearInvalidSessionAndRedirectToSignUp(sessionError.message)
+    }
+    throw mapAuthError(sessionError, 'Failed to read auth session')
+  }
+
+  if (session?.access_token && session.user) {
+    const expiresAtMs = (session.expires_at ?? 0) * 1000
+    if (expiresAtMs > Date.now() + TOKEN_REFRESH_SKEW_MS) {
+      return session
+    }
+  }
+
+  const { data, error: refreshError } = await supabase.auth.refreshSession()
+
+  if (refreshError || !data.session?.access_token || !data.session.user) {
+    return await clearInvalidSessionAndRedirectToSignUp(
+      refreshError?.message ??
+        'Your session is no longer valid. Please sign up again.',
+    )
+  }
+
+  return data.session
+}
+
+/**
+ * Authenticated user id for client-side writes (onboarding, avatars, etc.).
+ */
+export async function requireAuthenticatedUserId(): Promise<string> {
+  const session = await ensureFreshSession()
+  return session.user.id
+}
+
+/**
  * Return a usable access token for Backend/Agents API calls.
- *
- * Prefer `getUser()` (server-validated) then read the session token. Fall back
- * to `refreshSession()` when storage has a session but the JWT is no longer
- * accepted by Supabase Auth.
  */
 export async function getAccessToken(): Promise<string> {
+  const session = await ensureFreshSession()
+  return session.access_token
+}
+
+/**
+ * Confirm the stored session still maps to a living Auth user.
+ * Used on app boot — catches deleted-in-dashboard accounts with a leftover JWT.
+ */
+export async function validateStoredSessionOrRedirectToSignUp() {
+  const {
+    data: { session },
+    error: sessionError,
+  } = await supabase.auth.getSession()
+
+  if (sessionError) {
+    return await clearInvalidSessionAndRedirectToSignUp(sessionError.message)
+  }
+
+  if (!session) {
+    return null
+  }
+
   const {
     data: { user },
     error: userError,
   } = await supabase.auth.getUser()
 
   if (!userError && user) {
-    const {
-      data: { session },
-      error: sessionError,
-    } = await supabase.auth.getSession()
-
-    if (sessionError) {
-      throw mapAuthError(sessionError, 'Failed to read auth session')
-    }
-
-    if (session?.access_token) {
-      const expiresAtMs = (session.expires_at ?? 0) * 1000
-      if (expiresAtMs > Date.now() + TOKEN_REFRESH_SKEW_MS) {
-        return session.access_token
-      }
-    }
+    return session
   }
 
-  const { data, error: refreshError } = await supabase.auth.refreshSession()
+  const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession()
 
-  if (refreshError) {
-    throw mapAuthError(
-      refreshError,
-      'Your session expired. Sign out and sign in again to continue.',
+  if (refreshError || !refreshed.session?.user) {
+    return await clearInvalidSessionAndRedirectToSignUp(
+      userError?.message ??
+        refreshError?.message ??
+        'Your account is no longer available. Please sign up again.',
     )
   }
 
-  if (!data.session?.access_token) {
-    throw new AuthServiceError(
-      'You must be signed in to continue. Sign out and sign in again if this persists.',
-    )
-  }
-
-  return data.session.access_token
+  return refreshed.session
 }

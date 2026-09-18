@@ -1,17 +1,18 @@
 import type { FormEvent } from 'react'
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { AuthLayout, AuthLink } from '../components/auth/AuthLayout'
 import { AuthAlert, GoogleSignInButton, PrimaryButton } from '../components/auth/AuthButtons'
 import { AuthFormField } from '../components/auth/AuthFormField'
-import { LanguageSelector } from '../components/LanguageSelector'
 import { signInWithOAuthProvider, signUpWithEmail } from '../lib/auth'
 import { resolvePostAuthPath } from '../lib/projects'
 
 export function SignUpPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const sessionInvalid = searchParams.get('session') === 'invalid'
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
@@ -70,6 +71,9 @@ export function SignUpPage() {
       }
     >
       <form className="space-y-4" onSubmit={handleSubmit}>
+        {sessionInvalid && !errorMessage ? (
+          <AuthAlert message={t('auth.signup.sessionInvalid')} />
+        ) : null}
         {errorMessage ? <AuthAlert message={errorMessage} /> : null}
         {successMessage ? <AuthAlert message={successMessage} tone="success" /> : null}
 
@@ -93,19 +97,6 @@ export function SignUpPage() {
           value={password}
           onChange={(event) => setPassword(event.target.value)}
         />
-
-        <div className="space-y-1.5">
-          <label
-            htmlFor="signup-language-select"
-            className="block text-sm font-medium text-ink"
-          >
-            {t('auth.language')}
-          </label>
-          <LanguageSelector
-            id="signup-language-select"
-            className="w-full rounded-xl border border-border-hairline bg-canvas px-4 py-3 text-sm text-ink transition hover:border-border-hairline/80 hover:bg-canvas-raised"
-          />
-        </div>
 
         <PrimaryButton disabled={isSubmitting}>
           {isSubmitting ? t('auth.signup.submitting') : t('auth.signup.submit')}

@@ -87,6 +87,18 @@ body {
   background: transparent;
 }
 
+/** Hide scrollbars while allowing overflow scroll (onboarding card rows). */
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none !important;
+}
+
+.scrollbar-none::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
 @keyframes contos-mark-pulse {
   0%,
   100% {

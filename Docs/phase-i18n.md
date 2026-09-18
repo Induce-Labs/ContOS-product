@@ -52,12 +52,33 @@ Migration: [`supabase/migrations/20260918220000_user_profiles_preferred_language
 ### Profiling questionnaire flow
 
 1. Questions load from Supabase in English (`profiling_questionnaires`).
-2. UI translates question / options / placeholders to the active locale for display (`useLocalizedQuestionnaire` + chunked `translateTexts` in batches of 12, with one client retry).
+2. UI translates question / options / placeholders to the active locale for display (`useLocalizedQuestionnaire` + chunked `translateTexts` in batches of 12, with one client retry). Locale is `i18n.language` via `resolveUiLanguage` — set by `/onboarding/language` (`changeAppLanguage` before navigate) or the dashboard selector.
 3. User answers in the selected language; on save, free-text answers are translated to English and written to `avatars.profiling_data` (English `question` + `answer`). Select options map back to English labels without an LLM call (`optionMaps` / `englishOptions` on display questions).
-4. On load / language change, stored English answers are translated to the locale for the draft UI (wizard + review). Translate failures keep English draft text and surface an error — no silent invention.
+4. On load / language change, stored English answers are translated to the locale for the draft UI (wizard + review). Translate failures keep English draft text and surface a visible amber banner (`agents.translationFailed`) on ProfilingStep / ProfilingReviewPanel — not a silent English-only UI.
 5. Language selector is shared (`LanguageSelector`) on the dashboard top bar and the profiling wizard header.
 
 Agents and profile summaries continue to consume English profiling data. Backend OpenRouter calls also use batches of 12 with batched cache lookups so large questionnaires do not drop JSON keys under concurrent load.
+
+### Locale catalog repair (mojibake)
+
+`Frontend/public/locales/{zh,fr,es,hi}/common.json` were repaired from mojibake (UTF-8 misread as Windows-1252 and re-saved). Decode: reverse Windows-1252/C1 → original UTF-8 bytes → UTF-8 text; already-valid text left unchanged. Spot-checks: zh `欢迎来到 ContOS。`; fr `Appuyez sur Entrée ↵ pour continuer` / `← Retour`. Re-run repair via `Frontend/scripts/fix_locale_mojibake.py`, or `scripts/translate_ui_strings.py` with `OPENROUTER_API_KEY` if quality still lags.
+
+### Profiling translate timing
+
+Non-English profiling waits on `isTranslating` (`useLayoutEffect`, parallel `/api/translate` chunks) and shows `agents.translating` — questions are not rendered in English while translation is in flight. Translate failures surface `agents.translationFailed` and then fall back to English.
+
+### Onboarding overflow guidelines
+
+Long translations (hi/zh/fr/es) must not clip chrome:
+
+| Surface | Pattern |
+| --- | --- |
+| Welcome / project-type cards | Wider `min-w` cards; `break-words` / `text-balance` on titles; CTA `whitespace-normal` |
+| Profiling shell | Prefer `min-h-dvh` (scroll on small screens) over locked `h-dvh` + `overflow-hidden` alone; soften uppercase/tracking; wrap Next/Back |
+| Option rows | `min-w-0 flex-1 break-words` + `items-start` for multi-line labels |
+| Competitors | No `truncate` on platform labels; allow wrapping CTAs |
+
+Apply the same wrap rules so en/hi/zh/fr/es behave consistently. Do **not** duplicate full questionnaires into locale JSON — keep runtime translate.
 
 ### Helper tests
 

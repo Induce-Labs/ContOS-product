@@ -11,6 +11,8 @@ export type ProfilingReviewPanelProps = {
   draftAnswers: Record<string, string>
   fieldErrors: Record<string, string>
   errorMessage: string | null
+  /** Shown when question/option translation failed and English is displayed. */
+  translationError?: string | null
   hasChanges: boolean
   isSaving: boolean
   isSummarizing: boolean
@@ -25,6 +27,7 @@ export function ProfilingReviewPanel({
   draftAnswers,
   fieldErrors,
   errorMessage,
+  translationError = null,
   hasChanges,
   isSaving,
   isSummarizing,
@@ -48,6 +51,15 @@ export function ProfilingReviewPanel({
 
       {isTranslating ? (
         <p className="mb-4 text-xs text-ink-muted">{t('agents.translating')}</p>
+      ) : null}
+
+      {translationError && !isTranslating ? (
+        <div
+          className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-100 sm:text-sm"
+          role="status"
+        >
+          {t('agents.translationFailed')}
+        </div>
       ) : null}
 
       {errorMessage ? (

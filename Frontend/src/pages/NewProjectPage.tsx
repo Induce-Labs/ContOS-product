@@ -38,6 +38,7 @@ function NewProjectProfiling({
     questionIndex,
     answers,
     errorMessage,
+    translationError,
     fieldError,
     isLoading,
     isSaving,
@@ -96,6 +97,7 @@ function NewProjectProfiling({
       questionIndex={questionIndex}
       answers={answers}
       errorMessage={errorMessage}
+      translationError={translationError}
       fieldError={fieldError}
       isSaving={isSaving}
       isSummarizing={isSummarizing}

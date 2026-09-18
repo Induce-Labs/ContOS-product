@@ -95,6 +95,7 @@
       "submitting": "Creating account…",
       "google": "Sign up with Google",
       "checkEmail": "Check your email to confirm your account, then sign in to continue.",
+      "sessionInvalid": "Your previous account session is no longer valid (the account may have been removed). Please sign up again to continue.",
       "failedUnexpected": "Sign up failed unexpectedly",
       "googleFailedUnexpected": "Google sign up failed unexpectedly"
     },

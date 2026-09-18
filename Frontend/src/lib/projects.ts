@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { requireAuthenticatedUserId } from './auth'
 import {
   ensureUserProfile,
   hydrateAppLanguageFromProfile,
@@ -49,26 +50,22 @@ export async function createProject(
     throw new ProjectsServiceError('Avatar name is required.')
   }
 
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser()
-
-  if (userError) {
+  let userId: string
+  try {
+    userId = await requireAuthenticatedUserId()
+  } catch (error) {
     throw new ProjectsServiceError(
-      `Failed to read authenticated user: ${userError.message}`,
-      userError,
+      error instanceof Error
+        ? error.message
+        : 'You must be signed in to create an avatar.',
+      error,
     )
-  }
-
-  if (!user) {
-    throw new ProjectsServiceError('You must be signed in to create an avatar.')
   }
 
   const row: TablesInsert<'avatars'> = {
     name: trimmedName,
     type,
-    user_id: user.id,
+    user_id: userId,
     status: 'onboarding',
   }
 
