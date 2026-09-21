@@ -94,10 +94,30 @@ class Settings(BaseSettings):
         default=15,
         validation_alias="CELERY_TASK_RETRY_BACKOFF",
     )
+    postiz_url: str = Field(default="", validation_alias="POSTIZ_URL")
+    postiz_client_id: str = Field(default="", validation_alias="POSTIZ_CLIENT_ID")
+    postiz_client_secret: str = Field(default="", validation_alias="POSTIZ_CLIENT_SECRET")
+    postiz_redirect_uri: str = Field(default="", validation_alias="POSTIZ_REDIRECT_URI")
+    postiz_token_encryption_key: str = Field(
+        default="",
+        validation_alias="POSTIZ_TOKEN_ENCRYPTION_KEY",
+    )
 
     @property
     def cors_origin_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+
+    @property
+    def postiz_base_url(self) -> str:
+        return self.postiz_url.strip().rstrip("/")
+
+    @property
+    def postiz_oauth_token_url(self) -> str:
+        return f"{self.postiz_base_url}/api/oauth/token"
+
+    @property
+    def postiz_public_api_base_url(self) -> str:
+        return f"{self.postiz_base_url}/api/public/v1"
 
     def resolved_llm_provider(self) -> str:
         provider = self.llm_provider.strip().lower()

@@ -51,15 +51,6 @@ export function PlaceholderFeaturePage({ titleKey, subtitleKey }: PlaceholderFea
   )
 }
 
-export function CalendarPage() {
-  return (
-    <PlaceholderFeaturePage
-      titleKey="placeholder.calendar.title"
-      subtitleKey="placeholder.calendar.subtitle"
-    />
-  )
-}
-
 export function InsightsPage() {
   return (
     <PlaceholderFeaturePage

@@ -103,7 +103,8 @@
       "completing": "正在完成登录…",
       "failedTitle": "登录失败",
       "backToSignIn": "返回登录",
-      "failedUnexpected": "身份验证回调意外失败"
+      "failedUnexpected": "身份验证回调意外失败",
+      "timeout": "Sign in is taking too long. Please try again."
     },
     "loadingSession": "正在加载会话…"
   },
@@ -510,6 +511,43 @@
     "insights": {
       "title": "洞察",
       "subtitle": "从竞争对手研究和品牌背景中提取战略要点。"
+    }
+  },
+  "postiz": {
+    "calendar": {
+      "checking": "Checking LinkedIn connection…",
+      "connectEyebrow": "Social accounts",
+      "connectTitle": "Connect your social accounts",
+      "connectBody": "Connect your accounts to start scheduling and publishing.",
+      "connectLinkedIn": "Connect LinkedIn",
+      "connectingEyebrow": "Connecting",
+      "connectingTitle": "Finish connecting in the popup",
+      "connectingBody": "Complete Postiz authorization and LinkedIn connection in the popup window. This Calendar page will update when LinkedIn is connected.",
+      "linkedinConnected": "LinkedIn connected",
+      "linkedinConnectedAs": "LinkedIn connected as {{name}}",
+      "connectedEyebrow": "LinkedIn",
+      "connectedTitle": "Your LinkedIn account",
+      "reconnectLinkedIn": "Connect again",
+      "schedulingSoon": "Content scheduling for this calendar is still in development. Your LinkedIn connection is ready for publishing when that ships.",
+      "errorEyebrow": "Connection issue",
+      "errorTitle": "Could not connect LinkedIn",
+      "popupBlocked": "Your browser blocked the connection popup. Allow popups for ContOS and try again.",
+      "popupClosed": "The connection window was closed before LinkedIn finished connecting. You can retry.",
+      "timeout": "LinkedIn connection timed out. Please try again.",
+      "denied": "Postiz authorization was denied. You can retry when ready.",
+      "statusFailed": "Failed to load LinkedIn connection status.",
+      "connectFailed": "Failed to start the LinkedIn connection.",
+      "refreshStatus": "Refresh status"
+    },
+    "callback": {
+      "completing": "Connecting LinkedIn…",
+      "failedTitle": "LinkedIn connection failed",
+      "failedUnexpected": "An unexpected error occurred while completing Postiz authorization.",
+      "missingParams": "Postiz returned an incomplete callback. Missing authorization code or state.",
+      "denied": "You denied ContOS access in Postiz. Close this window and retry from Calendar.",
+      "oauthError": "Postiz returned an authorization error.",
+      "oauthErrorWithDetail": "Postiz returned an authorization error: {{detail}}",
+      "backToCalendar": "Back to ContOS"
     }
   },
   "workspaceTypes": {

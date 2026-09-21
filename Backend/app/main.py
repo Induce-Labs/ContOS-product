@@ -4,6 +4,7 @@ from fastapi import FastAPI, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes.avatars import router as avatars_router
+from app.api.routes.postiz import router as postiz_router
 from app.config import get_settings
 from app.services.redis_health import ping_redis
 
@@ -60,6 +61,7 @@ app.add_middleware(
 )
 
 app.include_router(avatars_router)
+app.include_router(postiz_router)
 
 
 @app.get("/health")

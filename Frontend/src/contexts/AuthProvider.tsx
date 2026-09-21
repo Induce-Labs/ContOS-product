@@ -23,9 +23,34 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   useEffect(() => {
     let isMounted = true
+    const pathname = window.location.pathname
+    const isAuthCallbackRoute =
+      pathname === '/auth/callback' || pathname === '/auth/postiz/callback'
 
     async function initializeSession() {
       try {
+        // Avoid getUser() racing OAuth PKCE exchange on callback routes.
+        if (isAuthCallbackRoute) {
+          const {
+            data: { session: nextSession },
+            error,
+          } = await supabase.auth.getSession()
+
+          if (!isMounted) {
+            return
+          }
+
+          if (error) {
+            setSession(null)
+            setIsLoading(false)
+            return
+          }
+
+          setSession(nextSession)
+          setIsLoading(false)
+          return
+        }
+
         const nextSession = await validateStoredSessionOrRedirectToSignUp()
 
         if (!isMounted) {
@@ -46,7 +71,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
           error instanceof Error &&
           error.name !== 'AuthServiceError'
         ) {
-          throw new Error(`Failed to initialize auth session: ${error.message}`)
+          throw new Error(`Failed to initialize auth session: ${error.message}`, {
+            cause: error,
+          })
         }
       }
     }
@@ -80,7 +107,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           `Sign out aborted: failed to save chat history (${
             error instanceof Error ? error.message : String(error)
           }). Stay signed in and try again.`,
-          { cause: error instanceof Error ? error : undefined },
+          { cause: error },
         )
       }
     }

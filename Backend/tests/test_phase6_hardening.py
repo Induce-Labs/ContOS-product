@@ -38,6 +38,11 @@ class TestSecretExposureGuards:
         "OPENROUTER_API_KEY",
         "REDIS_URL",
         "CELERY_",
+        "POSTIZ_CLIENT_SECRET",
+        "POSTIZ_TOKEN_ENCRYPTION_KEY",
+        "POSTIZ_CLIENT_ID",
+        "POSTIZ_URL",
+        "POSTIZ_REDIRECT_URI",
     )
 
     def test_frontend_env_example_has_no_server_secrets(self) -> None:

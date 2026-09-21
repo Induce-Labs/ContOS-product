@@ -4,8 +4,10 @@ import { ThemeProvider } from './contexts/ThemeProvider'
 import { GuestRoute } from './components/GuestRoute'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { RequireOnboardingComplete } from './components/RequireOnboardingComplete'
-import { CalendarPage, InsightsPage } from './pages/PlaceholderFeaturePage'
+import { CalendarPage } from './pages/CalendarPage'
+import { InsightsPage } from './pages/PlaceholderFeaturePage'
 import { AuthCallbackPage } from './pages/AuthCallbackPage'
+import { PostizCallbackPage } from './pages/PostizCallbackPage'
 import { AgentsPage } from './pages/AgentsPage'
 import { DashboardPage, DashboardRedirectPage } from './pages/DashboardPage'
 import { EditProfilingPage } from './pages/EditProfilingPage'
@@ -40,6 +42,7 @@ function App() {
             </Route>
 
             <Route path="/auth/callback" element={<AuthCallbackPage />} />
+            <Route path="/auth/postiz/callback" element={<PostizCallbackPage />} />
 
             <Route element={<ProtectedRoute />}>
               <Route path="/welcome" element={<WelcomeOnboardingPage />} />

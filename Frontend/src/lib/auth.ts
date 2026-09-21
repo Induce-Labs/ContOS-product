@@ -130,35 +130,84 @@ export async function signOut(): Promise<void> {
   }
 }
 
-export async function completeOAuthCallback(): Promise<void> {
-  const url = new URL(window.location.href)
-  const code = url.searchParams.get('code')
-  const errorDescription = url.searchParams.get('error_description')
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms)
+  })
+}
 
-  if (errorDescription) {
-    throw new AuthServiceError(decodeURIComponent(errorDescription))
-  }
+function isRecoverableCodeExchangeError(error: AuthError): boolean {
+  const message = (error.message ?? '').toLowerCase()
+  const code = (error.code ?? '').toLowerCase()
+  return (
+    code === 'flow_state_not_found' ||
+    message.includes('already been used') ||
+    message.includes('code verifier') ||
+    message.includes('pkce') ||
+    message.includes('invalid flow state') ||
+    message.includes('auth code not found') ||
+    message.includes('both auth code and code verifier')
+  )
+}
 
-  if (!code) {
+async function waitForSession(attempts = 5, delayMs = 400) {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
     const { data, error } = await supabase.auth.getSession()
 
     if (error) {
       throw mapAuthError(error, 'Failed to read auth session after redirect')
     }
 
-    if (!data.session) {
-      throw new AuthServiceError(
-        'No authorization code or session found after OAuth redirect',
-      )
+    if (data.session) {
+      return data.session
+    }
+
+    if (attempt < attempts - 1) {
+      await sleep(delayMs)
+    }
+  }
+
+  return null
+}
+
+export async function completeOAuthCallback(): Promise<void> {
+  const url = new URL(window.location.href)
+  const code = url.searchParams.get('code')
+  const oauthError = url.searchParams.get('error')
+  const errorDescription = url.searchParams.get('error_description')
+
+  if (oauthError || errorDescription) {
+    throw new AuthServiceError(
+      decodeURIComponent(errorDescription ?? oauthError ?? 'OAuth sign in was denied'),
+    )
+  }
+
+  if (code) {
+    const { error } = await supabase.auth.exchangeCodeForSession(code)
+
+    if (error) {
+      // detectSessionInUrl may have already exchanged the same one-time code.
+      const existing = await waitForSession(3, 250)
+      if (existing) {
+        return
+      }
+      if (isRecoverableCodeExchangeError(error)) {
+        throw new AuthServiceError(
+          'OAuth authorization code was already used and no session is available. Please try signing in again.',
+          error,
+        )
+      }
+      throw mapAuthError(error, 'Failed to complete OAuth sign in')
     }
 
     return
   }
 
-  const { error } = await supabase.auth.exchangeCodeForSession(code)
-
-  if (error) {
-    throw mapAuthError(error, 'Failed to complete OAuth sign in')
+  const session = await waitForSession()
+  if (!session) {
+    throw new AuthServiceError(
+      'No authorization code or session found after OAuth redirect',
+    )
   }
 }
 

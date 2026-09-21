@@ -8,7 +8,7 @@ Add Supabase Auth to the ContOS frontend: email/password and Google OAuth sign-u
 
 | Area | Location |
 | --- | --- |
-| Supabase client | `Frontend/src/lib/supabase.ts` |
+| Supabase client | `Frontend/src/lib/supabase.ts` (`flowType: 'pkce'`, `detectSessionInUrl: true`) |
 | Auth actions | `Frontend/src/lib/auth.ts` |
 | Project routing helpers | `Frontend/src/lib/projects.ts` |
 | Session provider | `Frontend/src/contexts/AuthProvider.tsx` |
@@ -22,7 +22,7 @@ Add Supabase Auth to the ContOS frontend: email/password and Google OAuth sign-u
 | --- | --- | --- |
 | `/login` | Guest only | Email/password + Google sign in |
 | `/signup` | Guest only | Email/password + Google sign up |
-| `/auth/callback` | Public | Completes OAuth PKCE exchange |
+| `/auth/callback` | Public | Completes OAuth PKCE exchange (20s timeout; error UI on failure) |
 | `/dashboard` | Authenticated | Redirects to active project or empty state |
 | `/dashboard/:projectId` | Authenticated | Project workspace preview |
 
@@ -46,9 +46,13 @@ Add these **Redirect URLs** (Authentication → URL Configuration):
 
 - `http://localhost:5173/auth/callback`
 - `http://localhost:5174/auth/callback`
-- Your production URL + `/auth/callback` when deployed
+- `https://contos-product.vercel.app/auth/callback` (production)
+- Any other deployed preview/production origin + `/auth/callback`
 
-**Site URL** (dev): `http://localhost:5173`
+**Site URL** (dev): `http://localhost:5173`  
+**Site URL** (production): `https://contos-product.vercel.app`
+
+Confirm Vercel env has matching `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` for this project.
 
 ### Vercel SPA routing
 
@@ -91,7 +95,9 @@ sequenceDiagram
 
 - Anon key only in frontend; no service-role key exposed
 - Sessions persisted by Supabase client (localStorage)
-- OAuth uses PKCE via `exchangeCodeForSession`
+- OAuth uses explicit `flowType: 'pkce'` on `createClient` plus `exchangeCodeForSession` on `/auth/callback`
+- `AuthProvider` skips heavy `getUser()` validation on `/auth/callback` to avoid racing PKCE exchange
+- Callback page enforces a 20s timeout so hung network calls surface an error instead of an infinite spinner
 - Protected routes block unauthenticated access
 - Project queries subject to RLS from Phase 1
 
@@ -100,8 +106,10 @@ sequenceDiagram
 1. Visit `/dashboard` while logged out → redirected to `/login`
 2. Sign up with email/password → empty dashboard or project route
 3. Sign out → returned to login
-4. Sign in with Google → lands on `/auth/callback` then dashboard
-5. Create a project manually in Supabase (or wait for Phase 3) → sign in routes to that project
+4. Sign in with Google → lands on `/auth/callback?code=...` then dashboard/onboarding (must not stick on “Completing sign in…”)
+5. Deny Google OAuth → error UI with link back to `/login`
+6. Create a project manually in Supabase (or wait for Phase 3) → sign in routes to that project
+7. Confirm Postiz `/auth/postiz/callback` is unchanged and still works from Calendar
 
 ## Known limitations
 

@@ -4,6 +4,26 @@ import { Link, useNavigate } from 'react-router-dom'
 import { completeOAuthCallback } from '../lib/auth'
 import { resolvePostAuthPath } from '../lib/projects'
 
+const CALLBACK_TIMEOUT_MS = 20_000
+
+function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = window.setTimeout(() => {
+      reject(new Error(message))
+    }, ms)
+
+    promise
+      .then((value) => {
+        window.clearTimeout(timer)
+        resolve(value)
+      })
+      .catch((error: unknown) => {
+        window.clearTimeout(timer)
+        reject(error)
+      })
+  })
+}
+
 export function AuthCallbackPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -14,8 +34,14 @@ export function AuthCallbackPage() {
 
     async function handleCallback() {
       try {
-        await completeOAuthCallback()
-        const nextPath = await resolvePostAuthPath()
+        const nextPath = await withTimeout(
+          (async () => {
+            await completeOAuthCallback()
+            return resolvePostAuthPath()
+          })(),
+          CALLBACK_TIMEOUT_MS,
+          t('auth.callback.timeout'),
+        )
 
         if (isMounted) {
           navigate(nextPath, { replace: true })

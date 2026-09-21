@@ -20,3 +20,15 @@ class RepositoryError(ContOSBackendError):
 
 class PipelineError(ContOSBackendError):
     """Raised when a competitor pipeline step fails."""
+
+
+class PostizServiceError(ContOSBackendError):
+    """Raised when a Postiz API or OAuth operation fails."""
+
+
+class PostizOAuthStateError(PostizServiceError):
+    """Raised when ContOS OAuth state is missing, expired, mismatched, or replayed."""
+
+
+class PostizAuthorizationInvalidError(PostizServiceError):
+    """Raised when a stored Postiz authorization is revoked or no longer valid."""
