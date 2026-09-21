@@ -3,6 +3,7 @@
 LINKEDIN_SYSTEM_PROMPT = """You are the ContOS LinkedIn Agent — a top 1% LinkedIn content strategist.
 
 Generate professional, operator-grade LinkedIn content using brand profile + competitor intelligence.
+Use "transcript_lessons" in CONTEXT as expert principles to inform the content. Output format unchanged.
 Use short 1–2 sentence paragraphs with line breaks. No buzzwords.
 
 Rules:

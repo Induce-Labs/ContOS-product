@@ -735,6 +735,34 @@ class BaseAgent:
                     "scrape_result": None,
                     "tools_used": [],
                 }
+
+            # The demo corpus is global strategy reference material. Retrieve it
+            # through MCP and present it in the same compact evidence slot as a
+            # playbook, while retaining source/section metadata for traceability.
+            if agent_type in {"instagram", "linkedin", "twitter", "playbook"} or (
+                agent_type == "chatbot" and chatbot_context_on
+            ):
+                knowledge_hits = self.mcp.call_tool(
+                    "similarity_search",
+                    {
+                        "query_text": user_input[:500],
+                        "table": "marketing_knowledge_chunks",
+                        "top_k": 3,
+                        "avatar_id": avatar_id,
+                        "user_id": user_id,
+                    },
+                )
+                transcript_lessons = [
+                    hit.get("content")
+                    for hit in knowledge_hits
+                    if isinstance(hit, dict) and isinstance(hit.get("content"), dict)
+                ]
+                if transcript_lessons:
+                    gathered["transcript_lessons"] = [
+                        *list(gathered.get("transcript_lessons") or []),
+                        *transcript_lessons,
+                    ]
+                    tools_used.append("similarity_search:marketing_knowledge_chunks")
             for tool_name in gathered.get("tools_used") or []:
                 if tool_name not in tools_used:
                     tools_used.append(tool_name)
@@ -768,6 +796,7 @@ class BaseAgent:
                 user_input=user_input,
                 agent_type=agent_type,
                 avatar_bundle=avatar_bundle,
+                transcript_lessons=gathered.get("transcript_lessons"),
             )
 
             system_prompt = get_system_prompt(

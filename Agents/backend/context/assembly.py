@@ -36,6 +36,7 @@ def assemble_context(
     agent_type: str,
     *,
     avatar_bundle: dict[str, Any] | None = None,
+    transcript_lessons: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     multi = bool(avatar_bundle and avatar_bundle.get("multi_avatar"))
     profiles = (avatar_bundle or {}).get("profiles") or (
@@ -57,6 +58,7 @@ def assemble_context(
         "competitor_context_by_avatar": (avatar_bundle or {}).get("competitor_context")
         or [],
         "relevant_playbooks": playbooks or [],
+        "transcript_lessons": transcript_lessons or [],
         "user_input": user_input,
     }
 

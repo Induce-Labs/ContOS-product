@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>ContOS Agents — Test Interface</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  :root { --bg:#0f1115; --panel:#171a21; --border:#2a2f3a; --text:#e6e8ee;
+          --muted:#8b93a7; --accent:#8b7cf6; --user:#1f2633; --sys:#12151c; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:14px/1.55 -apple-system, "Segoe UI", Roboto, sans-serif;
+         background:var(--bg); color:var(--text); height:100vh; display:flex; flex-direction:column; }
+  header { padding:10px 16px; border-bottom:1px solid var(--border); display:flex;
+           gap:12px; align-items:center; flex-wrap:wrap; background:var(--panel); }
+  header h1 { font-size:15px; margin:0; font-weight:600; }
+  select, input[type=text] { background:var(--sys); color:var(--text);
+    border:1px solid var(--border); border-radius:6px; padding:6px 8px; font-size:13px; }
+  label { color:var(--muted); font-size:12px; display:flex; gap:6px; align-items:center; }
+  main { flex:1; display:flex; min-height:0; }
+  #chat { flex:1; overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:10px; }
+  #debug { width:380px; border-left:1px solid var(--border); background:var(--panel);
+           overflow-y:auto; padding:12px; display:none; }
+  #debug.open { display:block; }
+  #debug h2 { font-size:12px; color:var(--muted); margin:0 0 8px; text-transform:uppercase; letter-spacing:.05em; }
+  .msg { max-width:82%; padding:10px 12px; border-radius:10px; white-space:pre-wrap; word-break:break-word; }
+  .user { align-self:flex-end; background:var(--user); border:1px solid var(--border); }
+  .agent { align-self:flex-start; background:var(--sys); border:1px solid var(--border); }
+  .agent.streaming::after { content:"▌"; color:var(--accent); }
+  .result h3 { margin:0 0 8px; font-size:15px; color:var(--text); }
+  .result h4 { margin:14px 0 5px; font-size:12px; color:var(--accent); text-transform:uppercase; letter-spacing:.04em; }
+  .result p { margin:6px 0; }
+  .result ul { margin:6px 0 8px 18px; padding:0; }
+  .result li { margin:4px 0; }
+  .result-card { border:1px solid var(--border); border-radius:8px; padding:9px; margin:8px 0; }
+  .result-card strong { color:var(--text); }
+  .muted { color:var(--muted); }
+  .sys { align-self:center; color:var(--muted); font-size:12px; background:none; }
+  .err { align-self:center; color:#e5534b; font-size:12px; background:none; }
+  .chunk { border:1px solid var(--border); border-radius:8px; padding:8px; margin-bottom:8px; font-size:12px; }
+  .chunk .meta { color:var(--accent); font-size:11px; margin-bottom:4px; }
+  footer { border-top:1px solid var(--border); padding:10px 16px; display:flex; gap:8px; background:var(--panel); }
+  textarea { flex:1; resize:none; background:var(--sys); color:var(--text);
+    border:1px solid var(--border); border-radius:8px; padding:10px; font:14px/1.4 inherit; height:52px; }
+  button { background:var(--accent); color:#0f1115; border:none; border-radius:8px;
+           padding:0 18px; font-weight:600; cursor:pointer; }
+  button:disabled { opacity:.5; cursor:default; }
+  #status { color:var(--muted); font-size:12px; align-self:center; min-width:110px; }
+  .tokrow { display:flex; gap:6px; align-items:center; flex:1; min-width:200px; }
+  .tokrow input { flex:1; }
+</style>
+<base target="_blank">
+</head>
+<body>
+<header>
+  <h1>Agents Test</h1>
+  <label>Agent
+    <select id="agent">
+      <option value="chatbot">Chatbot</option>
+      <option value="instagram">Instagram</option>
+      <option value="linkedin">LinkedIn</option>
+      <option value="twitter">Twitter</option>
+      <option value="playbook">Playbook</option>
+    </select>
+  </label>
+  <label>Avatar ID <input type="text" id="avatarId" style="width:210px" placeholder="required — must belong to token's user"></label>
+  <div class="tokrow"><label>Token <input type="text" id="token" placeholder="optional with dev auth bypass"></label></div>
+  <label><input type="checkbox" id="ctx"> chatbot_context_on</label>
+  <label><input type="checkbox" id="live"> live_mode</label>
+  <span id="health" style="margin-left:auto;font-size:12px;color:var(--muted)">…</span>
+</header>
+
+<main>
+  <div id="chat"></div>
+  <aside id="debug"><h2>Run log</h2><div id="log"></div></aside>
+</main>
+
+<footer>
+  <textarea id="input" placeholder="Ask a marketing question… (Enter to send)"></textarea>
+  <button id="send">Send</button>
+  <span id="status"></span>
+</footer>
+
+<script>
+/* Matches ContOS Agents API (main.py) — v0.3.0 */
+const API_BASE = "http://localhost:8001";
+const INVOKE_PATH = "/api/agents/invoke";
+const HEALTH_PATH = "/api/health";
+
+const chatEl = document.getElementById("chat");
+const inputEl = document.getElementById("input");
+const sendBtn = document.getElementById("send");
+const statusEl = document.getElementById("status");
+const debugEl = document.getElementById("debug");
+const logEl = document.getElementById("log");
+
+/* ── Health dot: /api/health returns 503 when Redis is down (status "degraded") ── */
+fetch(API_BASE + HEALTH_PATH).then(async r => {
+  const body = await r.json().catch(() => ({}));
+  const ok = r.ok && body.status === "ok";
+  const h = document.getElementById("health");
+  h.textContent = ok ? "● up" : "● degraded (redis: " + (body.redis || "?") + ")";
+  h.style.color = ok ? "#5dd39e" : "#e5a54b";
+}).catch(() => {
+  const h = document.getElementById("health");
+  h.textContent = "● unreachable";
+  h.style.color = "#e5534b";
+});
+
+function addMsg(cls, text) {
+  const div = document.createElement("div");
+  div.className = "msg " + cls;
+  div.textContent = text;
+  chatEl.appendChild(div);
+  chatEl.scrollTop = chatEl.scrollHeight;
+  return div;
+}
+
+function addLog(label, obj) {
+  const div = document.createElement("div");
+  div.className = "chunk";
+  const meta = document.createElement("div");
+  meta.className = "meta";
+  meta.textContent = label;
+  const body = document.createElement("div");
+  body.textContent = typeof obj === "string" ? obj : JSON.stringify(obj, null, 2);
+  div.append(meta, body);
+  logEl.appendChild(div);
+  debugEl.classList.add("open");
+  debugEl.scrollTop = debugEl.scrollHeight;
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function listHtml(items) {
+  const values = Array.isArray(items) ? items.filter(Boolean) : [];
+  return values.length
+    ? "<ul>" + values.map(item => "<li>" + escapeHtml(item) + "</li>").join("") + "</ul>"
+    : "";
+}
+
+function renderAgentOutput(output, agent) {
+  if (!output || typeof output !== "object") return escapeHtml(output || "");
+  const html = [];
+  const addList = (title, values) => {
+    if (Array.isArray(values) && values.length) {
+      html.push("<h4>" + title + "</h4>" + listHtml(values));
+    }
+  };
+
+  if (agent === "instagram") {
+    if (output.analysis) html.push("<p>" + escapeHtml(output.analysis) + "</p>");
+    if (output.posting_frequency) html.push("<h4>Posting rhythm</h4><p>" + escapeHtml(output.posting_frequency) + "</p>");
+    addList("Top hooks", output.top_hooks);
+    addList("Caption formulas", output.caption_formulas);
+    (output.content_calendar || []).forEach(item => {
+      html.push("<div class='result-card'><strong>Day " + escapeHtml(item.day) + " · " + escapeHtml(item.content_type) + "</strong>" +
+        "<p><strong>Hook:</strong> " + escapeHtml(item.hook) + "</p>" +
+        "<p><strong>Caption:</strong> " + escapeHtml(item.caption) + "</p>" +
+        "<p><strong>CTA:</strong> " + escapeHtml(item.cta) + "</p>" +
+        "<p><strong>Hashtags:</strong> " + escapeHtml((item.hashtags || []).join(" ")) + "</p>" +
+        (item.transcript ? "<p><strong>Transcript:</strong> " + escapeHtml(item.transcript) + "</p>" : "") +
+        "<p class='muted'><strong>Why:</strong> " + escapeHtml(item.reasoning) + "</p></div>");
+    });
+    return html.join("") || "<p>No Instagram recommendations returned.</p>";
+  }
+
+  if (agent === "linkedin") {
+    if (output.posting_frequency) html.push("<h4>Posting rhythm</h4><p>" + escapeHtml(output.posting_frequency) + "</p>");
+    addList("Thought-leadership themes", output.thought_leadership_themes);
+    (output.post_ideas || []).forEach(item => {
+      html.push("<div class='result-card'><strong>" + escapeHtml(item.topic) + "</strong>" +
+        "<p><strong>Hook:</strong> " + escapeHtml(item.hook) + "</p>" +
+        "<p>" + escapeHtml(item.post_structure) + "</p>" +
+        "<p><strong>CTA:</strong> " + escapeHtml(item.cta) + "</p>" +
+        "<p class='muted'><strong>Why:</strong> " + escapeHtml(item.reasoning) + "</p></div>");
+    });
+    return html.join("") || "<p>No LinkedIn recommendations returned.</p>";
+  }
+
+  if (agent === "twitter") {
+    if (output.posting_frequency) html.push("<h4>Posting rhythm</h4><p>" + escapeHtml(output.posting_frequency) + "</p>");
+    addList("Hook formulas", output.hook_formulas);
+    (output.tweet_ideas || []).forEach(item => {
+      html.push("<div class='result-card'><strong>" + escapeHtml(item.hook) + "</strong><p>" + escapeHtml(item.full_tweet) + "</p><p class='muted'><strong>Why:</strong> " + escapeHtml(item.reasoning) + "</p></div>");
+    });
+    return html.join("") || "<p>No Twitter recommendations returned.</p>";
+  }
+
+  if (agent === "playbook") {
+    addList("Strategy frameworks", output.strategy_frameworks);
+    addList("Guardrails", output.guardrails);
+    addList("Recommendations", output.recommendations);
+    if (output.reasoning) html.push("<h4>Reasoning</h4><p>" + escapeHtml(output.reasoning) + "</p>");
+    return html.join("") || "<p>No playbook recommendations returned.</p>";
+  }
+
+  if (output.display_text) return escapeHtml(output.display_text);
+  if (output.analysis) return escapeHtml(output.analysis);
+  return "<p>Response received.</p>";
+}
+
+async function send() {
+  const text = inputEl.value.trim();
+  const avatarId = document.getElementById("avatarId").value.trim();
+  const token = document.getElementById("token").value.trim();
+  if (!text) return;
+  if (!avatarId) {
+    addMsg("err", "Avatar ID is required.");
+    return;
+  }
+  inputEl.value = "";
+  addMsg("user", text);
+  const replyEl = addMsg("agent streaming", "");
+  const selectedAgent = document.getElementById("agent").value;
+  const structuredAgent = selectedAgent !== "chatbot";
+  if (structuredAgent) replyEl.textContent = "Building your strategy…";
+  sendBtn.disabled = true;
+  statusEl.textContent = "accepted…";
+  logEl.innerHTML = "";
+
+  /* Matches InvokeRequest in main.py */
+  const payload = {
+    avatar_id: avatarId,
+    agent_type: document.getElementById("agent").value,
+    user_input: text,
+    live_mode: document.getElementById("live").checked,
+    chatbot_context_on: document.getElementById("ctx").checked,
+    competitor_url: null,
+    competitor_summaries: null,
+    tagged_avatar_ids: null,
+    chat_history: null,
+    response_language: "en",
+  };
+
+  try {
+    const headers = { "Content-Type": "application/json" };
+    if (token) headers["Authorization"] = "Bearer " + token;
+    const res = await fetch(API_BASE + INVOKE_PATH, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(payload),
+    });
+    if (res.status === 401 || res.status === 403) throw new Error("Auth failed (401/403) — token expired or wrong user?");
+    if (res.status === 404) throw new Error("404 — avatar not found or not owned by this user.");
+    if (res.status === 429) throw new Error("429 — rate limited (concurrent limit). Retry shortly.");
+    if (!res.ok) {
+      const errBody = await res.json().catch(() => null);
+      throw new Error("HTTP " + res.status + (errBody ? " — " + JSON.stringify(errBody) : ""));
+    }
+    if (!res.body) throw new Error("No response body.");
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+
+      /* SSE frames separated by blank lines; each frame has "event:" and "data:" lines. */
+      let idx;
+      while ((idx = buf.indexOf("\n\n")) !== -1) {
+        const frame = buf.slice(0, idx); buf = buf.slice(idx + 2);
+        let event = "message";
+        const dataLines = [];
+        for (const line of frame.split("\n")) {
+          if (line.startsWith("event:")) event = line.slice(6).trim();
+          else if (line.startsWith("data:")) dataLines.push(line.slice(5).trim());
+          /* ":" comment lines (keepalive) are ignored */
+        }
+        if (!dataLines.length) continue;
+        const raw = dataLines.join("\n");
+        let data = {};
+        try { data = JSON.parse(raw); } catch { data = { raw }; }
+        addLog("event: " + event, data);
+
+        if (event === "status") {
+          statusEl.textContent = data.stage || "running…";
+        } else if (event === "token") {
+          if (!structuredAgent) {
+            replyEl.textContent += data.text ?? data.token ?? data.delta ?? "";
+          }
+          statusEl.textContent = structuredAgent ? "generating…" : "streaming…";
+        } else if (event === "complete") {
+          statusEl.textContent = "done (" + (data.status || "success") + ")";
+          if (structuredAgent) {
+            replyEl.innerHTML = "<div class='result'><h3>" + escapeHtml(selectedAgent[0].toUpperCase() + selectedAgent.slice(1)) + " strategy</h3>" + renderAgentOutput(data.output, selectedAgent) + "</div>";
+          } else if (!replyEl.textContent && data.output) {
+            replyEl.textContent = typeof data.output === "string" ? data.output : JSON.stringify(data.output);
+          }
+        } else if (event === "error") {
+          replyEl.textContent += "\n[error] " + (data.error || JSON.stringify(data));
+          statusEl.textContent = "error";
+        }
+      }
+    }
+    if (!replyEl.textContent) replyEl.textContent = "(stream ended with no tokens — check run log)";
+  } catch (err) {
+    replyEl.textContent += "\n[error] " + err.message;
+    statusEl.textContent = "failed";
+  } finally {
+    replyEl.classList.remove("streaming");
+    sendBtn.disabled = false;
+    chatEl.scrollTop = chatEl.scrollHeight;
+  }
+}
+
+sendBtn.onclick = send;
+inputEl.onkeydown = e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } };
+</script>
+</body>
+</html>
