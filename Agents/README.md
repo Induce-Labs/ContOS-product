@@ -15,3 +15,20 @@ Phase 2 agent architecture for ContOS (fractional CMO / Marketing-as-a-Service).
 7. Optional: `POST /api/embeddings/store-playbooks` to seed playbook vectors.
 
 Profiling summarize returns `202` and runs on the `website` queue. See [`Docs/phase-celery.md`](../Docs/phase-celery.md).
+
+## Marketing knowledge demo corpus
+
+`Transcripts.docx` can be ingested as source-grounded RAG material for the platform agents. Apply
+`supabase/migrations/20260921120000_marketing_knowledge_chunks.sql` first, then from `Agents/backend`:
+
+```bash
+# Inspect chunks only (no embedding API calls or database writes)
+python scripts/ingest_marketing_knowledge.py ../Transcripts.docx --dry-run
+
+# Embed and replace this document's existing chunks
+python scripts/ingest_marketing_knowledge.py ../Transcripts.docx
+```
+
+The ingestion command requires `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and
+`OPENROUTER_API_KEY` in `Agents/backend/.env`. `NEXT_PUBLIC_*` variables and a
+Supabase publishable key are browser configuration and are not used by this Python service.

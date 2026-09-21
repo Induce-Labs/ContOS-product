@@ -8,6 +8,8 @@ from __future__ import annotations
 import json
 import logging
 import re
+import time
+from contextvars import ContextVar
 from typing import Any, Callable
 
 from mcp.tools import (
@@ -19,6 +21,10 @@ from mcp.tools import (
 )
 
 logger = logging.getLogger(__name__)
+
+TOOL_TRACE: ContextVar[list[dict[str, Any]] | None] = ContextVar(
+    "contos_tool_trace", default=None
+)
 
 ToolHandler = Callable[..., Any]
 
@@ -86,6 +92,7 @@ class MCPServer:
             name="similarity_search",
             description=(
                 "Agentic RAG retrieve: embed a query and return top-k similar playbooks, "
+                "source-grounded marketing knowledge chunks, "
                 "LinkedIn summaries (linkedin_content_summaries), or Instagram summaries "
                 "(instagram_content_summaries)."
             ),
@@ -97,6 +104,7 @@ class MCPServer:
                         "type": "string",
                         "enum": [
                             "playbooks",
+                            "marketing_knowledge_chunks",
                             "linkedin_content_summaries",
                             "instagram_content_summaries",
                         ],
@@ -208,7 +216,36 @@ class MCPServer:
         args = arguments or {}
         logger.info("MCP tool call name=%s args=%s", name, args)
         handler = self._tools[name]["handler"]
-        return handler(**args)
+        started = time.perf_counter()
+        try:
+            result = handler(**args)
+        except Exception as exc:
+            trace = TOOL_TRACE.get()
+            if trace is not None:
+                trace.append(
+                    {
+                        "tool": name,
+                        "table": args.get("table"),
+                        "top_k": args.get("top_k"),
+                        "duration_ms": round((time.perf_counter() - started) * 1000, 1),
+                        "status": "error",
+                        "error_type": type(exc).__name__,
+                    }
+                )
+            raise
+        trace = TOOL_TRACE.get()
+        if trace is not None:
+            trace.append(
+                {
+                    "tool": name,
+                    "table": args.get("table"),
+                    "top_k": args.get("top_k"),
+                    "duration_ms": round((time.perf_counter() - started) * 1000, 1),
+                    "status": "ok",
+                    "result_count": len(result) if isinstance(result, list) else None,
+                }
+            )
+        return result
 
     def call_tool_json(self, name: str, arguments: dict[str, Any] | None = None) -> str:
         result = self.call_tool(name, arguments)

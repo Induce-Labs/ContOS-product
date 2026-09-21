@@ -16,7 +16,7 @@ from openai import OpenAI
 from constants import response_language_instruction, response_language_user_reminder
 from context.assembly import assemble_context
 from db.supabase_client import log_agent_call
-from mcp.server import mcp_server
+from mcp.server import TOOL_TRACE, mcp_server
 from prompts import get_system_prompt
 from schemas.output_schemas import OUTPUT_MODELS
 
@@ -654,6 +654,9 @@ class BaseAgent:
         context: dict[str, Any] = {}
         usage = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
         tools_used: list[str] = []
+        previous_performance: list[dict[str, Any]] = []
+        tool_trace: list[dict[str, Any]] = []
+        TOOL_TRACE.set(tool_trace)
 
         # If user supplied ingested competitor intel, keep chatbot context on
         if competitor_summaries and agent_type == "chatbot":
@@ -767,6 +770,14 @@ class BaseAgent:
                 if tool_name not in tools_used:
                     tools_used.append(tool_name)
 
+            if agent_type == "instagram":
+                from services.content_plan import load_recent_content_performance
+
+                previous_performance = load_recent_content_performance(
+                    user_id=user_id,
+                    avatar_id=avatar_ids[0] if avatar_ids else avatar_id,
+                )
+
             profile = (
                 (avatar_bundle or {}).get("profile")
                 or (
@@ -797,6 +808,7 @@ class BaseAgent:
                 agent_type=agent_type,
                 avatar_bundle=avatar_bundle,
                 transcript_lessons=gathered.get("transcript_lessons"),
+                previous_performance=previous_performance,
             )
 
             system_prompt = get_system_prompt(
@@ -816,6 +828,44 @@ class BaseAgent:
                 chat_history=chat_history,
                 response_language=response_language,
             )
+
+            yield {
+                "event": "status",
+                "data": {
+                    "stage": "context_evaluated",
+                    "agent": agent_type,
+                    "evaluation": {
+                        "tool_calls": tool_trace,
+                        "tool_call_count": len(tool_trace),
+                        "total_tool_ms": round(
+                            sum(float(item.get("duration_ms") or 0) for item in tool_trace),
+                            1,
+                        ),
+                        "avatar_profile": {
+                            "loaded": bool(profile),
+                            "avatar_count": len((avatar_bundle or {}).get("profiles") or []),
+                        },
+                        "competitor_rag": {
+                            "items": len(summaries),
+                            "source": "instagram_content_summaries"
+                            if agent_type == "instagram"
+                            else "avatar_competitor_context",
+                        },
+                        "transcript_rag": {
+                            "items": len(context.get("transcript_lessons") or []),
+                            "source": "marketing_knowledge_chunks",
+                        },
+                        "playbook_rag": {
+                            "items": len(context.get("relevant_playbooks") or []),
+                            "source": "playbooks",
+                        },
+                        "previous_performance": {
+                            "items": len(previous_performance),
+                            "used": bool(previous_performance),
+                        },
+                    },
+                },
+            }
 
             yield {
                 "event": "status",
@@ -877,6 +927,36 @@ class BaseAgent:
                     parsed = raw_response or parsed
 
             parsed = strip_asterisks(parsed)
+
+            if agent_type == "instagram" and isinstance(parsed, dict):
+                try:
+                    from services.content_plan import (
+                        persist_instagram_content_plan_items,
+                    )
+
+                    persisted_items = persist_instagram_content_plan_items(
+                        user_id=user_id,
+                        avatar_id=avatar_ids[0] if avatar_ids else avatar_id,
+                        output=parsed,
+                    )
+                    if persisted_items:
+                        tools_used.append("content_plan_items")
+                        item_ids = [
+                            item.get("id")
+                            for item in persisted_items
+                            if item.get("id")
+                        ]
+                        parsed["content_plan_item_ids"] = item_ids
+                        calendar = parsed.get("content_calendar")
+                        if isinstance(calendar, list):
+                            for item, item_id in zip(calendar, item_ids):
+                                if isinstance(item, dict):
+                                    item["content_plan_item_id"] = item_id
+                except Exception as persist_error:
+                    logger.warning(
+                        "Instagram content plan persistence failed: %s",
+                        persist_error,
+                    )
 
             yield {
                 "event": "complete",

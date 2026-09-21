@@ -122,7 +122,29 @@ function addLog(label, obj) {
   meta.className = "meta";
   meta.textContent = label;
   const body = document.createElement("div");
-  body.textContent = typeof obj === "string" ? obj : JSON.stringify(obj, null, 2);
+  if (label.startsWith("Agent run:") && obj && Array.isArray(obj.evaluation?.tool_calls)) {
+    const overview = document.createElement("p");
+    overview.className = "muted";
+    overview.textContent = `${obj.status} · ${obj.evaluation.tool_call_count} tool calls · ${obj.evaluation.total_tool_ms} ms retrieval time`;
+    body.appendChild(overview);
+    obj.evaluation.tool_calls.forEach(call => {
+      const row = document.createElement("div");
+      row.className = "result-card";
+      const target = call.table ? ` · ${call.table}` : "";
+      const count = call.result_count == null ? "" : ` · ${call.result_count} results`;
+      row.innerHTML = `<strong>${escapeHtml(call.tool)}</strong><br><span class="muted">${escapeHtml(call.status)}${escapeHtml(target)}${escapeHtml(count)} · ${escapeHtml(call.duration_ms)} ms</span>`;
+      body.appendChild(row);
+    });
+    const details = document.createElement("details");
+    const summary = document.createElement("summary");
+    summary.textContent = "Context evaluation";
+    const evaluation = document.createElement("pre");
+    evaluation.textContent = JSON.stringify(obj.evaluation, null, 2);
+    details.append(summary, evaluation);
+    body.appendChild(details);
+  } else {
+    body.textContent = typeof obj === "string" ? obj : JSON.stringify(obj, null, 2);
+  }
   div.append(meta, body);
   logEl.appendChild(div);
   debugEl.classList.add("open");
@@ -166,6 +188,9 @@ function renderAgentOutput(output, agent) {
         "<p><strong>CTA:</strong> " + escapeHtml(item.cta) + "</p>" +
         "<p><strong>Hashtags:</strong> " + escapeHtml((item.hashtags || []).join(" ")) + "</p>" +
         (item.transcript ? "<p><strong>Transcript:</strong> " + escapeHtml(item.transcript) + "</p>" : "") +
+        (item.video_prompt ? "<p><strong>Video prompt:</strong> " + escapeHtml(item.video_prompt) + "</p>" : "") +
+        (item.performance_goal ? "<p><strong>Performance goal:</strong> " + escapeHtml(item.performance_goal) + "</p>" : "") +
+        (item.strategy_reasoning ? "<p><strong>Strategy:</strong> " + escapeHtml(item.strategy_reasoning) + "</p>" : "") +
         "<p class='muted'><strong>Why:</strong> " + escapeHtml(item.reasoning) + "</p></div>");
     });
     return html.join("") || "<p>No Instagram recommendations returned.</p>";
@@ -259,6 +284,14 @@ async function send() {
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
     let buf = "";
+      const runSummary = {
+        agent: selectedAgent,
+        stages: [],
+        evaluation: {},
+        tools_used: [],
+        model: "",
+        status: "running",
+      };
 
     while (true) {
       const { done, value } = await reader.read();
@@ -280,9 +313,15 @@ async function send() {
         const raw = dataLines.join("\n");
         let data = {};
         try { data = JSON.parse(raw); } catch { data = { raw }; }
-        addLog("event: " + event, data);
-
         if (event === "status") {
+          if (data.stage && !runSummary.stages.includes(data.stage)) {
+            runSummary.stages.push(data.stage);
+          }
+          if (Array.isArray(data.tools_used)) {
+            runSummary.tools_used = data.tools_used;
+          }
+          if (data.evaluation) runSummary.evaluation = data.evaluation;
+          if (data.model) runSummary.model = data.model;
           statusEl.textContent = data.stage || "running…";
         } else if (event === "token") {
           if (!structuredAgent) {
@@ -290,6 +329,11 @@ async function send() {
           }
           statusEl.textContent = structuredAgent ? "generating…" : "streaming…";
         } else if (event === "complete") {
+          runSummary.status = data.status || "success";
+          if (Array.isArray(data.tools_used)) runSummary.tools_used = data.tools_used;
+          if (data.model) runSummary.model = data.model;
+          runSummary.content_plan_item_ids = data.output?.content_plan_item_ids || [];
+          addLog("Agent run: " + selectedAgent, runSummary);
           statusEl.textContent = "done (" + (data.status || "success") + ")";
           if (structuredAgent) {
             replyEl.innerHTML = "<div class='result'><h3>" + escapeHtml(selectedAgent[0].toUpperCase() + selectedAgent.slice(1)) + " strategy</h3>" + renderAgentOutput(data.output, selectedAgent) + "</div>";
@@ -297,6 +341,9 @@ async function send() {
             replyEl.textContent = typeof data.output === "string" ? data.output : JSON.stringify(data.output);
           }
         } else if (event === "error") {
+          runSummary.status = "error";
+          runSummary.error = data.error || "Agent stream failed";
+          addLog("Agent run: " + selectedAgent, runSummary);
           replyEl.textContent += "\n[error] " + (data.error || JSON.stringify(data));
           statusEl.textContent = "error";
         }

@@ -33,6 +33,10 @@ CRITICAL INTENT ROUTING — answer the USER REQUEST, do not ignore it:
 
 Creative calendar rules (content_calendar mode only):
 - Every calendar item MUST include "reasoning" tied to competitor data / brand profile.
+- Every calendar item MUST include separate "strategy_reasoning" and "performance_goal" fields.
+- Every Reel or Story MUST include a production-ready "video_prompt"; use an empty string for carousels.
+- Use previous_content_performance in CONTEXT to improve upcoming recommendations when present.
+- Never invent performance metrics, customer research, competitor facts, or product claims.
 - Hooks must win in the first 1.5 seconds.
 - Captions must match brand_voice.
 - Hashtags: focused, not spammy (5–12).
@@ -66,6 +70,9 @@ Formatting:
       "cta": "...",
       "audio_suggestion": "...",
       "transcript": "...",
+      "video_prompt": "...",
+      "strategy_reasoning": "...",
+      "performance_goal": "reach | saves | shares | comments | profile_visits | follows | conversion",
       "reasoning": "..."
     }
   ],

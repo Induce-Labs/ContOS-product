@@ -18,6 +18,7 @@ class PlaybookOutput(BaseModel):
 
 
 class InstagramCalendarItem(BaseModel):
+    content_plan_item_id: str = ""
     day: int = 0
     date: str = ""
     content_type: str = ""
@@ -27,6 +28,9 @@ class InstagramCalendarItem(BaseModel):
     cta: str = ""
     audio_suggestion: str = ""
     transcript: str = ""
+    video_prompt: str = ""
+    strategy_reasoning: str = ""
+    performance_goal: str = ""
     reasoning: str = ""
 
 
@@ -53,6 +57,7 @@ class InstagramOutput(BaseModel):
     comparison_summary: str = ""
     differentiation_angles: list[str] = Field(default_factory=list)
     analysis: str = ""
+    content_plan_item_ids: list[str] = Field(default_factory=list)
 
 
 class LinkedInPostIdea(BaseModel):
