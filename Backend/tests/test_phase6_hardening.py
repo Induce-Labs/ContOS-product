@@ -43,6 +43,7 @@ class TestSecretExposureGuards:
         "POSTIZ_CLIENT_ID",
         "POSTIZ_URL",
         "POSTIZ_REDIRECT_URI",
+        "CONTOS_PROVISION_SECRET",
     )
 
     def test_frontend_env_example_has_no_server_secrets(self) -> None:

@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -102,6 +102,18 @@ class Settings(BaseSettings):
         default="",
         validation_alias="POSTIZ_TOKEN_ENCRYPTION_KEY",
     )
+    contos_provision_secret: str = Field(
+        default="",
+        validation_alias="CONTOS_PROVISION_SECRET",
+    )
+
+    @field_validator("contos_provision_secret", mode="before")
+    @classmethod
+    def _normalize_contos_provision_secret(cls, value: object) -> object:
+        """Collapse whitespace so pasted hex secrets still match Postiz timingSafeEqual."""
+        if isinstance(value, str):
+            return "".join(value.split())
+        return value
 
     @property
     def cors_origin_list(self) -> list[str]:
@@ -118,6 +130,14 @@ class Settings(BaseSettings):
     @property
     def postiz_public_api_base_url(self) -> str:
         return f"{self.postiz_base_url}/api/public/v1"
+
+    @property
+    def postiz_provision_avatar_url(self) -> str:
+        return f"{self.postiz_base_url}/api/internal/contos/provision-avatar"
+
+    @property
+    def postiz_rotate_avatar_token_url(self) -> str:
+        return f"{self.postiz_base_url}/api/internal/contos/rotate-avatar-token"
 
     def resolved_llm_provider(self) -> str:
         provider = self.llm_provider.strip().lower()

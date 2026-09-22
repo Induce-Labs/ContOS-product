@@ -182,13 +182,19 @@ export async function completeOAuthCallback(): Promise<void> {
     )
   }
 
+  // detectSessionInUrl may already be exchanging ?code=; wait before a manual exchange
+  // to avoid racing the auth lock / consuming the one-time code twice.
   if (code) {
+    const existing = await waitForSession(6, 300)
+    if (existing) {
+      return
+    }
+
     const { error } = await supabase.auth.exchangeCodeForSession(code)
 
     if (error) {
-      // detectSessionInUrl may have already exchanged the same one-time code.
-      const existing = await waitForSession(3, 250)
-      if (existing) {
+      const afterExchange = await waitForSession(3, 250)
+      if (afterExchange) {
         return
       }
       if (isRecoverableCodeExchangeError(error)) {

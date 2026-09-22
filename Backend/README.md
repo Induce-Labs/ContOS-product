@@ -77,14 +77,14 @@ API docs: [http://localhost:8000/docs](http://localhost:8000/docs)
 See [`Docs/phase-postiz-linkedin.md`](../Docs/phase-postiz-linkedin.md).
 
 ```
-GET  /api/postiz/connect
-POST /api/postiz/oauth/callback
-GET  /api/postiz/status
+GET  /api/postiz/connect?avatar_id=<uuid>
+GET  /api/postiz/status?avatar_id=<uuid>
+POST /api/postiz/claim
 Authorization: Bearer <supabase_access_token>
 ```
 
-Requires backend env: `POSTIZ_URL`, `POSTIZ_CLIENT_ID`, `POSTIZ_CLIENT_SECRET`,
-`POSTIZ_REDIRECT_URI`, `POSTIZ_TOKEN_ENCRYPTION_KEY`. Never expose these to Vite.
+Requires backend env: `POSTIZ_URL`, `CONTOS_PROVISION_SECRET`, `POSTIZ_TOKEN_ENCRYPTION_KEY`.
+Never expose these to Vite. Org-consent callback is gone (410).
 
 ### Scrape enqueue
 

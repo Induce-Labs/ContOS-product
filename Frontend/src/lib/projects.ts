@@ -151,9 +151,15 @@ export async function resolveDashboardPath(): Promise<string> {
   return `/dashboard/${activeProject.id}`
 }
 
-export async function resolvePostAuthPath(): Promise<string> {
+export async function resolvePostAuthPath(options?: {
+  hydrateLanguage?: boolean
+}): Promise<string> {
+  const hydrateLanguage = options?.hydrateLanguage !== false
   const profile = await ensureUserProfile()
-  await hydrateAppLanguageFromProfile(profile)
+
+  if (hydrateLanguage) {
+    await hydrateAppLanguageFromProfile(profile)
+  }
 
   if (profile.onboarding_completed_at === null) {
     return resolveCurrentOnboardingPath()

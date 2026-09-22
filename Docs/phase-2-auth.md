@@ -95,8 +95,10 @@ sequenceDiagram
 
 - Anon key only in frontend; no service-role key exposed
 - Sessions persisted by Supabase client (localStorage)
-- OAuth uses explicit `flowType: 'pkce'` on `createClient` plus `exchangeCodeForSession` on `/auth/callback`
+- OAuth uses explicit `flowType: 'pkce'` on `createClient`; `/auth/callback` waits for the session (manual `exchangeCodeForSession` only as fallback) to avoid double-consuming the auth code
 - `AuthProvider` skips heavy `getUser()` validation on `/auth/callback` to avoid racing PKCE exchange
+- Callback page runs once (no `t` effect dependency), resolves the next route **without** hydrating language first, then navigates and applies language afterward — prevents “Completing sign in…” from hanging when i18n re-renders
+- Callback settlement uses refs (`startedRef` / `settledRef`), not a local `isMounted` cleared by effect cleanup — React Strict Mode remount must not skip `navigate` after the session is already stored
 - Callback page enforces a 20s timeout so hung network calls surface an error instead of an infinite spinner
 - Protected routes block unauthenticated access
 - Project queries subject to RLS from Phase 1

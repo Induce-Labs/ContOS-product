@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from './useAuth'
 import {
@@ -13,85 +13,74 @@ export function useDashboardShell() {
   const navigate = useNavigate()
   const { user, signOut } = useAuth()
   const [projects, setProjects] = useState<Project[]>([])
-  const [activeProject, setActiveProject] = useState<Project | null>(null)
   const [projectsLoading, setProjectsLoading] = useState(true)
-  const [projectsError, setProjectsError] = useState<string | null>(null)
+  const [projectsFetchError, setProjectsFetchError] = useState<string | null>(null)
   const [isSigningOut, setIsSigningOut] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
-  const applyProjects = useCallback(
-    (userProjects: Project[]) => {
-      setProjects(userProjects)
+  // Derive from URL + loaded list so Calendar/Postiz never keep a stale Avatar A
+  // while the route already points at Avatar B.
+  const activeProject = useMemo(() => {
+    if (projects.length === 0) {
+      return null
+    }
+    if (projectId) {
+      return projects.find((project) => project.id === projectId) ?? null
+    }
+    return resolveActiveProject(projects)
+  }, [projectId, projects])
 
-      if (userProjects.length === 0) {
-        setActiveProject(null)
-        return
-      }
+  const projectsError = useMemo(() => {
+    if (projectsFetchError) {
+      return projectsFetchError
+    }
+    if (
+      projectId &&
+      !projectsLoading &&
+      projects.length > 0 &&
+      !projects.some((project) => project.id === projectId)
+    ) {
+      return 'Project not found or you do not have access to it.'
+    }
+    return null
+  }, [projectId, projects, projectsFetchError, projectsLoading])
 
-      const selectedProject = projectId
-        ? (userProjects.find((project) => project.id === projectId) ?? null)
-        : resolveActiveProject(userProjects)
-
-      if (projectId && !selectedProject) {
-        setProjectsError('Project not found or you do not have access to it.')
-        setActiveProject(resolveActiveProject(userProjects))
-        return
-      }
-
-      if (selectedProject) {
-        setActiveProject(selectedProject)
-        setLastUsedProjectId(selectedProject.id)
-
-        if (!projectId) {
-          navigate(`/dashboard/${selectedProject.id}`, { replace: true })
-        }
-      }
-    },
-    [navigate, projectId],
-  )
-
-  const refreshProjects = useCallback(async () => {
+  const loadProjects = useCallback(async () => {
+    setProjectsLoading(true)
+    setProjectsFetchError(null)
     try {
       const userProjects = await fetchUserProjects()
-      applyProjects(userProjects)
-      setProjectsError(null)
+      setProjects(userProjects)
     } catch (error) {
-      setProjectsError(error instanceof Error ? error.message : 'Failed to load dashboard')
+      setProjectsFetchError(
+        error instanceof Error ? error.message : 'Failed to load dashboard',
+      )
+    } finally {
+      setProjectsLoading(false)
     }
-  }, [applyProjects])
+  }, [])
 
   useEffect(() => {
-    let isMounted = true
-
-    async function loadProjects() {
-      setProjectsLoading(true)
-      setProjectsError(null)
-
-      try {
-        const userProjects = await fetchUserProjects()
-
-        if (!isMounted) {
-          return
-        }
-
-        applyProjects(userProjects)
-      } catch (error) {
-        if (isMounted) {
-          setProjectsError(error instanceof Error ? error.message : 'Failed to load dashboard')
-        }
-      } finally {
-        if (isMounted) {
-          setProjectsLoading(false)
-        }
-      }
-    }
-
+    // Initial + identity-stable reload of the avatar list (external store → React state).
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- fetchUserProjects populates projects state
     void loadProjects()
+  }, [loadProjects])
 
-    return () => {
-      isMounted = false
+  useEffect(() => {
+    if (projectsLoading || projectId || projects.length === 0) {
+      return
     }
-  }, [applyProjects])
+    const selected = resolveActiveProject(projects)
+    if (selected) {
+      navigate(`/dashboard/${selected.id}`, { replace: true })
+    }
+  }, [navigate, projectId, projects, projectsLoading])
+
+  useEffect(() => {
+    if (activeProject) {
+      setLastUsedProjectId(activeProject.id)
+    }
+  }, [activeProject])
 
   async function handleSignOut() {
     setIsSigningOut(true)
@@ -100,7 +89,7 @@ export function useDashboardShell() {
       await signOut()
       navigate('/login', { replace: true })
     } catch (error) {
-      setProjectsError(error instanceof Error ? error.message : 'Sign out failed')
+      setProjectsFetchError(error instanceof Error ? error.message : 'Sign out failed')
       setIsSigningOut(false)
     }
   }
@@ -117,6 +106,6 @@ export function useDashboardShell() {
     sidebarOpen,
     setSidebarOpen,
     handleSignOut,
-    refreshProjects,
+    refreshProjects: loadProjects,
   }
 }

@@ -32,3 +32,15 @@ class PostizOAuthStateError(PostizServiceError):
 
 class PostizAuthorizationInvalidError(PostizServiceError):
     """Raised when a stored Postiz authorization is revoked or no longer valid."""
+
+
+class PostizIntegrationClaimError(PostizServiceError):
+    """Raised when a LinkedIn integration cannot be claimed for this ContOS user."""
+
+
+class PostizNotConnectedError(PostizServiceError):
+    """Raised when the avatar has no claimed LinkedIn integration for publishing."""
+
+
+class PostizPostNotFoundError(PostizServiceError):
+    """Raised when a Postiz post is missing or not owned by this avatar's integration."""

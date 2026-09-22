@@ -1,0 +1,89 @@
+﻿diff --git a/libraries/nestjs-libraries/src/integrations/social/linkedin.provider.ts b/libraries/nestjs-libraries/src/integrations/social/linkedin.provider.ts
+index 7816f70..c6f10d2 100644
+--- a/libraries/nestjs-libraries/src/integrations/social/linkedin.provider.ts
++++ b/libraries/nestjs-libraries/src/integrations/social/linkedin.provider.ts
+@@ -31,15 +31,9 @@ export class LinkedinProvider extends SocialAbstract implements SocialProvider {
+   oneTimeToken = true;
+ 
+   isBetweenSteps = false;
+-  scopes = [
+-    'openid',
+-    'profile',
+-    'w_member_social',
+-    'r_basicprofile',
+-    'rw_organization_admin',
+-    'w_organization_social',
+-    'r_organization_social',
+-  ];
++  // Personal LinkedIn: ContOS app only has openid/profile/w_member_social.
++  // Broader scopes ΓåÆ LinkedIn unauthorized_scope / "Bummer".
++  scopes = ['openid', 'profile', 'w_member_social'];
+   override maxConcurrentJob = 2;
+   refreshWait = true;
+   editor = 'normal' as const;
+@@ -115,14 +109,6 @@ export class LinkedinProvider extends SocialAbstract implements SocialProvider {
+       })
+     ).json();
+ 
+-    const { vanityName } = await (
+-      await fetch('https://api.linkedin.com/v2/me', {
+-        headers: {
+-          Authorization: `Bearer ${accessToken}`,
+-        },
+-      })
+-    ).json();
+-
+     const {
+       name,
+       sub: id,
+@@ -135,6 +121,9 @@ export class LinkedinProvider extends SocialAbstract implements SocialProvider {
+       })
+     ).json();
+ 
++    // /v2/me needs r_basicprofile; soft-fail when the app lacks it.
++    const vanityName = await this.resolveVanityName(accessToken);
++
+     return {
+       id,
+       accessToken,
+@@ -207,13 +196,8 @@ export class LinkedinProvider extends SocialAbstract implements SocialProvider {
+       })
+     ).json();
+ 
+-    const { vanityName } = await (
+-      await fetch('https://api.linkedin.com/v2/me', {
+-        headers: {
+-          Authorization: `Bearer ${accessToken}`,
+-        },
+-      })
+-    ).json();
++    // /v2/me needs r_basicprofile; soft-fail when the app lacks it.
++    const vanityName = await this.resolveVanityName(accessToken);
+ 
+     return {
+       id,
+@@ -226,6 +210,24 @@ export class LinkedinProvider extends SocialAbstract implements SocialProvider {
+     };
+   }
+ 
++  /** Optional vanity handle; empty when /v2/me is forbidden. */
++  private async resolveVanityName(accessToken: string): Promise<string> {
++    try {
++      const response = await fetch('https://api.linkedin.com/v2/me', {
++        headers: {
++          Authorization: `Bearer ${accessToken}`,
++        },
++      });
++      if (!response.ok) {
++        return '';
++      }
++      const body = (await response.json()) as { vanityName?: string };
++      return body.vanityName || '';
++    } catch {
++      return '';
++    }
++  }
++
+   async company(token: string, data: { url: string }) {
+     const { url } = data;
+     const getCompanyVanity = url.match(

@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useNavigate } from 'react-router-dom'
+import i18n from '../i18n'
 import { completeOAuthCallback } from '../lib/auth'
+import { hydrateAppLanguageFromProfile } from '../lib/onboarding'
 import { resolvePostAuthPath } from '../lib/projects'
 
 const CALLBACK_TIMEOUT_MS = 20_000
@@ -28,41 +30,52 @@ export function AuthCallbackPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const startedRef = useRef(false)
+  const settledRef = useRef(false)
 
   useEffect(() => {
-    let isMounted = true
+    // React Strict Mode remounts effects in dev: a local `isMounted` flag would be
+    // cleared on cleanup while `startedRef` blocks a second run — leaving the UI
+    // stuck on this page even though the session was stored. Settle via refs instead.
+    if (startedRef.current) {
+      return
+    }
+    startedRef.current = true
 
     async function handleCallback() {
+      const timeoutMessage = i18n.t('auth.callback.timeout')
+      const unexpectedMessage = i18n.t('auth.callback.failedUnexpected')
+
       try {
+        // Skip language hydrate here — changing i18n mid-callback re-renders this
+        // page and would cancel navigate if the effect depended on `t`.
         const nextPath = await withTimeout(
           (async () => {
             await completeOAuthCallback()
-            return resolvePostAuthPath()
+            return resolvePostAuthPath({ hydrateLanguage: false })
           })(),
           CALLBACK_TIMEOUT_MS,
-          t('auth.callback.timeout'),
+          timeoutMessage,
         )
 
-        if (isMounted) {
+        if (!settledRef.current) {
+          settledRef.current = true
           navigate(nextPath, { replace: true })
+          // Apply preferred language after navigate so i18n updates cannot cancel this flow.
+          void hydrateAppLanguageFromProfile()
         }
       } catch (error) {
-        if (isMounted) {
+        if (!settledRef.current) {
+          settledRef.current = true
           setErrorMessage(
-            error instanceof Error
-              ? error.message
-              : t('auth.callback.failedUnexpected'),
+            error instanceof Error ? error.message : unexpectedMessage,
           )
         }
       }
     }
 
     void handleCallback()
-
-    return () => {
-      isMounted = false
-    }
-  }, [navigate, t])
+  }, [navigate])
 
   if (errorMessage) {
     return (
