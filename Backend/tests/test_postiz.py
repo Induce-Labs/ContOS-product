@@ -12,7 +12,7 @@ import pytest
 from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
 
-from app.clients.postiz_client import PostizClient, is_provision_rotate_required_conflict
+from app.clients.postiz_client import PostizClient, is_provision_rotate_required_conflict, strip_unsupported_linkedin_prompt
 from app.config import Settings
 from app.errors import (
     PostizAuthorizationInvalidError,
@@ -162,6 +162,36 @@ class TestPostizClientNavigation:
         client = PostizClient(_settings())
         with pytest.raises(PostizServiceError):
             client.validate_navigation_url("https://evil.example/phish")
+
+    def test_strip_unsupported_linkedin_prompt_none(self) -> None:
+        raw = (
+            "https://www.linkedin.com/oauth/v2/authorization?response_type=code"
+            "&client_id=abc&prompt=none&redirect_uri=https%3A%2F%2Fpostiz.example"
+            "%2Fintegrations%2Fsocial%2Flinkedin&state=xyz"
+            "&scope=openid%20profile%20w_member_social"
+        )
+        cleaned = strip_unsupported_linkedin_prompt(raw)
+        assert "prompt=" not in cleaned
+        assert "prompt=none" not in cleaned
+        assert "scope=openid%20profile%20w_member_social" in cleaned
+        assert "state=xyz" in cleaned
+        assert "response_type=code" in cleaned
+
+    def test_get_linkedin_authorization_url_strips_prompt_none(self) -> None:
+        settings = _settings()
+        client = PostizClient(settings)
+        dirty = (
+            "https://www.linkedin.com/oauth/v2/authorization?response_type=code"
+            "&client_id=abc&prompt=none&redirect_uri="
+            "https%3A%2F%2Fpostiz.contos.now%2Fintegrations%2Fsocial%2Flinkedin"
+            "&state=s1&scope=openid%20profile%20w_member_social"
+        )
+        with patch.object(client, "_request_json", return_value={"url": dirty}):
+            url = client.get_linkedin_authorization_url(
+                "pos_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            )
+        assert "prompt=" not in url
+        assert "openid%20profile%20w_member_social" in url
 
     def test_provision_rotates_only_on_expected_409(self) -> None:
         settings = _settings()
@@ -747,6 +777,26 @@ class TestPostizMigrationAndSecrets:
     def test_backend_env_example_documents_provision_secret(self) -> None:
         content = BACKEND_ENV_EXAMPLE.read_text(encoding="utf-8")
         assert "CONTOS_PROVISION_SECRET=" in content
+
+    def test_personal_linkedin_auth_url_has_no_prompt_none(self) -> None:
+        """Regression: reconnect must not silently reuse LinkedIn via prompt=none."""
+        provider = (
+            REPO_ROOT
+            / "_postiz-v2.23.0"
+            / "libraries"
+            / "nestjs-libraries"
+            / "src"
+            / "integrations"
+            / "social"
+            / "linkedin.provider.ts"
+        )
+        source = provider.read_text(encoding="utf-8")
+        assert "prompt=none" not in source
+        assert "&prompt=" not in source
+        assert "scopes = ['openid', 'profile', 'w_member_social']" in source
+        assert "oauth/v2/authorization?response_type=code&client_id=" in source
+        assert "state=${state}" in source
+        assert "redirect_uri=" in source
 
 
 def _posts_service(

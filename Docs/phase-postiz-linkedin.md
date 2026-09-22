@@ -149,6 +149,7 @@ pytest tests/test_postiz.py tests/test_phase6_hardening.py -q
 - Provision 409 rotates only when Postiz indicates missing/unrecoverable token; other 409s propagate.
 - Concurrent provision for the same avatar relies on Postiz locking + DB unique indexes.
 - Postiz personal LinkedIn OAuth must request only scopes approved on the ContOS LinkedIn app (`openid`, `profile`, `w_member_social`). Broader scopes cause LinkedIn `unauthorized_scope` / “Bummer” before callback — see [postiz-linkedin-oauth-scopes-fix.md](./postiz-linkedin-oauth-scopes-fix.md).
+- Personal LinkedIn authorize URL must **not** include `prompt=none` (silent session reuse on reconnect). ContOS `PostizClient` strips undocumented `prompt` from LinkedIn authorize URLs returned to the browser. Postiz source is also patched; deploy to the VPS when SSH is available. LinkedIn may still reuse an active browser session/grant; ContOS UX asks users to switch/sign out in the OAuth popup. Server-side LinkedIn token revoke is intentionally omitted (not in official 3-legged docs).
 - Calendar must derive Postiz `avatar_id` from the URL `projectId` (never a stale `activeProject` from another avatar). See shell + CalendarPage fix for same-user multi-avatar isolation.
 - Media uploads are not supported in ContOS v1 (text-only posts).
 - Ownership lookup for mutate/delete uses a wide Postiz date window because Postiz public API has no `GET /posts/:id`.

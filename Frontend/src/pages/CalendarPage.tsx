@@ -148,6 +148,7 @@ function CalendarPostizPanel({ avatarId }: { avatarId: string }) {
   const [isClaiming, setIsClaiming] = useState(false)
   const [isDisconnecting, setIsDisconnecting] = useState(false)
   const [disconnectOpen, setDisconnectOpen] = useState(false)
+  const [connectPrepOpen, setConnectPrepOpen] = useState(false)
   const [disconnectWarning, setDisconnectWarning] = useState<string | null>(null)
   const popupRef = useRef<Window | null>(null)
   const pollTimerRef = useRef<number | null>(null)
@@ -390,6 +391,7 @@ function CalendarPostizPanel({ avatarId }: { avatarId: string }) {
   ])
 
   async function handleConnectLinkedIn() {
+    setConnectPrepOpen(false)
     setErrorMessage(null)
     setUiState('connecting')
 
@@ -417,6 +419,11 @@ function CalendarPostizPanel({ avatarId }: { avatarId: string }) {
             : t('postiz.calendar.connectFailed'),
       )
     }
+  }
+
+  function requestConnectLinkedIn() {
+    setErrorMessage(null)
+    setConnectPrepOpen(true)
   }
 
   async function handleDisconnectConfirm() {
@@ -469,9 +476,15 @@ function CalendarPostizPanel({ avatarId }: { avatarId: string }) {
           <p className="mt-3 max-w-xl text-sm leading-relaxed text-ink-muted">
             {t('postiz.calendar.connectBody')}
           </p>
+          <p className="mt-3 max-w-xl text-sm leading-relaxed text-ink-muted">
+            {t('postiz.calendar.switchAccountHint')}
+          </p>
+          <p className="mt-2 max-w-xl text-sm leading-relaxed text-ink-muted">
+            {t('postiz.calendar.switchAccountDetail')}
+          </p>
           <button
             type="button"
-            onClick={() => void handleConnectLinkedIn()}
+            onClick={requestConnectLinkedIn}
             className="contos-btn contos-btn--rect contos-btn--primary mt-6"
           >
             {t('postiz.calendar.connectLinkedIn')}
@@ -489,6 +502,12 @@ function CalendarPostizPanel({ avatarId }: { avatarId: string }) {
           </h2>
           <p className="mt-3 max-w-xl text-sm leading-relaxed text-ink-muted">
             {t('postiz.calendar.connectingBody')}
+          </p>
+          <p className="mt-3 max-w-xl text-sm leading-relaxed text-ink-muted">
+            {t('postiz.calendar.switchAccountHint')}
+          </p>
+          <p className="mt-2 max-w-xl text-sm leading-relaxed text-ink-muted">
+            {t('postiz.calendar.switchAccountDetail')}
           </p>
         </section>
       )}
@@ -556,6 +575,9 @@ function CalendarPostizPanel({ avatarId }: { avatarId: string }) {
                       })
                     : t('postiz.calendar.linkedinConnected')}
                 </p>
+                <p className="mt-2 max-w-xl text-sm leading-relaxed text-ink-muted">
+                  {t('postiz.calendar.reconnectSwitchHint')}
+                </p>
               </div>
               <div className="flex flex-wrap gap-3">
                 <button
@@ -567,7 +589,7 @@ function CalendarPostizPanel({ avatarId }: { avatarId: string }) {
                 </button>
                 <button
                   type="button"
-                  onClick={() => void handleConnectLinkedIn()}
+                  onClick={requestConnectLinkedIn}
                   className="contos-btn contos-btn--rect contos-btn--secondary"
                 >
                   {t('postiz.calendar.reconnectLinkedIn')}
@@ -599,7 +621,7 @@ function CalendarPostizPanel({ avatarId }: { avatarId: string }) {
           <div className="mt-6 flex flex-wrap gap-3">
             <button
               type="button"
-              onClick={() => void handleConnectLinkedIn()}
+              onClick={requestConnectLinkedIn}
               className="contos-btn contos-btn--rect contos-btn--primary"
             >
               {t('common.retry')}
@@ -614,6 +636,17 @@ function CalendarPostizPanel({ avatarId }: { avatarId: string }) {
           </div>
         </section>
       )}
+
+      <ConfirmDialog
+        open={connectPrepOpen}
+        title={t('postiz.calendar.connectPrepTitle')}
+        description={t('postiz.calendar.connectPrepBody')}
+        confirmLabel={t('postiz.calendar.connectPrepConfirm')}
+        cancelLabel={t('common.cancel')}
+        tone="default"
+        onConfirm={() => void handleConnectLinkedIn()}
+        onCancel={() => setConnectPrepOpen(false)}
+      />
 
       <ConfirmDialog
         open={disconnectOpen}

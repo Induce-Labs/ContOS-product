@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import time
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import parse_qsl, quote, urlencode, urlparse, urlunparse
 from uuid import UUID
 
 import httpx
@@ -60,6 +60,26 @@ def is_provision_rotate_required_conflict(status_code: int, body: Any) -> bool:
     if not message:
         return False
     return any(marker in message for marker in _ROTATE_REQUIRED_MSG_MARKERS)
+
+
+def strip_unsupported_linkedin_prompt(url: str) -> str:
+    """Remove LinkedIn authorize `prompt` query params ContOS does not rely on.
+
+    Postiz historically appended undocumented `prompt=none`, which silently reuses
+    the browser LinkedIn session on ContOS reconnect. Official LinkedIn 3-legged
+    docs do not list `prompt`; ContOS strips it from URLs returned to the browser
+    even if a stale Postiz build still emits it.
+    """
+    parsed = urlparse(url)
+    if "linkedin.com" not in parsed.netloc.lower():
+        return url
+    if not parsed.path.startswith("/oauth/"):
+        return url
+    pairs = parse_qsl(parsed.query, keep_blank_values=True)
+    filtered = [(key, value) for key, value in pairs if key.lower() != "prompt"]
+    if len(filtered) == len(pairs):
+        return url
+    return urlunparse(parsed._replace(query=urlencode(filtered, quote_via=quote)))
 
 
 class PostizClient:
@@ -239,6 +259,7 @@ class PostizClient:
                 "Postiz LinkedIn connect response must include a string url field.",
             )
         url = data["url"].strip()
+        url = strip_unsupported_linkedin_prompt(url)
         self.validate_navigation_url(url, allow_linkedin=True)
         return url
 
