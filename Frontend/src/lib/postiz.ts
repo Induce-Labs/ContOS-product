@@ -217,6 +217,17 @@ export async function startPostizConnect(avatarId: string): Promise<PostizConnec
 export type PostizPostType = 'now' | 'schedule' | 'draft' | 'update'
 export type PostizPostStatus = 'draft' | 'schedule'
 
+export const POSTIZ_MAX_POST_IMAGES = 10
+
+export type PostizMediaItem = {
+  id: string
+  path: string
+  alt: string | null
+  thumbnail: string | null
+  name: string | null
+  original_name: string | null
+}
+
 export type PostizCalendarPost = {
   id: string
   content: string
@@ -226,11 +237,30 @@ export type PostizCalendarPost = {
   release_url: string | null
   integration_id: string
   integration_name: string | null
+  images: PostizMediaItem[]
 }
 
 export type PostizDisconnectResponse = {
   disconnected: boolean
   warning: string
+}
+
+function parseMediaItem(value: unknown, index: number): PostizMediaItem {
+  if (typeof value !== 'object' || value === null) {
+    throw new PostizApiError(`Postiz media item at index ${index} is invalid.`)
+  }
+  const item = value as Record<string, unknown>
+  if (typeof item.id !== 'string' || typeof item.path !== 'string') {
+    throw new PostizApiError(`Postiz media item at index ${index} is missing id/path.`)
+  }
+  return {
+    id: item.id,
+    path: item.path,
+    alt: typeof item.alt === 'string' ? item.alt : null,
+    thumbnail: typeof item.thumbnail === 'string' ? item.thumbnail : null,
+    name: typeof item.name === 'string' ? item.name : null,
+    original_name: typeof item.original_name === 'string' ? item.original_name : null,
+  }
 }
 
 function parseCalendarPost(value: unknown, index: number): PostizCalendarPost {
@@ -260,6 +290,10 @@ function parseCalendarPost(value: unknown, index: number): PostizCalendarPost {
       `Postiz posts returned an unexpected integration_name at index ${index}.`,
     )
   }
+  const imagesRaw = item.images
+  if (imagesRaw != null && !Array.isArray(imagesRaw)) {
+    throw new PostizApiError(`Postiz posts returned unexpected images at index ${index}.`)
+  }
   return {
     id: item.id,
     content: item.content,
@@ -270,6 +304,7 @@ function parseCalendarPost(value: unknown, index: number): PostizCalendarPost {
     integration_id: item.integration_id,
     integration_name:
       typeof item.integration_name === 'string' ? item.integration_name : null,
+    images: Array.isArray(imagesRaw) ? imagesRaw.map(parseMediaItem) : [],
   }
 }
 
@@ -372,6 +407,7 @@ export async function createPostizPost(input: {
   content: string
   publishDate: string
   postId?: string
+  images?: Array<{ id: string; path: string; alt?: string | null; thumbnail?: string | null }>
 }): Promise<unknown> {
   const accessToken = await requireAccessToken()
   const id = requireAvatarId(input.avatarId)
@@ -387,6 +423,12 @@ export async function createPostizPost(input: {
       content: input.content,
       publish_date: input.publishDate,
       post_id: input.postId ?? null,
+      images: (input.images ?? []).map((image) => ({
+        id: image.id,
+        path: image.path,
+        ...(image.alt ? { alt: image.alt } : {}),
+        ...(image.thumbnail ? { thumbnail: image.thumbnail } : {}),
+      })),
     }),
   })
 
@@ -394,6 +436,31 @@ export async function createPostizPost(input: {
     throw new PostizApiError(await readErrorDetail(response), response.status)
   }
   return response.json()
+}
+
+export async function uploadPostizMedia(
+  avatarId: string,
+  file: File,
+): Promise<PostizMediaItem> {
+  const accessToken = await requireAccessToken()
+  const id = requireAvatarId(avatarId)
+  const url = new URL(`${getApiBaseUrl()}/api/postiz/upload`)
+  url.searchParams.set('avatar_id', id)
+  const body = new FormData()
+  body.append('file', file)
+
+  const response = await fetch(url.toString(), {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body,
+  })
+
+  if (!response.ok) {
+    throw new PostizApiError(await readErrorDetail(response), response.status)
+  }
+  return parseMediaItem(await response.json(), 0)
 }
 
 export async function changePostizPostStatus(

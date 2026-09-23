@@ -2,17 +2,20 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Literal
+from typing import Any, Literal, Sequence
 from uuid import UUID
 
 from app.clients.postiz_client import PostizClient
 from app.clients.postiz_repository import PostizRepository
 from app.config import Settings
 from app.errors import (
+    PostizBadRequestError,
+    PostizMediaOwnershipError,
     PostizNotConnectedError,
     PostizPostNotFoundError,
     PostizServiceError,
@@ -35,6 +38,31 @@ _ISO_DATETIME_RE = re.compile(
     r"(Z|[+-]\d{2}:\d{2})$",
 )
 
+MAX_POST_IMAGES = 10
+_IMAGE_EXTENSIONS = frozenset({".png", ".jpg", ".jpeg", ".gif", ".webp"})
+_ALLOWED_UPLOAD_MIME = frozenset(
+    {
+        "image/jpeg",
+        "image/png",
+        "image/gif",
+        "image/webp",
+        "image/avif",
+        "image/bmp",
+        "image/tiff",
+    },
+)
+_MAX_IMAGE_BYTES = 10 * 1024 * 1024
+
+
+@dataclass(frozen=True)
+class MediaRef:
+    id: str
+    path: str
+    alt: str | None = None
+    thumbnail: str | None = None
+    name: str | None = None
+    original_name: str | None = None
+
 
 @dataclass(frozen=True)
 class CalendarPost:
@@ -46,6 +74,7 @@ class CalendarPost:
     release_url: str | None
     integration_id: str
     integration_name: str | None
+    images: list[MediaRef] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -97,6 +126,55 @@ class PostizPostsService:
             if mapped is not None and mapped.integration_id == integration_id
         ]
 
+    def upload_media(
+        self,
+        *,
+        contos_user_id: UUID,
+        avatar_id: UUID,
+        filename: str,
+        content: bytes,
+        content_type: str,
+    ) -> MediaRef:
+        mime = (content_type or "").strip().lower() or "application/octet-stream"
+        if mime not in _ALLOWED_UPLOAD_MIME:
+            raise PostizBadRequestError(
+                f"Unsupported image type {mime!r}. "
+                "Phase 1 allows JPEG, PNG, GIF, WebP, AVIF, BMP, and TIFF only.",
+            )
+        if not content:
+            raise PostizBadRequestError("Uploaded file must not be empty.")
+        if len(content) > _MAX_IMAGE_BYTES:
+            raise PostizBadRequestError(
+                f"Image exceeds the maximum size of {_MAX_IMAGE_BYTES} bytes.",
+            )
+        if self._path_extension(filename) == ".mp4" or mime == "video/mp4":
+            raise PostizBadRequestError(
+                "Video uploads are not supported in Phase 1. Use images only.",
+            )
+
+        access_token, _integration_id = self._require_connected_context(
+            contos_user_id=contos_user_id,
+            avatar_id=avatar_id,
+        )
+        raw = self._client.upload_file(
+            access_token,
+            filename=filename or "upload",
+            content=content,
+            content_type=mime,
+        )
+        media = self._parse_media_ref(raw, require_name=False)
+        if media is None:
+            raise PostizServiceError("Postiz upload returned an incomplete media object.")
+        logger.info(
+            "Uploaded Postiz media for avatar",
+            extra={
+                "contos_user_id": str(contos_user_id),
+                "avatar_id": str(avatar_id),
+                "media_id": media.id,
+            },
+        )
+        return media
+
     def create_or_update_post(
         self,
         *,
@@ -106,16 +184,17 @@ class PostizPostsService:
         content: str,
         publish_date: str,
         post_id: str | None = None,
+        images: Sequence[MediaRef] | None = None,
     ) -> Any:
         cleaned_content = content.strip()
         if not cleaned_content:
-            raise PostizServiceError("Post content must not be empty.")
+            raise PostizBadRequestError("Post content must not be empty.")
 
         if post_type == "update":
             if not post_id or not post_id.strip():
-                raise PostizServiceError("post_id is required when type is update.")
+                raise PostizBadRequestError("post_id is required when type is update.")
         elif post_id is not None and post_id.strip():
-            raise PostizServiceError("post_id is only allowed when type is update.")
+            raise PostizBadRequestError("post_id is only allowed when type is update.")
 
         date_value = self._require_iso_datetime(publish_date, field_name="publish_date")
         access_token, integration_id = self._require_connected_context(
@@ -123,9 +202,24 @@ class PostizPostsService:
             avatar_id=avatar_id,
         )
 
+        normalized_images = self._normalize_images(images)
+        self._assert_media_owned_by_avatar_org(
+            access_token=access_token,
+            images=normalized_images,
+        )
+
         value_entry: dict[str, Any] = {
             "content": cleaned_content,
-            "image": [],
+            # Complete final array — empty clears media on update.
+            "image": [
+                {
+                    "id": item.id,
+                    "path": item.path,
+                    **({"alt": item.alt} if item.alt else {}),
+                    **({"thumbnail": item.thumbnail} if item.thumbnail else {}),
+                }
+                for item in normalized_images
+            ],
         }
         if post_type == "update":
             owned = self._require_owned_post(
@@ -144,6 +238,7 @@ class PostizPostsService:
                 {
                     "integration": {"id": integration_id},
                     "value": [value_entry],
+                    # Native LinkedIn multi-image; do not enable PDF carousel.
                     "settings": {"__type": "linkedin"},
                 },
             ],
@@ -157,6 +252,7 @@ class PostizPostsService:
                 "avatar_id": str(avatar_id),
                 "post_type": post_type,
                 "post_id": post_id.strip() if post_id else None,
+                "image_count": len(normalized_images),
             },
         )
         return result
@@ -170,7 +266,7 @@ class PostizPostsService:
         status: PostStatusAction,
     ) -> Any:
         if status not in {"draft", "schedule"}:
-            raise PostizServiceError("status must be 'draft' or 'schedule'.")
+            raise PostizBadRequestError("status must be 'draft' or 'schedule'.")
 
         access_token, integration_id = self._require_connected_context(
             contos_user_id=contos_user_id,
@@ -304,7 +400,7 @@ class PostizPostsService:
     ) -> CalendarPost:
         cleaned = post_id.strip()
         if not cleaned:
-            raise PostizServiceError("post_id is required.")
+            raise PostizBadRequestError("post_id is required.")
 
         raw_posts = self._client.list_posts(
             access_token,
@@ -321,6 +417,69 @@ class PostizPostsService:
         raise PostizPostNotFoundError(
             "Post was not found for this avatar's LinkedIn channel.",
         )
+
+    def _normalize_images(self, images: Sequence[MediaRef] | None) -> list[MediaRef]:
+        if images is None:
+            return []
+        if len(images) > MAX_POST_IMAGES:
+            raise PostizBadRequestError(
+                f"A post may include at most {MAX_POST_IMAGES} images.",
+            )
+        normalized: list[MediaRef] = []
+        for index, item in enumerate(images):
+            media_id = item.id.strip() if isinstance(item.id, str) else ""
+            path = item.path.strip() if isinstance(item.path, str) else ""
+            if not media_id or not path:
+                raise PostizBadRequestError(
+                    f"images[{index}] requires non-empty id and path.",
+                )
+            extension = self._path_extension(path)
+            if extension not in _IMAGE_EXTENSIONS:
+                raise PostizBadRequestError(
+                    f"images[{index}] path must end with an allowed image extension "
+                    f"({', '.join(sorted(_IMAGE_EXTENSIONS))}). Got: {path!r}",
+                )
+            if extension == ".mp4":
+                raise PostizBadRequestError(
+                    "Video attachments are not supported in Phase 1.",
+                )
+            alt = item.alt.strip() if isinstance(item.alt, str) and item.alt.strip() else None
+            thumbnail = (
+                item.thumbnail.strip()
+                if isinstance(item.thumbnail, str) and item.thumbnail.strip()
+                else None
+            )
+            normalized.append(
+                MediaRef(id=media_id, path=path, alt=alt, thumbnail=thumbnail),
+            )
+        return normalized
+
+    def _assert_media_owned_by_avatar_org(
+        self,
+        *,
+        access_token: str,
+        images: Sequence[MediaRef],
+    ) -> None:
+        for item in images:
+            try:
+                remote = self._client.get_media(access_token, item.id)
+            except PostizServiceError as error:
+                message = str(error)
+                if "404" in message or "not found" in message.lower():
+                    raise PostizMediaOwnershipError(
+                        f"Media {item.id!r} was not found in this avatar's Postiz organization.",
+                    ) from error
+                raise
+            remote_id = remote.get("id") if isinstance(remote, dict) else None
+            remote_path = remote.get("path") if isinstance(remote, dict) else None
+            if not isinstance(remote_id, str) or remote_id.strip() != item.id:
+                raise PostizMediaOwnershipError(
+                    f"Media {item.id!r} was not found in this avatar's Postiz organization.",
+                )
+            if not isinstance(remote_path, str) or remote_path.strip() != item.path:
+                raise PostizMediaOwnershipError(
+                    f"Media {item.id!r} path does not match this avatar's uploaded media.",
+                )
 
     def _map_post(self, item: Any) -> CalendarPost | None:
         if not isinstance(item, dict):
@@ -355,6 +514,7 @@ class PostizPostsService:
 
         group = item.get("group")
         release_url = item.get("releaseURL")
+        images = self._parse_images_field(item.get("image"))
         return CalendarPost(
             id=post_id.strip(),
             content=content,
@@ -368,24 +528,86 @@ class PostizPostsService:
             ),
             integration_id=integration_id,
             integration_name=integration_name,
+            images=images,
         )
+
+    @classmethod
+    def _parse_images_field(cls, raw: Any) -> list[MediaRef]:
+        if raw is None:
+            return []
+        parsed: Any = raw
+        if isinstance(raw, str):
+            cleaned = raw.strip()
+            if not cleaned:
+                return []
+            try:
+                parsed = json.loads(cleaned)
+            except ValueError:
+                return []
+        if not isinstance(parsed, list):
+            return []
+        images: list[MediaRef] = []
+        for entry in parsed:
+            media = cls._parse_media_ref(entry, require_name=False)
+            if media is not None:
+                images.append(media)
+        return images
+
+    @staticmethod
+    def _parse_media_ref(raw: Any, *, require_name: bool) -> MediaRef | None:
+        if not isinstance(raw, dict):
+            return None
+        media_id = raw.get("id")
+        path = raw.get("path")
+        if not isinstance(media_id, str) or not media_id.strip():
+            return None
+        if not isinstance(path, str) or not path.strip():
+            return None
+        name = raw.get("name")
+        original_name = raw.get("originalName")
+        if require_name and not isinstance(name, str):
+            return None
+        alt = raw.get("alt")
+        thumbnail = raw.get("thumbnail")
+        return MediaRef(
+            id=media_id.strip(),
+            path=path.strip(),
+            alt=alt.strip() if isinstance(alt, str) and alt.strip() else None,
+            thumbnail=(
+                thumbnail.strip()
+                if isinstance(thumbnail, str) and thumbnail.strip()
+                else None
+            ),
+            name=name.strip() if isinstance(name, str) and name.strip() else None,
+            original_name=(
+                original_name.strip()
+                if isinstance(original_name, str) and original_name.strip()
+                else None
+            ),
+        )
+
+    @staticmethod
+    def _path_extension(path: str) -> str:
+        cleaned = path.strip().split("?", 1)[0].rsplit(".", 1)
+        if len(cleaned) < 2:
+            return ""
+        return f".{cleaned[-1].lower()}"
 
     @staticmethod
     def _require_iso_datetime(value: str, *, field_name: str) -> str:
         cleaned = value.strip()
         if not cleaned:
-            raise PostizServiceError(f"{field_name} is required.")
+            raise PostizBadRequestError(f"{field_name} is required.")
         if not _ISO_DATETIME_RE.match(cleaned):
-            raise PostizServiceError(
+            raise PostizBadRequestError(
                 f"{field_name} must be an ISO-8601 datetime with timezone "
                 f"(Z or ±HH:MM), e.g. 2026-09-23T15:30:00+05:30. Got: {cleaned!r}",
             )
-        # Reject values that look valid but are not parseable.
         try:
             normalized = cleaned.replace("Z", "+00:00")
             datetime.fromisoformat(normalized)
         except ValueError as error:
-            raise PostizServiceError(
+            raise PostizBadRequestError(
                 f"{field_name} is not a valid ISO-8601 datetime: {cleaned!r}",
             ) from error
         return cleaned
@@ -397,5 +619,5 @@ class PostizPostsService:
         if isinstance(value, datetime):
             if value.tzinfo is None:
                 value = value.replace(tzinfo=timezone.utc)
-            return value.isoformat().replace("+00:00", "Z")
+            return value.isoformat()
         return None

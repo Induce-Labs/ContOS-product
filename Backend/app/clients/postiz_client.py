@@ -244,6 +244,83 @@ class PostizClient:
             allow_empty_body=True,
         )
 
+    def upload_file(
+        self,
+        access_token: str,
+        *,
+        filename: str,
+        content: bytes,
+        content_type: str,
+    ) -> dict[str, Any]:
+        """POST /upload — multipart field name `file`."""
+        if not access_token.startswith("pos_"):
+            raise PostizServiceError("Postiz access token has an unexpected format.")
+        if not content:
+            raise PostizServiceError("Upload content must not be empty.")
+        cleaned_name = filename.strip() or "upload"
+        mime = content_type.strip() or "application/octet-stream"
+
+        url = f"{self._settings.postiz_public_api_base_url}/upload"
+        upload_timeout = httpx.Timeout(connect=10.0, read=120.0, write=120.0, pool=10.0)
+        try:
+            with httpx.Client(timeout=upload_timeout) as client:
+                response = client.post(
+                    url,
+                    headers={"Authorization": access_token},
+                    files={"file": (cleaned_name, content, mime)},
+                )
+        except httpx.HTTPError as error:
+            logger.warning(
+                "Postiz upload transport failed",
+                extra={
+                    "url": _redact_url(url),
+                    "error_type": type(error).__name__,
+                },
+            )
+            raise PostizServiceError(
+                f"Postiz upload failed: {type(error).__name__}",
+            ) from error
+
+        if response.status_code == 401:
+            raise PostizAuthorizationInvalidError(
+                "Postiz authorization is no longer valid; reconnect required.",
+            )
+        if response.status_code >= 400:
+            body_preview = (response.text or "")[:200]
+            raise PostizServiceError(
+                f"Postiz upload failed with status {response.status_code}: {body_preview}",
+            )
+        try:
+            data = response.json()
+        except ValueError as error:
+            raise PostizServiceError(
+                "Postiz upload returned a non-JSON response body.",
+            ) from error
+        if not isinstance(data, dict):
+            raise PostizServiceError("Postiz upload response must be a JSON object.")
+        media_id = data.get("id")
+        path = data.get("path")
+        if not isinstance(media_id, str) or not media_id.strip():
+            raise PostizServiceError("Postiz upload response is missing id.")
+        if not isinstance(path, str) or not path.strip():
+            raise PostizServiceError("Postiz upload response is missing path.")
+        return data
+
+    def get_media(self, access_token: str, media_id: str) -> dict[str, Any]:
+        """GET /media/:id — org-scoped; 404 if not in this avatar's Postiz org."""
+        if not access_token.startswith("pos_"):
+            raise PostizServiceError("Postiz access token has an unexpected format.")
+        cleaned = media_id.strip()
+        if not cleaned:
+            raise PostizServiceError("media_id is required for get_media.")
+
+        return self._request_json(
+            method="GET",
+            url=f"{self._settings.postiz_public_api_base_url}/media/{cleaned}",
+            headers={"Authorization": access_token},
+            allow_retries=True,
+        )
+
     def get_linkedin_authorization_url(self, access_token: str) -> str:
         if not access_token.startswith("pos_"):
             raise PostizServiceError("Postiz access token has an unexpected format.")

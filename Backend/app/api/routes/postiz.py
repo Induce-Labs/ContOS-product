@@ -6,7 +6,7 @@ import logging
 from typing import Any, Literal, NoReturn
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.api.deps import get_current_user_id
@@ -15,14 +15,16 @@ from app.config import get_settings
 from app.errors import (
     ConfigurationError,
     PostizAuthorizationInvalidError,
+    PostizBadRequestError,
     PostizIntegrationClaimError,
+    PostizMediaOwnershipError,
     PostizNotConnectedError,
     PostizPostNotFoundError,
     PostizServiceError,
     RepositoryError,
 )
 from app.services.postiz_oauth import PostizOAuthService
-from app.services.postiz_posts import PostizPostsService
+from app.services.postiz_posts import MAX_POST_IMAGES, MediaRef, PostizPostsService
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +56,24 @@ class ClaimIntegrationRequest(BaseModel):
     integration_id: str = Field(min_length=1)
 
 
+class MediaItemResponse(BaseModel):
+    id: str
+    path: str
+    alt: str | None = None
+    thumbnail: str | None = None
+    name: str | None = None
+    original_name: str | None = None
+
+
+class MediaItemRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: str = Field(min_length=1)
+    path: str = Field(min_length=1)
+    alt: str | None = None
+    thumbnail: str | None = None
+
+
 class CalendarPostResponse(BaseModel):
     id: str
     content: str
@@ -63,6 +83,7 @@ class CalendarPostResponse(BaseModel):
     release_url: str | None = None
     integration_id: str
     integration_name: str | None = None
+    images: list[MediaItemResponse] = Field(default_factory=list)
 
 
 class CalendarPostsResponse(BaseModel):
@@ -77,6 +98,7 @@ class CreatePostRequest(BaseModel):
     content: str = Field(min_length=1, max_length=3000)
     publish_date: str = Field(min_length=1)
     post_id: str | None = None
+    images: list[MediaItemRequest] = Field(default_factory=list, max_length=MAX_POST_IMAGES)
 
     @field_validator("content")
     @classmethod
@@ -144,6 +166,16 @@ def _raise_postiz_http(error: Exception) -> NoReturn:
     if isinstance(error, PostizPostNotFoundError):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(error),
+        ) from error
+    if isinstance(error, PostizMediaOwnershipError):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(error),
+        ) from error
+    if isinstance(error, PostizBadRequestError):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(error),
         ) from error
     if isinstance(error, PostizServiceError):
@@ -319,9 +351,56 @@ def list_postiz_posts(
                 release_url=post.release_url,
                 integration_id=post.integration_id,
                 integration_name=post.integration_name,
+                images=[
+                    MediaItemResponse(
+                        id=image.id,
+                        path=image.path,
+                        alt=image.alt,
+                        thumbnail=image.thumbnail,
+                        name=image.name,
+                        original_name=image.original_name,
+                    )
+                    for image in post.images
+                ],
             )
             for post in posts
         ],
+    )
+
+
+@router.post("/upload", response_model=MediaItemResponse)
+async def upload_postiz_media(
+    avatar_id: UUID = Query(...),
+    file: UploadFile = File(...),
+    user_id: UUID = Depends(get_current_user_id),
+) -> MediaItemResponse:
+    try:
+        _verify_avatar_owner(avatar_id, user_id)
+        content = await file.read()
+        media = _get_posts_service().upload_media(
+            contos_user_id=user_id,
+            avatar_id=avatar_id,
+            filename=file.filename or "upload",
+            content=content,
+            content_type=file.content_type or "application/octet-stream",
+        )
+    except (
+        ConfigurationError,
+        PostizAuthorizationInvalidError,
+        PostizBadRequestError,
+        PostizNotConnectedError,
+        PostizServiceError,
+        RepositoryError,
+    ) as error:
+        _raise_postiz_http(error)
+
+    return MediaItemResponse(
+        id=media.id,
+        path=media.path,
+        alt=media.alt,
+        thumbnail=media.thumbnail,
+        name=media.name,
+        original_name=media.original_name,
     )
 
 
@@ -339,10 +418,21 @@ def create_postiz_post(
             content=body.content,
             publish_date=body.publish_date,
             post_id=body.post_id,
+            images=[
+                MediaRef(
+                    id=item.id,
+                    path=item.path,
+                    alt=item.alt,
+                    thumbnail=item.thumbnail,
+                )
+                for item in body.images
+            ],
         )
     except (
         ConfigurationError,
         PostizAuthorizationInvalidError,
+        PostizBadRequestError,
+        PostizMediaOwnershipError,
         PostizNotConnectedError,
         PostizPostNotFoundError,
         PostizServiceError,

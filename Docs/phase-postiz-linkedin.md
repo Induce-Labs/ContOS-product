@@ -40,8 +40,9 @@ Org-consent OAuth (`POST /api/postiz/oauth/callback`) is **deprecated** (HTTP 41
 | GET | `/api/postiz/connect?avatar_id=` | Bearer Supabase JWT | Provision/ensure avatar org, snapshot, return LinkedIn URL |
 | GET | `/api/postiz/status?avatar_id=` | Bearer Supabase JWT | `{ connected, integration, claim_candidates }` for this avatar |
 | POST | `/api/postiz/claim` | Bearer Supabase JWT | Body `{ avatar_id, integration_id }` — bind one unclaimed LinkedIn |
-| GET | `/api/postiz/posts?avatar_id=&start_date=&end_date=` | Bearer | List calendar posts for this avatar’s LinkedIn only |
-| POST | `/api/postiz/posts` | Bearer | Body `{ avatar_id, type, content, publish_date, post_id? }` — `type`: `now` \| `schedule` \| `draft` \| `update` |
+| GET | `/api/postiz/posts?avatar_id=&start_date=&end_date=` | Bearer | List calendar posts for this avatar’s LinkedIn only (includes `images`) |
+| POST | `/api/postiz/upload?avatar_id=` | Bearer | Multipart `file` — avatar-scoped proxy to Postiz `/upload` (images only, max 10 MB) |
+| POST | `/api/postiz/posts` | Bearer | Body `{ avatar_id, type, content, publish_date, post_id?, images? }` — `type`: `now` \| `schedule` \| `draft` \| `update`; `images` is the **complete final** MediaDto list (max 10) |
 | PUT | `/api/postiz/posts/{post_id}/status` | Bearer | Body `{ avatar_id, status }` — `draft` \| `schedule` |
 | DELETE | `/api/postiz/posts/{post_id}?avatar_id=` | Bearer | Delete a post owned by this avatar’s integration |
 | DELETE | `/api/postiz/integration?avatar_id=` | Bearer | Disconnect LinkedIn for this avatar; keep Postiz org/token |
@@ -49,15 +50,24 @@ Org-consent OAuth (`POST /api/postiz/oauth/callback`) is **deprecated** (HTTP 41
 
 ### Calendar / publishing (Postiz public API mapping)
 
-ContOS does **not** store posts. It proxies to Postiz v2.23.0 `/api/public/v1`:
+ContOS does **not** store posts or media blobs. It proxies to Postiz v2.23.0 `/api/public/v1`:
 
-- `POST /posts` with `type: now | schedule | draft | update`
-- `GET /posts?startDate=&endDate=`
+- `POST /upload` (multipart `file`) → `{ id, path, … }`
+- `GET /media/:id` (org-scoped ownership check)
+- `POST /posts` with `type: now | schedule | draft | update` and `value[].image: MediaDto[]`
+- `GET /posts?startDate=&endDate=` (includes `image` for edit hydration)
 - `DELETE /posts/:id`
 - `PUT /posts/:id/status`
 - `DELETE /integrations/:id` (disconnect)
 
-Every ContOS call: verify avatar ownership → load `postiz_connections` by `avatar_id` → decrypt that avatar’s token → resolve LinkedIn from **stored** `postiz_integration_id` (never from the frontend). Mutate/delete first confirms the post’s `integration.id` matches that claimed id.
+Every ContOS call: verify avatar ownership → load `postiz_connections` by `avatar_id` → decrypt that avatar’s token → resolve LinkedIn from **stored** `postiz_integration_id` (never from the frontend). Mutate/delete first confirms the post’s `integration.id` matches that claimed id. Create/update with images verifies each media id via Postiz `GET /media/:id` for **that** org and requires path match.
+
+**Media (Phase 1 — LinkedIn multi-image):**
+- Max **10** images per post; images only (no video).
+- Frontend uploads new files first; failed upload aborts create/update.
+- Edits send the **complete final** `images` array (e.g. existing `[A,B,C]` → remove B + add D → `[A,C,D]`; clear all → `[]`).
+- Settings stay `{ "__type": "linkedin" }` without `post_as_images_carousel` (native LinkedIn multi-image, not PDF carousel).
+- Text-only still works with `images: []`.
 
 **Timezone:** ContOS requires ISO-8601 datetimes with an explicit offset (`Z` or `±HH:MM`). The frontend builds them from the user’s local wall-clock time and ContOS passes `publish_date` through unchanged as Postiz `date`. ContOS does not convert to UTC or shift the scheduled time.
 

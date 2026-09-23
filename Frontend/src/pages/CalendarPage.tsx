@@ -16,10 +16,13 @@ import {
   localDateTimeToOffsetIso,
   monthBoundsAsOffsetIso,
   nowAsOffsetIso,
+  POSTIZ_MAX_POST_IMAGES,
   PostizApiError,
   startPostizConnect,
+  uploadPostizMedia,
   type PostizCalendarPost,
   type PostizIntegration,
+  type PostizMediaItem,
   type PostizPostType,
 } from '../lib/postiz'
 
@@ -27,6 +30,16 @@ const POSTIZ_CALLBACK_MESSAGE_TYPE = 'contos:postiz-callback' as const
 const POPUP_NAME = 'contos-postiz-oauth'
 const POLL_INTERVAL_MS = 5000
 const POLL_TIMEOUT_MS = 120_000
+const IMAGE_ACCEPT = 'image/jpeg,image/png,image/gif,image/webp,image/avif,image/bmp,image/tiff'
+
+type AttachedMedia = {
+  localId: string
+  status: 'local' | 'uploading' | 'ready' | 'error'
+  previewUrl: string
+  file?: File
+  error?: string
+  media?: PostizMediaItem
+}
 
 type ConnectionUiState =
   | 'checking'
@@ -683,7 +696,21 @@ function AvatarCalendarBoard({ avatarId }: { avatarId: string }) {
   const [formContent, setFormContent] = useState('')
   const [formWhen, setFormWhen] = useState('')
   const [formError, setFormError] = useState<string | null>(null)
+  const [attachments, setAttachments] = useState<AttachedMedia[]>([])
   const [reloadToken, setReloadToken] = useState(0)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
+
+  useEffect(() => {
+    return () => {
+      for (const item of attachments) {
+        if (item.file && item.previewUrl.startsWith('blob:')) {
+          URL.revokeObjectURL(item.previewUrl)
+        }
+      }
+    }
+    // Revoke only on unmount; per-item revoke happens on remove.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -794,11 +821,23 @@ function AvatarCalendarBoard({ avatarId }: { avatarId: string }) {
     return cells
   }, [viewMonth, viewYear])
 
+  function clearAttachments() {
+    setAttachments((prev) => {
+      for (const item of prev) {
+        if (item.file && item.previewUrl.startsWith('blob:')) {
+          URL.revokeObjectURL(item.previewUrl)
+        }
+      }
+      return []
+    })
+  }
+
   function openCreate(day?: number) {
     setModalMode('create')
     setEditingPost(null)
     setFormContent('')
     setFormError(null)
+    clearAttachments()
     const pad = (n: number) => String(n).padStart(2, '0')
     const base =
       day != null
@@ -816,13 +855,139 @@ function AvatarCalendarBoard({ avatarId }: { avatarId: string }) {
     setFormContent(post.content)
     setFormWhen(isoToLocalDateTimeInput(post.publish_date))
     setFormError(null)
+    clearAttachments()
+    setAttachments(
+      post.images.map((image) => ({
+        localId: image.id,
+        status: 'ready' as const,
+        previewUrl: image.path,
+        media: image,
+      })),
+    )
     setModalOpen(true)
+  }
+
+  function addFiles(fileList: FileList | null) {
+    if (!fileList || fileList.length === 0) {
+      return
+    }
+    setFormError(null)
+    setAttachments((prev) => {
+      const remaining = POSTIZ_MAX_POST_IMAGES - prev.length
+      if (remaining <= 0) {
+        setFormError(t('postiz.calendar.mediaMaxReached', { max: POSTIZ_MAX_POST_IMAGES }))
+        return prev
+      }
+      const next = [...prev]
+      for (const file of Array.from(fileList)) {
+        if (next.length >= POSTIZ_MAX_POST_IMAGES) {
+          setFormError(t('postiz.calendar.mediaMaxReached', { max: POSTIZ_MAX_POST_IMAGES }))
+          break
+        }
+        if (!file.type.startsWith('image/') || file.type === 'video/mp4') {
+          setFormError(t('postiz.calendar.mediaImagesOnly'))
+          continue
+        }
+        next.push({
+          localId: `${file.name}-${file.size}-${file.lastModified}-${Math.random().toString(36).slice(2)}`,
+          status: 'local',
+          previewUrl: URL.createObjectURL(file),
+          file,
+        })
+      }
+      return next
+    })
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+  }
+
+  function removeAttachment(localId: string) {
+    setAttachments((prev) => {
+      const target = prev.find((item) => item.localId === localId)
+      if (target?.file && target.previewUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(target.previewUrl)
+      }
+      return prev.filter((item) => item.localId !== localId)
+    })
+  }
+
+  function moveAttachment(localId: string, direction: -1 | 1) {
+    setAttachments((prev) => {
+      const index = prev.findIndex((item) => item.localId === localId)
+      if (index < 0) {
+        return prev
+      }
+      const nextIndex = index + direction
+      if (nextIndex < 0 || nextIndex >= prev.length) {
+        return prev
+      }
+      const next = [...prev]
+      const [item] = next.splice(index, 1)
+      next.splice(nextIndex, 0, item)
+      return next
+    })
+  }
+
+  async function resolveFinalImages(): Promise<PostizMediaItem[]> {
+    const snapshot = attachments
+    const resolved: PostizMediaItem[] = []
+
+    for (const item of snapshot) {
+      if (item.status === 'ready' && item.media) {
+        resolved.push(item.media)
+        continue
+      }
+      if (item.status === 'error') {
+        throw new PostizApiError(item.error || t('postiz.calendar.mediaUploadFailed'))
+      }
+      if (!item.file) {
+        throw new PostizApiError(t('postiz.calendar.mediaUploadFailed'))
+      }
+
+      setAttachments((prev) =>
+        prev.map((entry) =>
+          entry.localId === item.localId
+            ? { ...entry, status: 'uploading', error: undefined }
+            : entry,
+        ),
+      )
+      try {
+        const uploaded = await uploadPostizMedia(avatarId, item.file)
+        setAttachments((prev) =>
+          prev.map((entry) =>
+            entry.localId === item.localId
+              ? { ...entry, status: 'ready', media: uploaded, error: undefined }
+              : entry,
+          ),
+        )
+        resolved.push(uploaded)
+      } catch (err) {
+        const message =
+          err instanceof PostizApiError
+            ? err.message
+            : err instanceof Error
+              ? err.message
+              : t('postiz.calendar.mediaUploadFailed')
+        setAttachments((prev) =>
+          prev.map((entry) =>
+            entry.localId === item.localId
+              ? { ...entry, status: 'error', error: message }
+              : entry,
+          ),
+        )
+        throw new PostizApiError(message)
+      }
+    }
+
+    return resolved
   }
 
   async function submitPost(type: Exclude<PostizPostType, 'update'>) {
     setSaving(true)
     setFormError(null)
     try {
+      const images = await resolveFinalImages()
       const publishDate =
         type === 'now' ? nowAsOffsetIso() : localDateTimeToOffsetIso(formWhen)
       await createPostizPost({
@@ -830,8 +995,10 @@ function AvatarCalendarBoard({ avatarId }: { avatarId: string }) {
         type,
         content: formContent,
         publishDate,
+        images,
       })
       setModalOpen(false)
+      clearAttachments()
       beginPostsReload()
     } catch (err) {
       setFormError(
@@ -853,14 +1020,18 @@ function AvatarCalendarBoard({ avatarId }: { avatarId: string }) {
     setSaving(true)
     setFormError(null)
     try {
+      // Complete final image array (including [] if all removed).
+      const images = await resolveFinalImages()
       await createPostizPost({
         avatarId,
         type: 'update',
         content: formContent,
         publishDate: localDateTimeToOffsetIso(formWhen),
         postId: editingPost.id,
+        images,
       })
       setModalOpen(false)
+      clearAttachments()
       beginPostsReload()
     } catch (err) {
       setFormError(
@@ -1035,7 +1206,7 @@ function AvatarCalendarBoard({ avatarId }: { avatarId: string }) {
                 : t('postiz.calendar.editPostTitle')}
             </h3>
             <p className="mt-2 text-sm text-ink-muted">
-              {t('postiz.calendar.textOnlyHint')}
+              {t('postiz.calendar.mediaHint', { max: POSTIZ_MAX_POST_IMAGES })}
             </p>
 
             {editingPost ? (
@@ -1059,6 +1230,87 @@ function AvatarCalendarBoard({ avatarId }: { avatarId: string }) {
               />
             </label>
 
+            <div className="mt-4">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-medium text-ink">
+                  {t('postiz.calendar.attachMedia')}
+                </p>
+                <button
+                  type="button"
+                  disabled={saving || attachments.length >= POSTIZ_MAX_POST_IMAGES}
+                  className="contos-btn contos-btn--rect contos-btn--secondary text-xs"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  {t('postiz.calendar.addImages')}
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept={IMAGE_ACCEPT}
+                  multiple
+                  className="hidden"
+                  onChange={(event) => addFiles(event.target.files)}
+                />
+              </div>
+              {attachments.length > 0 ? (
+                <ul className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                  {attachments.map((item, index) => (
+                    <li
+                      key={item.localId}
+                      className="overflow-hidden rounded-2xl border border-border-hairline bg-canvas-raised"
+                    >
+                      <div className="aspect-square bg-canvas">
+                        <img
+                          src={item.previewUrl}
+                          alt=""
+                          className="h-full w-full object-cover"
+                        />
+                      </div>
+                      <div className="flex flex-wrap items-center gap-1 p-2">
+                        <button
+                          type="button"
+                          disabled={saving || index === 0}
+                          className="rounded px-1.5 py-0.5 text-[11px] text-ink disabled:opacity-40"
+                          onClick={() => moveAttachment(item.localId, -1)}
+                        >
+                          {t('postiz.calendar.moveUp')}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={saving || index === attachments.length - 1}
+                          className="rounded px-1.5 py-0.5 text-[11px] text-ink disabled:opacity-40"
+                          onClick={() => moveAttachment(item.localId, 1)}
+                        >
+                          {t('postiz.calendar.moveDown')}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={saving}
+                          className="rounded px-1.5 py-0.5 text-[11px] text-red-600"
+                          onClick={() => removeAttachment(item.localId)}
+                        >
+                          {t('postiz.calendar.removeImage')}
+                        </button>
+                      </div>
+                      <p className="px-2 pb-2 text-[11px] text-ink-muted">
+                        {item.status === 'uploading'
+                          ? t('postiz.calendar.mediaUploading')
+                          : item.status === 'error'
+                            ? item.error || t('postiz.calendar.mediaUploadFailed')
+                            : item.status === 'ready'
+                              ? t('postiz.calendar.mediaReady')
+                              : t('postiz.calendar.mediaPending')}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-2 text-xs text-ink-muted">
+                  {t('postiz.calendar.mediaOptional')}
+                </p>
+              )}
+            </div>
+
             <label className="mt-4 block text-sm font-medium text-ink">
               {t('postiz.calendar.whenLabel')}
               <input
@@ -1079,7 +1331,11 @@ function AvatarCalendarBoard({ avatarId }: { avatarId: string }) {
                 <>
                   <button
                     type="button"
-                    disabled={saving || !formContent.trim()}
+                    disabled={
+                      saving ||
+                      !formContent.trim() ||
+                      attachments.some((item) => item.status === 'uploading')
+                    }
                     className="contos-btn contos-btn--rect contos-btn--primary"
                     onClick={() => void submitPost('now')}
                   >
@@ -1087,7 +1343,12 @@ function AvatarCalendarBoard({ avatarId }: { avatarId: string }) {
                   </button>
                   <button
                     type="button"
-                    disabled={saving || !formContent.trim() || !formWhen}
+                    disabled={
+                      saving ||
+                      !formContent.trim() ||
+                      !formWhen ||
+                      attachments.some((item) => item.status === 'uploading')
+                    }
                     className="contos-btn contos-btn--rect contos-btn--secondary"
                     onClick={() => void submitPost('schedule')}
                   >
@@ -1095,7 +1356,11 @@ function AvatarCalendarBoard({ avatarId }: { avatarId: string }) {
                   </button>
                   <button
                     type="button"
-                    disabled={saving || !formContent.trim()}
+                    disabled={
+                      saving ||
+                      !formContent.trim() ||
+                      attachments.some((item) => item.status === 'uploading')
+                    }
                     className="contos-btn contos-btn--rect contos-btn--secondary"
                     onClick={() => void submitPost('draft')}
                   >
@@ -1106,7 +1371,12 @@ function AvatarCalendarBoard({ avatarId }: { avatarId: string }) {
                 <>
                   <button
                     type="button"
-                    disabled={saving || !formContent.trim() || !formWhen}
+                    disabled={
+                      saving ||
+                      !formContent.trim() ||
+                      !formWhen ||
+                      attachments.some((item) => item.status === 'uploading')
+                    }
                     className="contos-btn contos-btn--rect contos-btn--primary"
                     onClick={() => void submitUpdate()}
                   >

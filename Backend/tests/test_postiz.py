@@ -1176,3 +1176,304 @@ class TestPostizCalendarPosts:
             client.delete(f"/api/postiz/integration?avatar_id={AVATAR_A}").status_code
             == 401
         )
+        assert (
+            client.post(f"/api/postiz/upload?avatar_id={AVATAR_A}").status_code == 401
+        )
+
+
+class TestPostizMediaPosts:
+    """Phase 1 LinkedIn multi-image support (max 10)."""
+
+    def _connected(
+        self,
+        *,
+        settings: Settings,
+        client: MagicMock,
+        repository: MagicMock,
+        avatar_id: UUID = AVATAR_A,
+        user_id: UUID = USER_A,
+        integration_id: str = "li-a",
+        token: bytes = b"pos_token_a",
+    ) -> PostizPostsService:
+        repository.get_connection.return_value = _connection(
+            settings=settings,
+            avatar_id=avatar_id,
+            user_id=user_id,
+            integration_id=integration_id,
+            token=token,
+        )
+        return _posts_service(settings=settings, client=client, repository=repository)
+
+    def test_single_and_multiple_ordered_images(self) -> None:
+        settings = _settings()
+        client = MagicMock()
+        repository = MagicMock()
+        service = self._connected(settings=settings, client=client, repository=repository)
+        client.create_post.return_value = [{"postId": "p1"}]
+        client.get_media.side_effect = lambda _token, media_id: {
+            "id": media_id,
+            "path": f"https://cdn.example.com/{media_id}.jpg",
+        }
+
+        from app.services.postiz_posts import MediaRef
+
+        service.create_or_update_post(
+            contos_user_id=USER_A,
+            avatar_id=AVATAR_A,
+            post_type="now",
+            content="One image",
+            publish_date="2026-09-23T15:30:00+05:30",
+            images=[
+                MediaRef(id="m1", path="https://cdn.example.com/m1.jpg"),
+            ],
+        )
+        payload = client.create_post.call_args.args[1]
+        assert payload["posts"][0]["value"][0]["image"] == [
+            {"id": "m1", "path": "https://cdn.example.com/m1.jpg"},
+        ]
+        assert payload["posts"][0]["settings"] == {"__type": "linkedin"}
+        assert "post_as_images_carousel" not in payload["posts"][0]["settings"]
+
+        client.create_post.reset_mock()
+        service.create_or_update_post(
+            contos_user_id=USER_A,
+            avatar_id=AVATAR_A,
+            post_type="schedule",
+            content="Multi",
+            publish_date="2026-09-23T15:30:00+05:30",
+            images=[
+                MediaRef(id="m1", path="https://cdn.example.com/m1.jpg"),
+                MediaRef(id="m2", path="https://cdn.example.com/m2.jpg"),
+                MediaRef(id="m3", path="https://cdn.example.com/m3.jpg"),
+            ],
+        )
+        images = client.create_post.call_args.args[1]["posts"][0]["value"][0]["image"]
+        assert [item["id"] for item in images] == ["m1", "m2", "m3"]
+
+    def test_draft_with_images(self) -> None:
+        settings = _settings()
+        client = MagicMock()
+        repository = MagicMock()
+        service = self._connected(settings=settings, client=client, repository=repository)
+        client.create_post.return_value = [{"postId": "d1"}]
+        client.get_media.side_effect = lambda _token, media_id: {
+            "id": media_id,
+            "path": f"https://cdn.example.com/{media_id}.png",
+        }
+        from app.services.postiz_posts import MediaRef
+
+        service.create_or_update_post(
+            contos_user_id=USER_A,
+            avatar_id=AVATAR_A,
+            post_type="draft",
+            content="Draft media",
+            publish_date="2026-09-23T15:30:00+05:30",
+            images=[MediaRef(id="m9", path="https://cdn.example.com/m9.png")],
+        )
+        assert client.create_post.call_args.args[1]["type"] == "draft"
+        assert len(client.create_post.call_args.args[1]["posts"][0]["value"][0]["image"]) == 1
+
+    def test_edit_add_remove_reorder_and_remove_all(self) -> None:
+        settings = _settings()
+        client = MagicMock()
+        repository = MagicMock()
+        service = self._connected(settings=settings, client=client, repository=repository)
+        client.list_posts.return_value = [
+            _raw_post(post_id="pa", content="A", integration_id="li-a"),
+        ]
+        client.create_post.return_value = [{"postId": "pa"}]
+        client.get_media.side_effect = lambda _token, media_id: {
+            "id": media_id,
+            "path": f"https://cdn.example.com/{media_id}.jpg",
+        }
+        from app.services.postiz_posts import MediaRef
+
+        # Existing A,B,C → remove B + add D = A,C,D
+        service.create_or_update_post(
+            contos_user_id=USER_A,
+            avatar_id=AVATAR_A,
+            post_type="update",
+            content="Updated",
+            publish_date="2026-09-23T15:30:00Z",
+            post_id="pa",
+            images=[
+                MediaRef(id="A", path="https://cdn.example.com/A.jpg"),
+                MediaRef(id="C", path="https://cdn.example.com/C.jpg"),
+                MediaRef(id="D", path="https://cdn.example.com/D.jpg"),
+            ],
+        )
+        images = client.create_post.call_args.args[1]["posts"][0]["value"][0]["image"]
+        assert [item["id"] for item in images] == ["A", "C", "D"]
+        assert client.create_post.call_args.args[1]["posts"][0]["value"][0]["id"] == "pa"
+
+        # Remove all → images: []
+        client.create_post.reset_mock()
+        client.get_media.reset_mock()
+        service.create_or_update_post(
+            contos_user_id=USER_A,
+            avatar_id=AVATAR_A,
+            post_type="update",
+            content="No media",
+            publish_date="2026-09-23T15:30:00Z",
+            post_id="pa",
+            images=[],
+        )
+        assert client.create_post.call_args.args[1]["posts"][0]["value"][0]["image"] == []
+        client.get_media.assert_not_called()
+
+    def test_cross_avatar_media_rejected(self) -> None:
+        settings = _settings()
+        client = MagicMock()
+        repository = MagicMock()
+        service = self._connected(settings=settings, client=client, repository=repository)
+        client.get_media.side_effect = PostizServiceError(
+            "Postiz request failed with status 404: Media not found",
+        )
+        from app.errors import PostizMediaOwnershipError
+        from app.services.postiz_posts import MediaRef
+
+        with pytest.raises(PostizMediaOwnershipError):
+            service.create_or_update_post(
+                contos_user_id=USER_A,
+                avatar_id=AVATAR_A,
+                post_type="now",
+                content="Steal",
+                publish_date="2026-09-23T15:30:00Z",
+                images=[
+                    MediaRef(id="foreign", path="https://cdn.example.com/foreign.jpg"),
+                ],
+            )
+        client.create_post.assert_not_called()
+
+    def test_path_mismatch_rejected(self) -> None:
+        settings = _settings()
+        client = MagicMock()
+        repository = MagicMock()
+        service = self._connected(settings=settings, client=client, repository=repository)
+        client.get_media.return_value = {
+            "id": "m1",
+            "path": "https://cdn.example.com/real.jpg",
+        }
+        from app.errors import PostizMediaOwnershipError
+        from app.services.postiz_posts import MediaRef
+
+        with pytest.raises(PostizMediaOwnershipError):
+            service.create_or_update_post(
+                contos_user_id=USER_A,
+                avatar_id=AVATAR_A,
+                post_type="now",
+                content="Mismatch",
+                publish_date="2026-09-23T15:30:00Z",
+                images=[
+                    MediaRef(id="m1", path="https://cdn.example.com/fake.jpg"),
+                ],
+            )
+        client.create_post.assert_not_called()
+
+    def test_rejects_more_than_ten_and_video(self) -> None:
+        settings = _settings()
+        client = MagicMock()
+        repository = MagicMock()
+        service = self._connected(settings=settings, client=client, repository=repository)
+        from app.errors import PostizBadRequestError
+        from app.services.postiz_posts import MediaRef
+
+        too_many = [
+            MediaRef(id=f"m{i}", path=f"https://cdn.example.com/m{i}.jpg")
+            for i in range(11)
+        ]
+        with pytest.raises(PostizBadRequestError, match="at most 10"):
+            service.create_or_update_post(
+                contos_user_id=USER_A,
+                avatar_id=AVATAR_A,
+                post_type="now",
+                content="Too many",
+                publish_date="2026-09-23T15:30:00Z",
+                images=too_many,
+            )
+        client.create_post.assert_not_called()
+
+        with pytest.raises(PostizBadRequestError, match="image extension"):
+            service.create_or_update_post(
+                contos_user_id=USER_A,
+                avatar_id=AVATAR_A,
+                post_type="now",
+                content="Video",
+                publish_date="2026-09-23T15:30:00Z",
+                images=[
+                    MediaRef(id="v1", path="https://cdn.example.com/clip.mp4"),
+                ],
+            )
+
+    def test_upload_failure_does_not_create_post(self) -> None:
+        settings = _settings()
+        client = MagicMock()
+        repository = MagicMock()
+        service = self._connected(settings=settings, client=client, repository=repository)
+        client.upload_file.side_effect = PostizServiceError(
+            "Postiz upload failed with status 400: Unsupported file type.",
+        )
+        with pytest.raises(PostizServiceError, match="400"):
+            service.upload_media(
+                contos_user_id=USER_A,
+                avatar_id=AVATAR_A,
+                filename="bad.bin",
+                content=b"not-an-image",
+                content_type="image/jpeg",
+            )
+        client.create_post.assert_not_called()
+
+    def test_upload_rejects_video_mime(self) -> None:
+        settings = _settings()
+        client = MagicMock()
+        repository = MagicMock()
+        service = self._connected(settings=settings, client=client, repository=repository)
+        from app.errors import PostizBadRequestError
+
+        with pytest.raises(PostizBadRequestError, match="video/mp4"):
+            service.upload_media(
+                contos_user_id=USER_A,
+                avatar_id=AVATAR_A,
+                filename="clip.mp4",
+                content=b"fake",
+                content_type="video/mp4",
+            )
+        client.upload_file.assert_not_called()
+
+    def test_text_only_still_sends_empty_image_array(self) -> None:
+        settings = _settings()
+        client = MagicMock()
+        repository = MagicMock()
+        service = self._connected(settings=settings, client=client, repository=repository)
+        client.create_post.return_value = [{"postId": "t1"}]
+        service.create_or_update_post(
+            contos_user_id=USER_A,
+            avatar_id=AVATAR_A,
+            post_type="now",
+            content="Text only",
+            publish_date="2026-09-23T15:30:00Z",
+        )
+        assert client.create_post.call_args.args[1]["posts"][0]["value"][0]["image"] == []
+        client.get_media.assert_not_called()
+
+    def test_list_maps_images_for_edit_hydration(self) -> None:
+        settings = _settings()
+        client = MagicMock()
+        repository = MagicMock()
+        service = self._connected(settings=settings, client=client, repository=repository)
+        raw = _raw_post(post_id="pa", content="With media", integration_id="li-a")
+        raw["image"] = json.dumps(
+            [
+                {"id": "m1", "path": "https://cdn.example.com/m1.jpg"},
+                {"id": "m2", "path": "https://cdn.example.com/m2.jpg"},
+            ],
+        )
+        client.list_posts.return_value = [raw]
+        posts = service.list_posts(
+            contos_user_id=USER_A,
+            avatar_id=AVATAR_A,
+            start_date="2026-09-01T00:00:00.000Z",
+            end_date="2026-09-30T23:59:59.000Z",
+        )
+        assert len(posts) == 1
+        assert [image.id for image in posts[0].images] == ["m1", "m2"]

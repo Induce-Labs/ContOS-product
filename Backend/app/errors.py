@@ -44,3 +44,11 @@ class PostizNotConnectedError(PostizServiceError):
 
 class PostizPostNotFoundError(PostizServiceError):
     """Raised when a Postiz post is missing or not owned by this avatar's integration."""
+
+
+class PostizMediaOwnershipError(PostizServiceError):
+    """Raised when media ids/paths are not owned by the avatar's Postiz organization."""
+
+
+class PostizBadRequestError(PostizServiceError):
+    """Raised for ContOS-side validation failures on Postiz calendar requests."""
