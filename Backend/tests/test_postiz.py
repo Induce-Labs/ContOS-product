@@ -12,7 +12,12 @@ import pytest
 from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
 
-from app.clients.postiz_client import PostizClient, is_provision_rotate_required_conflict, strip_unsupported_linkedin_prompt
+from app.clients.postiz_client import (
+    PostizClient,
+    is_provision_rotate_required_conflict,
+    strip_unsupported_linkedin_prompt,
+    _sanitize_upstream_body_preview,
+)
 from app.config import Settings
 from app.errors import (
     PostizAuthorizationInvalidError,
@@ -128,8 +133,204 @@ class TestProvisionRotateDetection:
             409,
             {"msg": "Some other conflict"},
         )
+
+
+class TestPostizUploadErrorSanitization:
+    def test_html_504_body_is_sanitized(self) -> None:
+        preview = _sanitize_upstream_body_preview(
+            "<html><head><title>504 Gateway Time-out</title></head>"
+            "<body><center><h1>504 Gateway Time-out</h1></center>"
+            "<hr><center>nginx/1.22.1</center></body></html>",
+            status_code=504,
+        )
+        assert "504" in preview
+        assert "<html" not in preview.lower()
+        assert "STORAGE_PROVIDER" in preview
+
+    def test_json_error_body_is_kept(self) -> None:
+        preview = _sanitize_upstream_body_preview(
+            '{"msg":"Unsupported file type."}',
+            status_code=400,
+        )
+        assert preview == '{"msg":"Unsupported file type."}'
+
+    def test_upload_log_extra_must_not_use_reserved_filename_key(self) -> None:
+        """Logging extra key `filename` crashes LogRecord and becomes ContOS 500."""
+        import logging
+
+        log = logging.getLogger("contos.test.upload_log_keys")
+        log.handlers.clear()
+        log.setLevel(logging.INFO)
+        log.propagate = False
+        log.addHandler(logging.NullHandler())
+        with pytest.raises(KeyError, match="filename"):
+            log.info("boom", extra={"filename": "photo.jpg"})
+        # Safe key used by Postiz upload diagnostics.
+        log.info(
+            "ok",
+            extra={
+                "upload_filename": "photo.jpg",
+                "content_type": "image/jpeg",
+                "size_bytes": 12,
+                "elapsed_ms": 1,
+                "status_code": 504,
+            },
+        )
+
+    def test_upload_media_log_does_not_raise_before_postiz_call(self) -> None:
+        """Regression: ContOS 500 was KeyError on LogRecord before Postiz was called."""
+        settings = _settings()
+        client = MagicMock()
+        repository = MagicMock()
+        repository.get_connection.return_value = _connection(
+            settings=settings,
+            avatar_id=AVATAR_A,
+            integration_id="li-a",
+            token=b"pos_token_a",
+        )
+        client.upload_file.side_effect = PostizServiceError(
+            "Postiz upload failed with status 504: gateway timeout",
+            status_code=504,
+        )
+        service = _posts_service(settings=settings, client=client, repository=repository)
+        with pytest.raises(PostizServiceError) as raised:
+            service.upload_media(
+                contos_user_id=USER_A,
+                avatar_id=AVATAR_A,
+                filename="diagram.png",
+                content=b"\x89PNG\r\n\x1a\nfake",
+                content_type="image/png",
+            )
+        assert raised.value.status_code == 504
+        client.upload_file.assert_called_once()
         assert not is_provision_rotate_required_conflict(400, {"msg": "no valid access token"})
 
+    def test_client_accepts_postiz_201_created_upload_body(self) -> None:
+        """Live Postiz returns HTTP 201 + camelCase originalName; ContOS must not treat as error."""
+        settings = _settings()
+        client = PostizClient(settings)
+        media_id = "38ffdbc4-865a-4e9c-8452-e7957bbb072d"
+        path = "https://postiz.contos.now/uploads/2026/09/23/example.png"
+
+        class FakeResponse:
+            status_code = 201
+            text = json.dumps(
+                {
+                    "id": media_id,
+                    "name": "example.png",
+                    "originalName": None,
+                    "path": path,
+                    "thumbnail": None,
+                    "alt": None,
+                },
+            )
+            headers = {"content-type": "application/json; charset=utf-8"}
+
+            def json(self) -> dict[str, Any]:
+                return json.loads(self.text)
+
+        with patch("app.clients.postiz_client.httpx.Client") as client_cls:
+            instance = client_cls.return_value.__enter__.return_value
+            instance.post.return_value = FakeResponse()
+            data = client.upload_file(
+                "pos_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                filename="example.png",
+                content=b"\x89PNG\r\n\x1a\nfake",
+                content_type="image/png",
+            )
+
+        assert data["id"] == media_id
+        assert data["path"] == path
+        assert data["originalName"] is None
+        instance.post.assert_called_once()
+
+    def test_upload_media_maps_postiz_201_shape_to_media_ref(self) -> None:
+        settings = _settings()
+        client = MagicMock()
+        repository = MagicMock()
+        repository.get_connection.return_value = _connection(
+            settings=settings,
+            avatar_id=AVATAR_A,
+            integration_id="li-a",
+            token=b"pos_token_a",
+        )
+        client.upload_file.return_value = {
+            "id": "a1a17a6b-141b-47d1-af7f-8a9c4a2ef4f1",
+            "name": "a7191da6ff5a336d9fbd0e91a5e1da9f.png",
+            "originalName": None,
+            "path": "https://postiz.contos.now/uploads/2026/09/23/a7191.png",
+            "thumbnail": None,
+            "alt": None,
+        }
+        service = _posts_service(settings=settings, client=client, repository=repository)
+        media = service.upload_media(
+            contos_user_id=USER_A,
+            avatar_id=AVATAR_A,
+            filename="photo.png",
+            content=b"\x89PNG\r\n\x1a\nfake",
+            content_type="image/png",
+        )
+        assert media.id == "a1a17a6b-141b-47d1-af7f-8a9c4a2ef4f1"
+        assert media.path.endswith("/a7191.png")
+        assert media.name == "a7191da6ff5a336d9fbd0e91a5e1da9f.png"
+        assert media.original_name is None
+
+    def test_parse_media_ref_accepts_snake_case_original_name(self) -> None:
+        media = PostizPostsService._parse_media_ref(
+            {
+                "id": "m1",
+                "path": "https://cdn.example.com/m1.jpg",
+                "original_name": "holiday.jpg",
+            },
+            require_name=False,
+        )
+        assert media is not None
+        assert media.original_name == "holiday.jpg"
+
+    def test_contos_upload_route_returns_200_snake_case_not_201(self) -> None:
+        """Frontend must receive ContOS 200 + snake_case even when Postiz used 201."""
+        from app.api.deps import get_current_user_id
+        from app.main import app
+        from app.services.postiz_posts import MediaRef
+
+        media = MediaRef(
+            id="38ffdbc4-865a-4e9c-8452-e7957bbb072d",
+            path="https://postiz.contos.now/uploads/2026/09/23/example.png",
+            name="example.png",
+            original_name=None,
+            alt=None,
+            thumbnail=None,
+        )
+        app.dependency_overrides[get_current_user_id] = lambda: USER_A
+        try:
+            with (
+                patch("app.api.routes.postiz.SupabaseRepository") as repo_cls,
+                patch("app.api.routes.postiz._get_posts_service") as posts_factory,
+            ):
+                repo_cls.return_value.verify_avatar_owner.return_value = None
+                posts_factory.return_value.upload_media.return_value = media
+                client = TestClient(app)
+                response = client.post(
+                    f"/api/postiz/upload?avatar_id={AVATAR_A}",
+                    files={"file": ("example.png", b"\x89PNG\r\n\x1a\nfake", "image/png")},
+                )
+        finally:
+            app.dependency_overrides.clear()
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body == {
+            "id": media.id,
+            "path": media.path,
+            "alt": None,
+            "thumbnail": None,
+            "name": "example.png",
+            "original_name": None,
+        }
+        assert "originalName" not in body
+
+
+class TestPostizProvisionSecretNormalization:
     def test_provision_secret_whitespace_normalized(self) -> None:
         spaced = "abcd" + (" " * 20) + ("0123456789abcdef" * 3) + "0123456789ab"
         assert len("".join(spaced.split())) == 64
@@ -559,6 +760,88 @@ class TestPostizOAuthService:
         with pytest.raises(PostizAuthorizationInvalidError):
             service.get_status(contos_user_id=USER_A, avatar_id=AVATAR_A)
         repository.delete_connection.assert_called_once_with(AVATAR_A)
+
+    def test_status_upstream_502_without_cache_propagates(self) -> None:
+        """ContOS maps Postiz gateway 502 → PostizServiceError (route → HTTP 502)."""
+        settings = _settings()
+        repository = MagicMock()
+        client = MagicMock()
+        repository.get_connection.return_value = _connection(
+            settings=settings,
+            token=b"pos_ok",
+            integration_id="li-1",
+        )
+        client.list_integrations.side_effect = PostizServiceError(
+            "Postiz request failed with status 502: ",
+            status_code=502,
+        )
+        service = _service(settings=settings, client=client, repository=repository)
+        with pytest.raises(PostizServiceError) as raised:
+            service.get_status(contos_user_id=USER_A, avatar_id=AVATAR_A)
+        assert raised.value.status_code == 502
+        repository.delete_connection.assert_not_called()
+
+    def test_status_upstream_502_returns_cached_status(self) -> None:
+        settings = _settings()
+        repository = MagicMock()
+        client = MagicMock()
+        redis = FakeRedis()
+        repository.get_connection.return_value = _connection(
+            settings=settings,
+            token=b"pos_ok",
+            integration_id="li-1",
+        )
+        client.list_integrations.side_effect = PostizServiceError(
+            "Postiz request failed with status 502: Bad Gateway",
+            status_code=502,
+        )
+        service = _service(
+            settings=settings,
+            client=client,
+            repository=repository,
+            redis_client=redis,
+        )
+        service._set_status_cache(
+            AVATAR_A,
+            PostizStatus(
+                connected=True,
+                integration=SafeIntegration(
+                    id="li-1",
+                    name="LinkedIn",
+                    identifier="linkedin",
+                    picture=None,
+                ),
+            ),
+        )
+        status = service.get_status(contos_user_id=USER_A, avatar_id=AVATAR_A)
+        assert status.connected is True
+        assert status.integration is not None
+        assert status.integration.id == "li-1"
+        repository.delete_connection.assert_not_called()
+
+    def test_list_integrations_uses_raw_pos_authorization_header(self) -> None:
+        """Public API auth is Authorization: pos_… (not Bearer)."""
+        settings = _settings()
+        client = PostizClient(settings)
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = "[]"
+        mock_response.content = b"[]"
+        mock_response.headers = {"content-type": "application/json"}
+        mock_response.json.return_value = []
+
+        with patch("app.clients.postiz_client.httpx.Client") as client_cls:
+            http = MagicMock()
+            client_cls.return_value.__enter__.return_value = http
+            http.request.return_value = mock_response
+            result = client.list_integrations("pos_test_token_abc")
+
+        assert result == []
+        args, kwargs = http.request.call_args
+        assert args[0] == "GET"
+        assert args[1] == f"{settings.postiz_public_api_base_url}/integrations"
+        assert kwargs["headers"]["Authorization"] == "pos_test_token_abc"
+        assert not kwargs["headers"]["Authorization"].startswith("Bearer ")
 
     def test_legacy_null_avatar_not_returned_by_get_connection(self) -> None:
         """Repository get_connection filters by avatar_id — never legacy null rows."""
@@ -1182,7 +1465,7 @@ class TestPostizCalendarPosts:
 
 
 class TestPostizMediaPosts:
-    """Phase 1 LinkedIn multi-image support (max 10)."""
+    """LinkedIn multi-image (max 10) and single MP4 video via value[].image."""
 
     def _connected(
         self,
@@ -1370,7 +1653,34 @@ class TestPostizMediaPosts:
             )
         client.create_post.assert_not_called()
 
-    def test_rejects_more_than_ten_and_video(self) -> None:
+    def test_accepts_exactly_ten_images(self) -> None:
+        settings = _settings()
+        client = MagicMock()
+        repository = MagicMock()
+        service = self._connected(settings=settings, client=client, repository=repository)
+        client.create_post.return_value = [{"postId": "p10"}]
+        client.get_media.side_effect = lambda _token, media_id: {
+            "id": media_id,
+            "path": f"https://cdn.example.com/{media_id}.jpg",
+        }
+        from app.services.postiz_posts import MediaRef
+
+        ten = [
+            MediaRef(id=f"m{i}", path=f"https://cdn.example.com/m{i}.jpg")
+            for i in range(10)
+        ]
+        service.create_or_update_post(
+            contos_user_id=USER_A,
+            avatar_id=AVATAR_A,
+            post_type="now",
+            content="Exactly ten",
+            publish_date="2026-09-23T15:30:00Z",
+            images=ten,
+        )
+        images = client.create_post.call_args.args[1]["posts"][0]["value"][0]["image"]
+        assert [item["id"] for item in images] == [f"m{i}" for i in range(10)]
+
+    def test_rejects_more_than_ten_images(self) -> None:
         settings = _settings()
         client = MagicMock()
         repository = MagicMock()
@@ -1393,18 +1703,6 @@ class TestPostizMediaPosts:
             )
         client.create_post.assert_not_called()
 
-        with pytest.raises(PostizBadRequestError, match="image extension"):
-            service.create_or_update_post(
-                contos_user_id=USER_A,
-                avatar_id=AVATAR_A,
-                post_type="now",
-                content="Video",
-                publish_date="2026-09-23T15:30:00Z",
-                images=[
-                    MediaRef(id="v1", path="https://cdn.example.com/clip.mp4"),
-                ],
-            )
-
     def test_upload_failure_does_not_create_post(self) -> None:
         settings = _settings()
         client = MagicMock()
@@ -1423,22 +1721,206 @@ class TestPostizMediaPosts:
             )
         client.create_post.assert_not_called()
 
-    def test_upload_rejects_video_mime(self) -> None:
+    def test_upload_accepts_mp4_video(self) -> None:
+        settings = _settings()
+        client = MagicMock()
+        repository = MagicMock()
+        service = self._connected(settings=settings, client=client, repository=repository)
+        client.upload_file.return_value = {
+            "id": "vid-1",
+            "name": "clip.mp4",
+            "path": "https://cdn.example.com/uploads/clip.mp4",
+            "originalName": "clip.mp4",
+            "thumbnail": None,
+            "alt": None,
+        }
+        media = service.upload_media(
+            contos_user_id=USER_A,
+            avatar_id=AVATAR_A,
+            filename="clip.mp4",
+            content=b"\x00\x00\x00\x18ftypmp42fake",
+            content_type="video/mp4",
+        )
+        assert media.id == "vid-1"
+        assert media.path.endswith(".mp4")
+        client.upload_file.assert_called_once()
+        assert client.upload_file.call_args.kwargs["content_type"] == "video/mp4"
+        assert client.upload_file.call_args.kwargs["filename"] == "clip.mp4"
+
+    def test_upload_accepts_jpeg_and_png(self) -> None:
+        settings = _settings()
+        client = MagicMock()
+        repository = MagicMock()
+        service = self._connected(settings=settings, client=client, repository=repository)
+        client.upload_file.side_effect = [
+            {
+                "id": "jpg-1",
+                "path": "https://cdn.example.com/a.jpg",
+                "name": "a.jpg",
+            },
+            {
+                "id": "png-1",
+                "path": "https://cdn.example.com/b.png",
+                "name": "b.png",
+            },
+        ]
+        jpeg = service.upload_media(
+            contos_user_id=USER_A,
+            avatar_id=AVATAR_A,
+            filename="a.jpg",
+            content=b"\xff\xd8\xfffake",
+            content_type="image/jpeg",
+        )
+        png = service.upload_media(
+            contos_user_id=USER_A,
+            avatar_id=AVATAR_A,
+            filename="b.png",
+            content=b"\x89PNG\r\n\x1a\nfake",
+            content_type="image/png",
+        )
+        assert jpeg.path.endswith(".jpg")
+        assert png.path.endswith(".png")
+        assert client.upload_file.call_count == 2
+
+    def test_validate_upload_size_rejects_oversized_without_allocating(self) -> None:
+        from app.errors import PostizBadRequestError
+        from app.services import postiz_posts as posts_mod
+
+        with pytest.raises(PostizBadRequestError, match="Image exceeds"):
+            posts_mod._validate_upload_size(
+                "image/jpeg",
+                posts_mod._MAX_IMAGE_BYTES + 1,
+            )
+        with pytest.raises(PostizBadRequestError, match="Video exceeds"):
+            posts_mod._validate_upload_size(
+                "video/mp4",
+                posts_mod._MAX_VIDEO_BYTES + 1,
+            )
+        posts_mod._validate_upload_size("image/png", posts_mod._MAX_IMAGE_BYTES)
+        posts_mod._validate_upload_size("video/mp4", posts_mod._MAX_VIDEO_BYTES)
+
+    def test_upload_rejects_unsupported_video_mimes(self) -> None:
         settings = _settings()
         client = MagicMock()
         repository = MagicMock()
         service = self._connected(settings=settings, client=client, repository=repository)
         from app.errors import PostizBadRequestError
 
-        with pytest.raises(PostizBadRequestError, match="video/mp4"):
+        for mime, name in (
+            ("video/webm", "clip.webm"),
+            ("video/quicktime", "clip.mov"),
+            ("video/x-msvideo", "clip.avi"),
+            ("video/x-matroska", "clip.mkv"),
+        ):
+            with pytest.raises(PostizBadRequestError, match="Unsupported upload type"):
+                service.upload_media(
+                    contos_user_id=USER_A,
+                    avatar_id=AVATAR_A,
+                    filename=name,
+                    content=b"fake",
+                    content_type=mime,
+                )
+        client.upload_file.assert_not_called()
+
+    def test_upload_rejects_mime_extension_mismatch(self) -> None:
+        settings = _settings()
+        client = MagicMock()
+        repository = MagicMock()
+        service = self._connected(settings=settings, client=client, repository=repository)
+        from app.errors import PostizBadRequestError
+
+        with pytest.raises(PostizBadRequestError, match="cannot use a .mp4 filename"):
             service.upload_media(
                 contos_user_id=USER_A,
                 avatar_id=AVATAR_A,
-                filename="clip.mp4",
-                content=b"fake",
+                filename="fake.mp4",
+                content=b"\xff\xd8\xfffake",
+                content_type="image/jpeg",
+            )
+        with pytest.raises(PostizBadRequestError, match="require a .mp4 filename"):
+            service.upload_media(
+                contos_user_id=USER_A,
+                avatar_id=AVATAR_A,
+                filename="clip.jpg",
+                content=b"fake-video",
                 content_type="video/mp4",
             )
         client.upload_file.assert_not_called()
+
+    def test_single_video_post_uses_image_array(self) -> None:
+        settings = _settings()
+        client = MagicMock()
+        repository = MagicMock()
+        service = self._connected(settings=settings, client=client, repository=repository)
+        client.create_post.return_value = [{"postId": "pv1"}]
+        client.get_media.return_value = {
+            "id": "v1",
+            "path": "https://cdn.example.com/clip.mp4",
+        }
+        from app.services.postiz_posts import MediaRef
+
+        service.create_or_update_post(
+            contos_user_id=USER_A,
+            avatar_id=AVATAR_A,
+            post_type="now",
+            content="One video",
+            publish_date="2026-09-23T15:30:00Z",
+            images=[
+                MediaRef(id="v1", path="https://cdn.example.com/clip.mp4"),
+            ],
+        )
+        payload = client.create_post.call_args.args[1]
+        image_field = payload["posts"][0]["value"][0]["image"]
+        assert image_field == [
+            {"id": "v1", "path": "https://cdn.example.com/clip.mp4"},
+        ]
+        assert image_field[0]["path"].endswith(".mp4")
+
+    def test_rejects_two_videos_and_image_video_mix(self) -> None:
+        settings = _settings()
+        client = MagicMock()
+        repository = MagicMock()
+        service = self._connected(settings=settings, client=client, repository=repository)
+        from app.errors import PostizBadRequestError
+        from app.services.postiz_posts import MediaRef
+
+        with pytest.raises(PostizBadRequestError, match="at most one video"):
+            service.create_or_update_post(
+                contos_user_id=USER_A,
+                avatar_id=AVATAR_A,
+                post_type="now",
+                content="Two videos",
+                publish_date="2026-09-23T15:30:00Z",
+                images=[
+                    MediaRef(id="v1", path="https://cdn.example.com/a.mp4"),
+                    MediaRef(id="v2", path="https://cdn.example.com/b.mp4"),
+                ],
+            )
+        with pytest.raises(PostizBadRequestError, match="cannot combine video and image"):
+            service.create_or_update_post(
+                contos_user_id=USER_A,
+                avatar_id=AVATAR_A,
+                post_type="now",
+                content="Image then video",
+                publish_date="2026-09-23T15:30:00Z",
+                images=[
+                    MediaRef(id="m1", path="https://cdn.example.com/a.jpg"),
+                    MediaRef(id="v1", path="https://cdn.example.com/a.mp4"),
+                ],
+            )
+        with pytest.raises(PostizBadRequestError, match="cannot combine video and image"):
+            service.create_or_update_post(
+                contos_user_id=USER_A,
+                avatar_id=AVATAR_A,
+                post_type="now",
+                content="Video then image",
+                publish_date="2026-09-23T15:30:00Z",
+                images=[
+                    MediaRef(id="v1", path="https://cdn.example.com/a.mp4"),
+                    MediaRef(id="m1", path="https://cdn.example.com/a.jpg"),
+                ],
+            )
+        client.create_post.assert_not_called()
 
     def test_text_only_still_sends_empty_image_array(self) -> None:
         settings = _settings()

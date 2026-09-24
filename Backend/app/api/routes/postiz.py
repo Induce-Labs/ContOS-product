@@ -179,8 +179,14 @@ def _raise_postiz_http(error: Exception) -> NoReturn:
             detail=str(error),
         ) from error
     if isinstance(error, PostizServiceError):
+        upstream = getattr(error, "status_code", None)
+        http_status = (
+            upstream
+            if isinstance(upstream, int) and upstream in {502, 503, 504}
+            else status.HTTP_502_BAD_GATEWAY
+        )
         raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
+            status_code=http_status,
             detail=str(error),
         ) from error
     if isinstance(error, RepositoryError):
@@ -394,6 +400,19 @@ async def upload_postiz_media(
     ) as error:
         _raise_postiz_http(error)
 
+    # ContOS always returns 200 + snake_case MediaItemResponse to the browser.
+    # Postiz itself often replies 201 with camelCase originalName — already mapped.
+    logger.info(
+        "ContOS upload response ready for frontend",
+        extra={
+            "avatar_id": str(avatar_id),
+            "media_id": media.id,
+            "has_path": bool(media.path),
+            "has_name": bool(media.name),
+            "has_original_name": bool(media.original_name),
+            "contos_http_status": 200,
+        },
+    )
     return MediaItemResponse(
         id=media.id,
         path=media.path,

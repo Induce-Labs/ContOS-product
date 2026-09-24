@@ -41,7 +41,7 @@ Org-consent OAuth (`POST /api/postiz/oauth/callback`) is **deprecated** (HTTP 41
 | GET | `/api/postiz/status?avatar_id=` | Bearer Supabase JWT | `{ connected, integration, claim_candidates }` for this avatar |
 | POST | `/api/postiz/claim` | Bearer Supabase JWT | Body `{ avatar_id, integration_id }` — bind one unclaimed LinkedIn |
 | GET | `/api/postiz/posts?avatar_id=&start_date=&end_date=` | Bearer | List calendar posts for this avatar’s LinkedIn only (includes `images`) |
-| POST | `/api/postiz/upload?avatar_id=` | Bearer | Multipart `file` — avatar-scoped proxy to Postiz `/upload` (images only, max 10 MB) |
+| POST | `/api/postiz/upload?avatar_id=` | Bearer | Multipart `file` — avatar-scoped proxy to Postiz `/upload` (images max 10 MB; `video/mp4` max 1 GB) |
 | POST | `/api/postiz/posts` | Bearer | Body `{ avatar_id, type, content, publish_date, post_id?, images? }` — `type`: `now` \| `schedule` \| `draft` \| `update`; `images` is the **complete final** MediaDto list (max 10) |
 | PUT | `/api/postiz/posts/{post_id}/status` | Bearer | Body `{ avatar_id, status }` — `draft` \| `schedule` |
 | DELETE | `/api/postiz/posts/{post_id}?avatar_id=` | Bearer | Delete a post owned by this avatar’s integration |
@@ -62,12 +62,100 @@ ContOS does **not** store posts or media blobs. It proxies to Postiz v2.23.0 `/a
 
 Every ContOS call: verify avatar ownership → load `postiz_connections` by `avatar_id` → decrypt that avatar’s token → resolve LinkedIn from **stored** `postiz_integration_id` (never from the frontend). Mutate/delete first confirms the post’s `integration.id` matches that claimed id. Create/update with images verifies each media id via Postiz `GET /media/:id` for **that** org and requires path match.
 
-**Media (Phase 1 — LinkedIn multi-image):**
-- Max **10** images per post; images only (no video).
-- Frontend uploads new files first; failed upload aborts create/update.
+**Media (LinkedIn images + MP4 video):**
+- Max **10** images per post **or** exactly **1** `video/mp4` (not both). Text-only still uses `images: []`.
+- ContOS upload validates **declared MIME + filename extension + size** only (`_MAX_IMAGE_BYTES` / `_MAX_VIDEO_BYTES`). Postiz performs content sniffing.
+- ContOS still sends media through Postiz `value[].image` (MediaDto); no separate video field.
+- Calendar UI: attach up to 10 images **or** exactly 1 MP4 (`<video controls>` preview for local blob / hydrated `.mp4` URL). Frontend validation is UX-only; ContOS backend remains authoritative.
+- Frontend Calendar still reuses `uploadPostizMedia` (no separate video upload client).
 - Edits send the **complete final** `images` array (e.g. existing `[A,B,C]` → remove B + add D → `[A,C,D]`; clear all → `[]`).
 - Settings stay `{ "__type": "linkedin" }` without `post_as_images_carousel` (native LinkedIn multi-image, not PDF carousel).
-- Text-only still works with `images: []`.
+- **Large-file limit (known):** ContOS `await file.read()` loads the whole file into memory; Postiz client read timeout is ~120s — not redesigned in this step.
+
+**Step 4 — Mixed image + video (investigation only):**
+
+> Postiz v2.23.0's LinkedIn provider explicitly rejects mixed image + video attachments.
+
+Evidence: `_postiz-v2.23.0/libraries/nestjs-libraries/src/integrations/social/linkedin.provider.ts` → `LinkedinProvider.checkValidity` — if media length > 1 and any `path` contains `mp4`, returns `"Can have maximum 1 media when selecting a video."` (This documents our Postiz provider behavior, not a claim about LinkedIn’s underlying API.)
+
+ContOS contract (unchanged; no ContOS/Postiz code changes from this investigation):
+
+| Case | Result |
+|------|--------|
+| Images only: 0–10 images | ALLOWED |
+| Video only: exactly 1 MP4 | ALLOWED |
+| Images + 1 video (any mix) | REJECTED |
+| 2+ videos (any mix) | REJECTED |
+
+**Final rule:** ContOS contract: images XOR 1 MP4 video.
+
+The upload/processing layer can individually process multiple media items, but that does not mean the LinkedIn provider supports publishing those mixed media items together. Do not bypass provider validation or call LinkedIn from ContOS.
+
+### Upload 504 troubleshooting (Postiz storage)
+
+ContOS waits synchronously for `POST {POSTIZ_URL}/api/public/v1/upload`.
+
+**2026-09-23 retest (production `postiz.contos.now`):** authenticated ContOS-client uploads completed successfully end-to-end:
+
+| Probe | Result |
+|--------|--------|
+| Unauthenticated `/api/public/v1/upload` | **401 in ~0.4s** |
+| ContOS `PostizClient.upload_file` tiny PNG (3 avatars) | **201 in ~300–420ms** |
+| ContOS client ~826KB JPEG | **201 in ~627ms** |
+
+So the hang is **not** currently reproducible in auth → multer → `LocalStorage.uploadFile` → Prisma `saveFile`. Earlier nginx `upstream timed out` / HTML **504** (~60–75s) was real, but the live handler path above is fast with `STORAGE_PROVIDER=local`.
+
+If 504 returns, Postiz now emits structured `upload_timing` logs (no tokens/contents). Interpret:
+
+1. `auth_ok` then silence before `multipart_pipe_start` / `handler_start` → blocked in **FileInterceptor/multer** (body incomplete or stream stall).
+2. `handler_start` then silence before `after_storage_uploadFile` → blocked in **storage** (`fromBuffer` / mkdir / write).
+3. `after_storage_uploadFile` then silence before `after_saveFile` → blocked in **Prisma `media.create`**.
+4. `after_saveFile` then nginx 504 → response/proxy issue after handler finished.
+
+Postiz hardening applied: multer `limits.fileSize` = 1GB (matches video cap); temporary `upload_timing` logs around auth, pipe, storage, and Prisma.
+
+On the Postiz VPS if it regresses:
+
+1. `STORAGE_PROVIDER` / `UPLOAD_DIRECTORY` (confirm process env, not just compose file).
+2. `docker logs` grep `upload_timing` during an upload.
+3. Bypass proxy: `curl -m 15 -H "Authorization: pos_…" -F file=@tiny.png http://127.0.0.1:3000/public/v1/upload`.
+4. Do **not** raise nginx timeouts until Postiz itself is slow but completing.
+
+Regression test (Postiz tree):
+
+```bash
+pnpm exec jest libraries/nestjs-libraries/src/upload/local.storage.spec.ts --coverage=false
+```
+
+### Upload success but UI still fails (response path)
+
+When Postiz `upload_timing` reaches `response_finished` (~150ms) but Calendar still shows
+“Image upload failed…”, the failure is **after** Postiz storage — not a hang.
+
+**Observed successful Postiz response**
+
+| Layer | HTTP | Body shape |
+|--------|------|------------|
+| Postiz `POST /public/v1/upload` | **201 Created** (Nest default for POST) | `{ id, name, originalName, path, thumbnail, alt }` — `originalName` often `null` |
+| ContOS `POST /api/postiz/upload` | **200 OK** | snake_case `MediaItemResponse`: `{ id, path, alt, thumbnail, name, original_name }` |
+
+`PostizClient.upload_file` treats any status below 400 as success (201 is not an error). It logs
+`status_code`, `response_keys`, `has_id` / `has_path` / `has_originalName` (never tokens or file bytes).
+`_parse_media_ref` accepts both `originalName` and `original_name`.
+
+**Frontend causes found**
+
+1. **Race:** `queueMicrotask` ran `uploadAttachment(localId)` before React committed the new
+   attachment, so `attachmentsRef` missed the entry → generic `mediaUploadFailed` without a
+   lasting attachment update. Fix: sync `attachmentsRef.current` inside the updater and pass
+   `file` as `fileOverride`.
+2. **Sticky `formError`:** a failed race left the banner up even after a later success. Fix:
+   `setFormError(null)` on successful upload.
+3. **Parse:** ContOS already returns snake_case; `parseMediaItem` also accepts camelCase
+   `originalName` and surfaces `HTTP status` + response keys if parse fails. `response.ok`
+   is true for all 2xx — ContOS never returns 201 to the browser.
+
+ContOS regression tests: `TestPostizUploadErrorSanitization` (201 body + ContOS 200 route).
 
 **Timezone:** ContOS requires ISO-8601 datetimes with an explicit offset (`Z` or `±HH:MM`). The frontend builds them from the user’s local wall-clock time and ContOS passes `publish_date` through unchanged as Postiz `date`. ContOS does not convert to UTC or shift the scheduled time.
 
@@ -124,6 +212,10 @@ Apply all Postiz SQL migrations to ContOS Supabase before testing. Postiz must e
 - `/auth/postiz/callback` shows a deprecated message if hit
 - No Postiz secrets in Vite env
 
+### Calendar UI
+
+Visual-only redesign of the Calendar presentation layer (`CalendarPage.tsx`). Layout: connected-account strip, left rail (Create post + upcoming list from the loaded month’s posts), large month grid with pastel event chips and today highlight. Uses the shared dashboard content background (same as other tabs). Uses existing Postiz client calls, handlers, and i18n; no API, schema, or scheduling-logic changes.
+
 ## Security
 
 - Ownership: `verify_avatar_owner` before every connect/status/claim/posts/disconnect
@@ -152,6 +244,8 @@ cd Backend
 pip install -e ".[dev]"
 pytest tests/test_postiz.py tests/test_phase6_hardening.py -q
 ```
+
+Final LinkedIn automated QA results (2026-09-24): [linkedin-final-qa.md](./linkedin-final-qa.md).
 
 ## Known limitations
 

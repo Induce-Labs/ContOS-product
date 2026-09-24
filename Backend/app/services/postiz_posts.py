@@ -40,6 +40,9 @@ _ISO_DATETIME_RE = re.compile(
 
 MAX_POST_IMAGES = 10
 _IMAGE_EXTENSIONS = frozenset({".png", ".jpg", ".jpeg", ".gif", ".webp"})
+_VIDEO_MIME = "video/mp4"
+_VIDEO_EXTENSION = ".mp4"
+_ALLOWED_MEDIA_EXTENSIONS = _IMAGE_EXTENSIONS | {_VIDEO_EXTENSION}
 _ALLOWED_UPLOAD_MIME = frozenset(
     {
         "image/jpeg",
@@ -49,9 +52,56 @@ _ALLOWED_UPLOAD_MIME = frozenset(
         "image/avif",
         "image/bmp",
         "image/tiff",
+        _VIDEO_MIME,
     },
 )
 _MAX_IMAGE_BYTES = 10 * 1024 * 1024
+_MAX_VIDEO_BYTES = 1024 * 1024 * 1024
+
+
+def _path_extension(path: str) -> str:
+    cleaned = path.strip().split("?", 1)[0].rsplit(".", 1)
+    if len(cleaned) < 2:
+        return ""
+    return f".{cleaned[-1].lower()}"
+
+
+def _validate_upload_size(mime: str, size_bytes: int) -> None:
+    """Enforce ContOS size limits from declared MIME (no byte sniffing)."""
+    if mime == _VIDEO_MIME:
+        if size_bytes > _MAX_VIDEO_BYTES:
+            raise PostizBadRequestError(
+                f"Video exceeds the maximum size of {_MAX_VIDEO_BYTES} bytes.",
+            )
+        return
+    if mime.startswith("image/"):
+        if size_bytes > _MAX_IMAGE_BYTES:
+            raise PostizBadRequestError(
+                f"Image exceeds the maximum size of {_MAX_IMAGE_BYTES} bytes.",
+            )
+        return
+    raise PostizBadRequestError(f"Unsupported upload type {mime!r}.")
+
+
+def _validate_upload_mime_and_extension(*, mime: str, filename: str) -> None:
+    """ContOS checks declared MIME + filename extension only; Postiz sniffs content."""
+    extension = _path_extension(filename)
+    if mime == _VIDEO_MIME:
+        if extension != _VIDEO_EXTENSION:
+            raise PostizBadRequestError(
+                f"video/mp4 uploads require a {_VIDEO_EXTENSION} filename. Got: {filename!r}.",
+            )
+        return
+    if mime.startswith("image/") and mime in _ALLOWED_UPLOAD_MIME:
+        if extension == _VIDEO_EXTENSION:
+            raise PostizBadRequestError(
+                f"Image upload MIME {mime!r} cannot use a {_VIDEO_EXTENSION} filename.",
+            )
+        return
+    raise PostizBadRequestError(
+        f"Unsupported upload type {mime!r}. "
+        "Allowed: JPEG, PNG, GIF, WebP, AVIF, BMP, TIFF, and video/mp4.",
+    )
 
 
 @dataclass(frozen=True)
@@ -138,23 +188,27 @@ class PostizPostsService:
         mime = (content_type or "").strip().lower() or "application/octet-stream"
         if mime not in _ALLOWED_UPLOAD_MIME:
             raise PostizBadRequestError(
-                f"Unsupported image type {mime!r}. "
-                "Phase 1 allows JPEG, PNG, GIF, WebP, AVIF, BMP, and TIFF only.",
+                f"Unsupported upload type {mime!r}. "
+                "Allowed: JPEG, PNG, GIF, WebP, AVIF, BMP, TIFF, and video/mp4.",
             )
         if not content:
             raise PostizBadRequestError("Uploaded file must not be empty.")
-        if len(content) > _MAX_IMAGE_BYTES:
-            raise PostizBadRequestError(
-                f"Image exceeds the maximum size of {_MAX_IMAGE_BYTES} bytes.",
-            )
-        if self._path_extension(filename) == ".mp4" or mime == "video/mp4":
-            raise PostizBadRequestError(
-                "Video uploads are not supported in Phase 1. Use images only.",
-            )
+        _validate_upload_mime_and_extension(mime=mime, filename=filename or "upload")
+        _validate_upload_size(mime, len(content))
 
         access_token, _integration_id = self._require_connected_context(
             contos_user_id=contos_user_id,
             avatar_id=avatar_id,
+        )
+        logger.info(
+            "Avatar media upload forwarding to Postiz",
+            extra={
+                "contos_user_id": str(contos_user_id),
+                "avatar_id": str(avatar_id),
+                "upload_filename": filename or "upload",
+                "content_type": mime,
+                "size_bytes": len(content),
+            },
         )
         raw = self._client.upload_file(
             access_token,
@@ -171,6 +225,9 @@ class PostizPostsService:
                 "contos_user_id": str(contos_user_id),
                 "avatar_id": str(avatar_id),
                 "media_id": media.id,
+                "upload_filename": filename or "upload",
+                "content_type": mime,
+                "size_bytes": len(content),
             },
         )
         return media
@@ -426,6 +483,8 @@ class PostizPostsService:
                 f"A post may include at most {MAX_POST_IMAGES} images.",
             )
         normalized: list[MediaRef] = []
+        video_count = 0
+        image_count = 0
         for index, item in enumerate(images):
             media_id = item.id.strip() if isinstance(item.id, str) else ""
             path = item.path.strip() if isinstance(item.path, str) else ""
@@ -434,15 +493,15 @@ class PostizPostsService:
                     f"images[{index}] requires non-empty id and path.",
                 )
             extension = self._path_extension(path)
-            if extension not in _IMAGE_EXTENSIONS:
+            if extension not in _ALLOWED_MEDIA_EXTENSIONS:
                 raise PostizBadRequestError(
-                    f"images[{index}] path must end with an allowed image extension "
-                    f"({', '.join(sorted(_IMAGE_EXTENSIONS))}). Got: {path!r}",
+                    f"images[{index}] path must end with an allowed media extension "
+                    f"({', '.join(sorted(_ALLOWED_MEDIA_EXTENSIONS))}). Got: {path!r}",
                 )
-            if extension == ".mp4":
-                raise PostizBadRequestError(
-                    "Video attachments are not supported in Phase 1.",
-                )
+            if extension == _VIDEO_EXTENSION:
+                video_count += 1
+            else:
+                image_count += 1
             alt = item.alt.strip() if isinstance(item.alt, str) and item.alt.strip() else None
             thumbnail = (
                 item.thumbnail.strip()
@@ -451,6 +510,15 @@ class PostizPostsService:
             )
             normalized.append(
                 MediaRef(id=media_id, path=path, alt=alt, thumbnail=thumbnail),
+            )
+
+        if video_count > 1:
+            raise PostizBadRequestError(
+                "A post may include at most one video attachment.",
+            )
+        if video_count == 1 and image_count > 0:
+            raise PostizBadRequestError(
+                "A post cannot combine video and image attachments.",
             )
         return normalized
 
@@ -565,6 +633,8 @@ class PostizPostsService:
             return None
         name = raw.get("name")
         original_name = raw.get("originalName")
+        if not isinstance(original_name, str):
+            original_name = raw.get("original_name")
         if require_name and not isinstance(name, str):
             return None
         alt = raw.get("alt")
@@ -588,10 +658,7 @@ class PostizPostsService:
 
     @staticmethod
     def _path_extension(path: str) -> str:
-        cleaned = path.strip().split("?", 1)[0].rsplit(".", 1)
-        if len(cleaned) < 2:
-            return ""
-        return f".{cleaned[-1].lower()}"
+        return _path_extension(path)
 
     @staticmethod
     def _require_iso_datetime(value: str, *, field_name: str) -> str:

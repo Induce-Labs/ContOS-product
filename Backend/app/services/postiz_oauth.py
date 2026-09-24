@@ -218,6 +218,35 @@ class PostizOAuthService:
             self._clear_status_cache(avatar_id)
             self._clear_linkedin_snapshot(avatar_id)
             raise
+        except PostizServiceError as error:
+            # Transient upstream gateway failures (e.g. Postiz container restart)
+            # should not wipe the ContOS connection. Prefer a fresh cache hit.
+            upstream = getattr(error, "status_code", None)
+            if upstream in {502, 503, 504}:
+                cached = self._get_status_cache(avatar_id)
+                if cached is not None:
+                    logger.warning(
+                        "Postiz public API unavailable; returning cached status",
+                        extra={
+                            "contos_user_id": str(contos_user_id),
+                            "avatar_id": str(avatar_id),
+                            "postiz_organization_id": org_id,
+                            "upstream_status_code": upstream,
+                            "cached_connected": cached.connected,
+                        },
+                    )
+                    return cached
+            logger.warning(
+                "Postiz status failed calling public integrations API",
+                extra={
+                    "contos_user_id": str(contos_user_id),
+                    "avatar_id": str(avatar_id),
+                    "postiz_organization_id": org_id,
+                    "upstream_status_code": upstream,
+                    "error_type": type(error).__name__,
+                },
+            )
+            raise
 
         stored_id = connection.get("postiz_integration_id")
         stored_id_str = (

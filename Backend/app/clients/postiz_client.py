@@ -37,6 +37,25 @@ def _redact_url(url: str) -> str:
     return f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
 
 
+def _sanitize_upstream_body_preview(body_text: str, *, status_code: int) -> str:
+    """Keep error messages actionable without dumping HTML gateway pages to clients."""
+    cleaned = (body_text or "").strip()
+    lowered = cleaned.lower()
+    if (
+        status_code in {502, 503, 504}
+        or "<html" in lowered
+        or "gateway time-out" in lowered
+        or "bad gateway" in lowered
+    ):
+        return (
+            f"Postiz upstream returned HTTP {status_code} "
+            "(gateway timeout or bad gateway). The Postiz /upload handler did not "
+            "finish before the reverse proxy gave up — check Postiz storage "
+            "(STORAGE_PROVIDER / R2 / UPLOAD_DIRECTORY) and container logs."
+        )
+    return cleaned[:200]
+
+
 def _extract_postiz_error_message(body: Any) -> str:
     if isinstance(body, dict):
         for key in ("msg", "message", "detail", "error"):
@@ -259,9 +278,23 @@ class PostizClient:
             raise PostizServiceError("Upload content must not be empty.")
         cleaned_name = filename.strip() or "upload"
         mime = content_type.strip() or "application/octet-stream"
+        size_bytes = len(content)
 
         url = f"{self._settings.postiz_public_api_base_url}/upload"
+        # ContOS waits synchronously for Postiz to finish storage+DB. Keep a
+        # generous client timeout so nginx (often ~60s) is what surfaces first
+        # when Postiz hangs — we then report the upstream status clearly.
         upload_timeout = httpx.Timeout(connect=10.0, read=120.0, write=120.0, pool=10.0)
+        started = time.perf_counter()
+        logger.info(
+            "Postiz upload starting",
+            extra={
+                "url": _redact_url(url),
+                "upload_filename": cleaned_name,
+                "content_type": mime,
+                "size_bytes": size_bytes,
+            },
+        )
         try:
             with httpx.Client(timeout=upload_timeout) as client:
                 response = client.post(
@@ -270,40 +303,129 @@ class PostizClient:
                     files={"file": (cleaned_name, content, mime)},
                 )
         except httpx.HTTPError as error:
+            elapsed_ms = int((time.perf_counter() - started) * 1000)
             logger.warning(
                 "Postiz upload transport failed",
                 extra={
                     "url": _redact_url(url),
+                    "upload_filename": cleaned_name,
+                    "content_type": mime,
+                    "size_bytes": size_bytes,
+                    "elapsed_ms": elapsed_ms,
                     "error_type": type(error).__name__,
                 },
             )
             raise PostizServiceError(
-                f"Postiz upload failed: {type(error).__name__}",
+                f"Postiz upload failed: {type(error).__name__} after {elapsed_ms}ms",
             ) from error
 
-        if response.status_code == 401:
+        elapsed_ms = int((time.perf_counter() - started) * 1000)
+        status_code = response.status_code
+        response_content_type = (response.headers.get("content-type") or "").split(";")[0]
+        # Nest POST /upload returns 201 Created on success (not only 200).
+        if status_code == 401:
+            logger.warning(
+                "Postiz upload unauthorized",
+                extra={
+                    "url": _redact_url(url),
+                    "upload_filename": cleaned_name,
+                    "size_bytes": size_bytes,
+                    "elapsed_ms": elapsed_ms,
+                    "status_code": 401,
+                    "content_type_response": response_content_type,
+                },
+            )
             raise PostizAuthorizationInvalidError(
                 "Postiz authorization is no longer valid; reconnect required.",
             )
-        if response.status_code >= 400:
-            body_preview = (response.text or "")[:200]
+        if status_code >= 400:
+            body_preview = _sanitize_upstream_body_preview(
+                response.text or "",
+                status_code=status_code,
+            )
+            logger.warning(
+                "Postiz upload failed",
+                extra={
+                    "url": _redact_url(url),
+                    "upload_filename": cleaned_name,
+                    "content_type": mime,
+                    "size_bytes": size_bytes,
+                    "elapsed_ms": elapsed_ms,
+                    "status_code": status_code,
+                    "content_type_response": response_content_type,
+                    "body_preview": body_preview[:200],
+                },
+            )
             raise PostizServiceError(
-                f"Postiz upload failed with status {response.status_code}: {body_preview}",
+                f"Postiz upload failed with status {status_code}: {body_preview}",
+                status_code=status_code,
             )
         try:
             data = response.json()
         except ValueError as error:
+            logger.warning(
+                "Postiz upload non-JSON body",
+                extra={
+                    "url": _redact_url(url),
+                    "upload_filename": cleaned_name,
+                    "size_bytes": size_bytes,
+                    "elapsed_ms": elapsed_ms,
+                    "status_code": status_code,
+                    "content_type_response": response_content_type,
+                    "body_length": len(response.text or ""),
+                },
+            )
             raise PostizServiceError(
                 "Postiz upload returned a non-JSON response body.",
+                status_code=status_code,
             ) from error
         if not isinstance(data, dict):
             raise PostizServiceError("Postiz upload response must be a JSON object.")
+        response_keys = sorted(str(key) for key in data.keys())
         media_id = data.get("id")
         path = data.get("path")
-        if not isinstance(media_id, str) or not media_id.strip():
-            raise PostizServiceError("Postiz upload response is missing id.")
-        if not isinstance(path, str) or not path.strip():
-            raise PostizServiceError("Postiz upload response is missing path.")
+        has_id = isinstance(media_id, str) and bool(media_id.strip())
+        has_path = isinstance(path, str) and bool(path.strip())
+        logger.info(
+            "Postiz upload response shape",
+            extra={
+                "url": _redact_url(url),
+                "upload_filename": cleaned_name,
+                "content_type": mime,
+                "size_bytes": size_bytes,
+                "elapsed_ms": elapsed_ms,
+                "status_code": status_code,
+                "content_type_response": response_content_type,
+                "response_keys": ",".join(response_keys),
+                "has_id": has_id,
+                "has_path": has_path,
+                "has_name": isinstance(data.get("name"), str),
+                "has_originalName": "originalName" in data,
+                "has_original_name": "original_name" in data,
+            },
+        )
+        if not has_id:
+            raise PostizServiceError(
+                "Postiz upload response is missing id.",
+                status_code=status_code,
+            )
+        if not has_path:
+            raise PostizServiceError(
+                "Postiz upload response is missing path.",
+                status_code=status_code,
+            )
+        logger.info(
+            "Postiz upload completed",
+            extra={
+                "url": _redact_url(url),
+                "upload_filename": cleaned_name,
+                "content_type": mime,
+                "size_bytes": size_bytes,
+                "elapsed_ms": elapsed_ms,
+                "status_code": status_code,
+                "media_id": media_id.strip(),
+            },
+        )
         return data
 
     def get_media(self, access_token: str, media_id: str) -> dict[str, Any]:
@@ -494,6 +616,8 @@ class PostizClient:
                         "url": _redact_url(url),
                         "status_code": response.status_code,
                         "attempt": attempt,
+                        "content_type": response.headers.get("content-type"),
+                        "body_length": len(response.content or b""),
                     },
                 )
                 time.sleep(attempt)
@@ -513,13 +637,30 @@ class PostizClient:
                 ):
                     error = PostizServiceError(
                         "Postiz provisioned avatar has no recoverable access token; rotate required.",
+                        status_code=response.status_code,
                     )
                     setattr(error, "rotate_required", True)
                     raise error
 
                 body_preview = body_text[:200]
+                logger.warning(
+                    "Postiz request failed permanently",
+                    extra={
+                        "method": method,
+                        "url": _redact_url(url),
+                        "status_code": response.status_code,
+                        "attempt": attempt,
+                        "content_type": response.headers.get("content-type"),
+                        "body_preview": _sanitize_upstream_body_preview(
+                            body_text,
+                            status_code=response.status_code,
+                        )[:200],
+                    },
+                )
                 raise PostizServiceError(
-                    f"Postiz request failed with status {response.status_code}: {body_preview}",
+                    f"Postiz request failed with status {response.status_code}: "
+                    f"{_sanitize_upstream_body_preview(body_text, status_code=response.status_code)}",
+                    status_code=response.status_code,
                 )
 
             body_text = (response.text or "").strip()

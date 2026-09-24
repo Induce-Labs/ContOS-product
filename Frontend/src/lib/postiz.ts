@@ -218,6 +218,9 @@ export type PostizPostType = 'now' | 'schedule' | 'draft' | 'update'
 export type PostizPostStatus = 'draft' | 'schedule'
 
 export const POSTIZ_MAX_POST_IMAGES = 10
+/** Mirrors ContOS backend `_MAX_VIDEO_BYTES` (1 GB). Frontend UX guard only. */
+export const POSTIZ_MAX_VIDEO_BYTES = 1024 * 1024 * 1024
+export const POSTIZ_VIDEO_MIME = 'video/mp4'
 
 export type PostizMediaItem = {
   id: string
@@ -253,13 +256,20 @@ function parseMediaItem(value: unknown, index: number): PostizMediaItem {
   if (typeof item.id !== 'string' || typeof item.path !== 'string') {
     throw new PostizApiError(`Postiz media item at index ${index} is missing id/path.`)
   }
+  // ContOS API uses snake_case; raw Postiz bodies use camelCase originalName.
+  const originalName =
+    typeof item.original_name === 'string'
+      ? item.original_name
+      : typeof item.originalName === 'string'
+        ? item.originalName
+        : null
   return {
     id: item.id,
     path: item.path,
     alt: typeof item.alt === 'string' ? item.alt : null,
     thumbnail: typeof item.thumbnail === 'string' ? item.thumbnail : null,
     name: typeof item.name === 'string' ? item.name : null,
-    original_name: typeof item.original_name === 'string' ? item.original_name : null,
+    original_name: originalName,
   }
 }
 
@@ -460,7 +470,31 @@ export async function uploadPostizMedia(
   if (!response.ok) {
     throw new PostizApiError(await readErrorDetail(response), response.status)
   }
-  return parseMediaItem(await response.json(), 0)
+  // ContOS returns 200 with MediaItemResponse; Postiz upstream often used 201.
+  // response.ok is true for both 200–299 — never treat 201 as failure here.
+  let payload: unknown
+  try {
+    payload = await response.json()
+  } catch {
+    throw new PostizApiError(
+      `Upload response was not JSON (HTTP ${response.status}).`,
+      response.status,
+    )
+  }
+  try {
+    return parseMediaItem(payload, 0)
+  } catch (error) {
+    const keys =
+      typeof payload === 'object' && payload !== null
+        ? Object.keys(payload as Record<string, unknown>).join(',')
+        : typeof payload
+    throw new PostizApiError(
+      error instanceof PostizApiError
+        ? `${error.message} (HTTP ${response.status}, keys=${keys})`
+        : `Upload response parse failed (HTTP ${response.status}, keys=${keys})`,
+      response.status,
+    )
+  }
 }
 
 export async function changePostizPostStatus(

@@ -23,7 +23,15 @@ class PipelineError(ContOSBackendError):
 
 
 class PostizServiceError(ContOSBackendError):
-    """Raised when a Postiz API or OAuth operation fails."""
+    """Raised when a Postiz API or OAuth operation fails.
+
+    Optional ``status_code`` is the upstream HTTP status when the failure came
+    from a Postiz response (never include tokens or secrets in the message).
+    """
+
+    def __init__(self, message: str, *, status_code: int | None = None) -> None:
+        super().__init__(message)
+        self.status_code = status_code
 
 
 class PostizOAuthStateError(PostizServiceError):
