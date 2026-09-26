@@ -179,3 +179,41 @@ describe('isAddMediaDisabled', () => {
     expect(isAddMediaDisabled([{ kind: 'image' }])).toBe(false)
   })
 })
+
+describe('validateNewFiles X max of 4', () => {
+  it('accepts 4 images', () => {
+    const existing = Array.from({ length: 3 }, () => ({ kind: 'image' as const }))
+    const result = validateNewFiles(existing, [fakeFile('d.jpg', 'image/jpeg')], 4)
+    expect(result.ok).toBe(true)
+  })
+
+  it('rejects a 5th image', () => {
+    const existing = Array.from({ length: 4 }, () => ({ kind: 'image' as const }))
+    const result = validateNewFiles(existing, [fakeFile('e.jpg', 'image/jpeg')], 4)
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.errorKey).toBe('mediaMaxReached')
+      expect(result.errorParams).toEqual({ max: 4 })
+    }
+  })
+
+  it('accepts one MP4 and rejects a second, a mix, and two videos', () => {
+    const video = fakeFile('clip.mp4', 'video/mp4')
+    expect(validateNewFiles([], [video], 4).ok).toBe(true)
+    expect(validateNewFiles([{ kind: 'video' }], [video], 4).ok).toBe(false)
+    expect(
+      validateNewFiles([{ kind: 'image' }], [video], 4).ok,
+    ).toBe(false)
+    const two = validateNewFiles([], [video, fakeFile('other.mp4', 'video/mp4')], 4)
+    expect(two.ok).toBe(false)
+    if (!two.ok) {
+      expect(two.errorKey).toBe('mediaVideoOnlyOne')
+    }
+  })
+
+  it('disables add at 4 images and still allows fewer', () => {
+    const four = Array.from({ length: 4 }, () => ({ kind: 'image' as const }))
+    expect(isAddMediaDisabled(four, 4)).toBe(true)
+    expect(isAddMediaDisabled([{ kind: 'image' }], 4)).toBe(false)
+  })
+})

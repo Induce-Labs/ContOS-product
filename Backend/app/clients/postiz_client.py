@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import time
 from typing import Any
 from urllib.parse import parse_qsl, quote, urlencode, urlparse, urlunparse
@@ -22,6 +23,16 @@ logger = logging.getLogger(__name__)
 _MAX_RETRIES = 2
 _RETRYABLE_STATUS_CODES = {408, 429, 500, 502, 503, 504}
 _LINKEDIN_AUTH_HOSTS = frozenset({"www.linkedin.com", "linkedin.com"})
+_X_AUTH_HOSTS = frozenset(
+    {
+        "api.twitter.com",
+        "twitter.com",
+        "www.twitter.com",
+        "api.x.com",
+        "x.com",
+        "www.x.com",
+    },
+)
 
 # Postiz ContosProvisionService 409 bodies that mean "call rotate-avatar-token".
 _ROTATE_REQUIRED_MSG_MARKERS = (
@@ -35,6 +46,30 @@ def _redact_url(url: str) -> str:
     """Strip query/fragment so logs never include codes, state, or secrets."""
     parsed = urlparse(url)
     return f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
+
+
+_POS_TOKEN_RE = re.compile(r"pos_[A-Za-z0-9]+")
+_BEARER_RE = re.compile(r"(?i)\bbearer\s+[A-Za-z0-9\-._~+/]+=*")
+_SENSITIVE_JSON_FIELD_RE = re.compile(
+    r'(?i)("(?:authorization|access_token|accessToken|refresh_token|refreshToken|'
+    r'api_secret|apiSecret|api_key|apiKey|oauth_token|oauth_token_secret|'
+    r'client_secret|clientSecret|encrypted_access_token)"\s*:\s*)"(.*?)"'
+)
+
+
+def _is_create_posts_request(method: str, url: str) -> bool:
+    if method.upper() != "POST":
+        return False
+    return urlparse(url).path.rstrip("/").endswith("/posts")
+
+
+def _sanitize_postiz_error_body(body_text: str) -> str:
+    """Remove credential-shaped values from a Postiz error body before logging."""
+    cleaned = body_text or ""
+    cleaned = _POS_TOKEN_RE.sub("[redacted]", cleaned)
+    cleaned = _BEARER_RE.sub("Bearer [redacted]", cleaned)
+    cleaned = _SENSITIVE_JSON_FIELD_RE.sub(r'\1"[redacted]"', cleaned)
+    return cleaned
 
 
 def _sanitize_upstream_body_preview(body_text: str, *, status_code: int) -> str:
@@ -462,7 +497,55 @@ class PostizClient:
         self.validate_navigation_url(url, allow_linkedin=True)
         return url
 
-    def validate_navigation_url(self, url: str, *, allow_linkedin: bool = False) -> None:
+    def get_x_authorization_url(self, access_token: str) -> str:
+        """GET /social/x — Postiz starts OAuth 1.0a. ContOS only returns the URL."""
+        if not access_token.startswith("pos_"):
+            raise PostizServiceError("Postiz access token has an unexpected format.")
+
+        data = self._request_json(
+            method="GET",
+            url=f"{self._settings.postiz_public_api_base_url}/social/x",
+            headers={"Authorization": access_token},
+            allow_retries=True,
+        )
+        if not isinstance(data, dict) or not isinstance(data.get("url"), str):
+            raise PostizServiceError(
+                "Postiz X connect response must include a string url field.",
+            )
+        url = data["url"].strip()
+        self.validate_navigation_url(url, allow_x=True)
+        return url
+
+    def get_integration_settings(self, access_token: str, integration_id: str) -> dict[str, Any]:
+        """GET /integration-settings/:id — org-scoped. Used for X maxLength only."""
+        if not access_token.startswith("pos_"):
+            raise PostizServiceError("Postiz access token has an unexpected format.")
+        cleaned = integration_id.strip()
+        if not cleaned:
+            raise PostizServiceError("integration_id is required for integration settings.")
+
+        data = self._request_json(
+            method="GET",
+            url=(
+                f"{self._settings.postiz_public_api_base_url}"
+                f"/integration-settings/{quote(cleaned, safe='')}"
+            ),
+            headers={"Authorization": access_token},
+            allow_retries=True,
+        )
+        if not isinstance(data, dict):
+            raise PostizServiceError(
+                "Postiz integration-settings response must be a JSON object.",
+            )
+        return data
+
+    def validate_navigation_url(
+        self,
+        url: str,
+        *,
+        allow_linkedin: bool = False,
+        allow_x: bool = False,
+    ) -> None:
         """Reject open redirects; allow only Postiz origin or LinkedIn OAuth when expected."""
         try:
             parsed = urlparse(url)
@@ -483,6 +566,13 @@ class PostizClient:
             if not parsed.path.startswith("/oauth/"):
                 raise PostizServiceError(
                     "LinkedIn navigation URL path is not an OAuth authorization path.",
+                )
+            return
+
+        if allow_x and host in _X_AUTH_HOSTS:
+            if not parsed.path.startswith("/oauth"):
+                raise PostizServiceError(
+                    "X navigation URL path is not an OAuth authorization path.",
                 )
             return
 
@@ -642,7 +732,17 @@ class PostizClient:
                     setattr(error, "rotate_required", True)
                     raise error
 
-                body_preview = body_text[:200]
+                if _is_create_posts_request(method, url):
+                    sanitized_error_body = _sanitize_postiz_error_body(body_text)
+                    logger.warning(
+                        "Postiz POST /posts rejected status_code=%s postiz_error_body=%s",
+                        response.status_code,
+                        sanitized_error_body,
+                        extra={
+                            "status_code": response.status_code,
+                            "postiz_error_body": sanitized_error_body,
+                        },
+                    )
                 logger.warning(
                     "Postiz request failed permanently",
                     extra={

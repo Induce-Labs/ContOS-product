@@ -81,11 +81,12 @@ export type ValidateNewFilesResult =
 
 /**
  * Validate a newly picked FileList against existing attachments.
- * Rules: ≤10 images XOR exactly 1 MP4; empty existing + empty new is caller concern.
+ * Rules: ≤ maxImages (LinkedIn 10, X 4) XOR exactly 1 MP4.
  */
 export function validateNewFiles(
   existing: ExistingAttachmentKind[],
   files: File[],
+  maxImages: number = POSTIZ_MAX_POST_IMAGES,
 ): ValidateNewFilesResult {
   if (files.length === 0) {
     return { ok: true, accepted: [] }
@@ -124,23 +125,26 @@ export function validateNewFiles(
   if (newVideoCount === 1 && (newImageCount > 0 || existingImageCount > 0)) {
     return { ok: false, errorKey: 'mediaCannotMixVideoAndImages' }
   }
-  if (newImageCount > 0 && existingImageCount + newImageCount > POSTIZ_MAX_POST_IMAGES) {
+  if (newImageCount > 0 && existingImageCount + newImageCount > maxImages) {
     return {
       ok: false,
       errorKey: 'mediaMaxReached',
-      errorParams: { max: POSTIZ_MAX_POST_IMAGES },
+      errorParams: { max: maxImages },
     }
   }
 
   return { ok: true, accepted }
 }
 
-export function isAddMediaDisabled(existing: ExistingAttachmentKind[]): boolean {
+export function isAddMediaDisabled(
+  existing: ExistingAttachmentKind[],
+  maxImages: number = POSTIZ_MAX_POST_IMAGES,
+): boolean {
   if (existing.some((item) => item.kind === 'video')) {
     return true
   }
   const imageCount = existing.filter((item) => item.kind === 'image').length
-  return imageCount >= POSTIZ_MAX_POST_IMAGES
+  return imageCount >= maxImages
 }
 
 export const MEDIA_ACCEPT =

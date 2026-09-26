@@ -17,8 +17,11 @@ import {
   monthBoundsAsOffsetIso,
   nowAsOffsetIso,
   POSTIZ_MAX_POST_IMAGES,
+  POSTIZ_MAX_X_POST_IMAGES,
   PostizApiError,
+  postizContentLength,
   startPostizConnect,
+  type PostizPlatform,
   uploadPostizMedia,
   type PostizCalendarPost,
   type PostizIntegration,
@@ -170,6 +173,18 @@ function formatPostDateTime(iso: string, locale: string): string {
   }).format(date)
 }
 
+function XMark({ className = 'h-11 w-11' }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 44 44" aria-hidden="true">
+      <rect width="44" height="44" rx="12" fill="#111" />
+      <path
+        fill="#fff"
+        d="M12.8 13.6h5.1l4.1 5.8 4.2-5.8h4.9l-6.7 9 7 10.8h-5.1l-4.5-6.4-4.6 6.4h-4.9l7.2-9.6-6.7-10.2z"
+      />
+    </svg>
+  )
+}
+
 function LinkedInMark({ className = 'h-11 w-11' }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 44 44" aria-hidden="true">
@@ -236,7 +251,13 @@ export function CalendarPage() {
   )
 }
 
-function CalendarPostizPanel({ avatarId }: { avatarId: string }) {
+function XChannelPanel({
+  avatarId,
+  onIntegrationChange,
+}: {
+  avatarId: string
+  onIntegrationChange: (integration: PostizIntegration | null) => void
+}) {
   const { t } = useTranslation()
   const [uiState, setUiState] = useState<ConnectionUiState>('checking')
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
@@ -250,6 +271,7 @@ function CalendarPostizPanel({ avatarId }: { avatarId: string }) {
   const popupRef = useRef<Window | null>(null)
   const pollTimerRef = useRef<number | null>(null)
   const pollDeadlineRef = useRef<number>(0)
+  const connectingRef = useRef(false)
 
   const stopPolling = useCallback(() => {
     if (pollTimerRef.current != null) {
@@ -267,6 +289,7 @@ function CalendarPostizPanel({ avatarId }: { avatarId: string }) {
 
   const applyConnected = useCallback(
     (nextIntegration: PostizIntegration | null) => {
+      connectingRef.current = false
       setIntegration(nextIntegration)
       setClaimCandidates([])
       setUiState('connected')
@@ -279,6 +302,422 @@ function CalendarPostizPanel({ avatarId }: { avatarId: string }) {
 
   const applyClaimCandidates = useCallback(
     (candidates: PostizIntegration[]) => {
+      connectingRef.current = false
+      setClaimCandidates(candidates)
+      setUiState('choose_account')
+      setErrorMessage(null)
+      stopPolling()
+      closePopup()
+    },
+    [closePopup, stopPolling],
+  )
+
+  useEffect(() => {
+    onIntegrationChange(uiState === 'connected' ? integration : null)
+  }, [integration, onIntegrationChange, uiState])
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadStatus() {
+      try {
+        const status = await getPostizStatus(avatarId, 'x')
+        if (cancelled) {
+          return
+        }
+        if (status.connected) {
+          setIntegration(status.integration)
+          setClaimCandidates([])
+          setUiState('connected')
+          setErrorMessage(null)
+          return
+        }
+        if (status.claim_candidates.length > 0) {
+          setClaimCandidates(status.claim_candidates)
+          setIntegration(null)
+          setUiState('choose_account')
+          setErrorMessage(null)
+          return
+        }
+        setIntegration(null)
+        setClaimCandidates([])
+        setUiState('disconnected')
+      } catch (error) {
+        if (cancelled) {
+          return
+        }
+        setUiState('error')
+        setErrorMessage(
+          error instanceof PostizApiError
+            ? error.message
+            : error instanceof Error
+              ? error.message
+              : t('postiz.calendar.x.statusFailed'),
+        )
+      }
+    }
+
+    void loadStatus()
+    return () => {
+      cancelled = true
+      stopPolling()
+      closePopup()
+    }
+  }, [avatarId, closePopup, stopPolling, t])
+
+  useEffect(() => {
+    function onMessage(event: MessageEvent) {
+      if (event.origin !== window.location.origin) {
+        return
+      }
+      if (!connectingRef.current || !isPostizParentMessage(event.data)) {
+        return
+      }
+
+      connectingRef.current = false
+      stopPolling()
+      closePopup()
+      setUiState('error')
+      setErrorMessage(
+        event.data.status === 'denied'
+          ? t('postiz.calendar.x.denied')
+          : event.data.message,
+      )
+    }
+
+    window.addEventListener('message', onMessage)
+    return () => {
+      window.removeEventListener('message', onMessage)
+    }
+  }, [closePopup, stopPolling, t])
+
+  const refreshStatus = useCallback(async (): Promise<boolean> => {
+    const status = await getPostizStatus(avatarId, 'x')
+    if (status.connected) {
+      applyConnected(status.integration)
+      return true
+    }
+    if (status.claim_candidates.length > 0) {
+      applyClaimCandidates(status.claim_candidates)
+      return false
+    }
+    setIntegration(null)
+    setUiState('disconnected')
+    return false
+  }, [applyClaimCandidates, applyConnected, avatarId])
+
+  async function handleClaimAccount(candidate: PostizIntegration) {
+    setIsClaiming(true)
+    setErrorMessage(null)
+    try {
+      const result = await claimPostizIntegration(avatarId, candidate.id, 'x')
+      if (!result.connected || result.integration === null) {
+        throw new PostizApiError(t('postiz.calendar.x.claimFailed'))
+      }
+      applyConnected(result.integration)
+    } catch (error) {
+      setUiState('error')
+      setErrorMessage(
+        error instanceof PostizApiError
+          ? error.message
+          : error instanceof Error
+            ? error.message
+            : t('postiz.calendar.x.claimFailed'),
+      )
+    } finally {
+      setIsClaiming(false)
+    }
+  }
+
+  const startPolling = useCallback(() => {
+    stopPolling()
+    pollDeadlineRef.current = Date.now() + POLL_TIMEOUT_MS
+
+    pollTimerRef.current = window.setInterval(() => {
+      void (async () => {
+        if (Date.now() > pollDeadlineRef.current) {
+          connectingRef.current = false
+          stopPolling()
+          closePopup()
+          try {
+            const status = await getPostizStatus(avatarId, 'x')
+            if (status.connected && status.integration) {
+              applyConnected(status.integration)
+              return
+            }
+            if (status.claim_candidates.length > 0) {
+              applyClaimCandidates(status.claim_candidates)
+              return
+            }
+            setUiState('error')
+            setErrorMessage(t('postiz.calendar.x.timeout'))
+          } catch (error) {
+            setUiState('error')
+            setErrorMessage(
+              error instanceof PostizApiError
+                ? error.message
+                : error instanceof Error
+                  ? error.message
+                  : t('postiz.calendar.x.timeout'),
+            )
+          }
+          return
+        }
+
+        try {
+          await refreshStatus()
+        } catch {
+          // Keep polling until timeout; transient errors are expected mid-OAuth.
+        }
+      })()
+    }, POLL_INTERVAL_MS)
+  }, [applyClaimCandidates, applyConnected, avatarId, closePopup, refreshStatus, stopPolling, t])
+
+  async function handleConnectX() {
+    setConnectPrepOpen(false)
+    setErrorMessage(null)
+    connectingRef.current = true
+    setUiState('connecting')
+
+    const popup = window.open('about:blank', 'contos-postiz-oauth-x', 'width=640,height=720')
+    popupRef.current = popup
+    if (!popup) {
+      connectingRef.current = false
+      setUiState('error')
+      setErrorMessage(t('postiz.calendar.x.popupBlocked'))
+      return
+    }
+
+    try {
+      const result = await startPostizConnect(avatarId, 'x')
+      popup.location.href = result.authorization_url
+      startPolling()
+    } catch (error) {
+      connectingRef.current = false
+      popup.close()
+      popupRef.current = null
+      setUiState('error')
+      setErrorMessage(
+        error instanceof PostizApiError
+          ? error.message
+          : error instanceof Error
+            ? error.message
+            : t('postiz.calendar.x.connectFailed'),
+      )
+    }
+  }
+
+  async function handleDisconnectConfirm() {
+    setIsDisconnecting(true)
+    setErrorMessage(null)
+    try {
+      const result = await disconnectPostizIntegration(avatarId, 'x')
+      setDisconnectOpen(false)
+      setDisconnectWarning(result.warning)
+      setIntegration(null)
+      setUiState('disconnected')
+    } catch (error) {
+      setErrorMessage(
+        error instanceof PostizApiError
+          ? error.message
+          : error instanceof Error
+            ? error.message
+            : t('postiz.calendar.x.disconnectFailed'),
+      )
+    } finally {
+      setIsDisconnecting(false)
+    }
+  }
+
+  return (
+    <section className={`${CALENDAR_CARD} px-5 py-4 sm:px-6 sm:py-5`}>
+      {disconnectWarning ? (
+        <p role="status" className="mb-3 text-sm text-amber-950 dark:text-amber-100">
+          {disconnectWarning}
+        </p>
+      ) : null}
+
+      {uiState === 'checking' && (
+        <p className="text-sm text-ink-muted">{t('postiz.calendar.x.checking')}</p>
+      )}
+
+      {uiState === 'disconnected' && (
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-muted">
+            {t('postiz.calendar.x.connectedEyebrow')}
+          </p>
+          <h2 className="mt-1 text-base font-semibold text-ink">{t('postiz.calendar.x.connectTitle')}</h2>
+          <p className="mt-2 text-sm leading-relaxed text-ink-muted">
+            {t('postiz.calendar.x.connectBody')}
+          </p>
+          <button
+            type="button"
+            onClick={() => setConnectPrepOpen(true)}
+            className={`${CALENDAR_CREATE_BTN} mt-4 w-auto px-5`}
+          >
+            {t('postiz.calendar.x.connect')}
+          </button>
+        </div>
+      )}
+
+      {uiState === 'connecting' && (
+        <div>
+          <h2 className="text-base font-semibold text-ink">{t('postiz.calendar.x.connectingTitle')}</h2>
+          <p className="mt-2 text-sm text-ink-muted">{t('postiz.calendar.x.connectingBody')}</p>
+        </div>
+      )}
+
+      {uiState === 'choose_account' && (
+        <div>
+          <h2 className="text-base font-semibold text-ink">{t('postiz.calendar.x.chooseTitle')}</h2>
+          <p className="mt-2 text-sm text-ink-muted">{t('postiz.calendar.x.chooseBody')}</p>
+          <ul className="mt-4 space-y-3">
+            {claimCandidates.map((candidate) => (
+              <li
+                key={candidate.id}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border-hairline bg-canvas px-3 py-2"
+              >
+                <span className="text-sm font-medium text-ink">{candidate.name}</span>
+                <button
+                  type="button"
+                  disabled={isClaiming}
+                  onClick={() => void handleClaimAccount(candidate)}
+                  className={`${CALENDAR_CREATE_BTN} w-auto px-4 py-2`}
+                >
+                  {t('postiz.calendar.useThisAccount')}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {uiState === 'connected' && (
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex min-w-0 items-center gap-4">
+            {integration?.picture ? (
+              <img
+                src={integration.picture}
+                alt=""
+                className="h-11 w-11 shrink-0 rounded-xl object-cover"
+              />
+            ) : (
+              <XMark className="h-11 w-11 shrink-0" />
+            )}
+            <div className="min-w-0">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-muted">
+                {t('postiz.calendar.x.connectedEyebrow')}
+              </p>
+              <h2 className="mt-0.5 truncate text-base font-semibold text-ink">
+                {t('postiz.calendar.x.connectedTitle')}
+              </h2>
+              <p className="mt-0.5 truncate text-sm text-ink-muted">
+                {integration
+                  ? t('postiz.calendar.x.connectedAs', { name: integration.name })
+                  : t('postiz.calendar.x.connected')}
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" onClick={() => setDisconnectOpen(true)} className={CALENDAR_CHIP_BTN}>
+              {t('postiz.calendar.x.disconnect')}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {uiState === 'error' && (
+        <div>
+          <h2 className="text-base font-semibold text-ink">{t('postiz.calendar.x.errorTitle')}</h2>
+          <p className="mt-2 text-sm text-[#C45C4A]">
+            {errorMessage ?? t('postiz.calendar.x.connectFailed')}
+          </p>
+          <button
+            type="button"
+            onClick={() => setConnectPrepOpen(true)}
+            className={`${CALENDAR_CREATE_BTN} mt-4 w-auto px-5`}
+          >
+            {t('common.retry')}
+          </button>
+        </div>
+      )}
+
+      <ConfirmDialog
+        open={connectPrepOpen}
+        title={t('postiz.calendar.x.connectPrepTitle')}
+        description={t('postiz.calendar.x.connectPrepBody')}
+        confirmLabel={t('postiz.calendar.x.connectPrepConfirm')}
+        cancelLabel={t('common.cancel')}
+        tone="default"
+        onConfirm={() => void handleConnectX()}
+        onCancel={() => setConnectPrepOpen(false)}
+      />
+
+      <ConfirmDialog
+        open={disconnectOpen}
+        title={t('postiz.calendar.x.disconnectTitle')}
+        description={t('postiz.calendar.x.disconnectBody')}
+        confirmLabel={t('postiz.calendar.x.disconnectConfirm')}
+        confirming={isDisconnecting}
+        tone="danger"
+        onConfirm={() => void handleDisconnectConfirm()}
+        onCancel={() => {
+          if (!isDisconnecting) {
+            setDisconnectOpen(false)
+          }
+        }}
+      />
+    </section>
+  )
+}
+
+function CalendarPostizPanel({ avatarId }: { avatarId: string }) {
+  const { t } = useTranslation()
+  const [uiState, setUiState] = useState<ConnectionUiState>('checking')
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [integration, setIntegration] = useState<PostizIntegration | null>(null)
+  const [claimCandidates, setClaimCandidates] = useState<PostizIntegration[]>([])
+  const [isClaiming, setIsClaiming] = useState(false)
+  const [isDisconnecting, setIsDisconnecting] = useState(false)
+  const [disconnectOpen, setDisconnectOpen] = useState(false)
+  const [connectPrepOpen, setConnectPrepOpen] = useState(false)
+  const [disconnectWarning, setDisconnectWarning] = useState<string | null>(null)
+  const [xIntegration, setXIntegration] = useState<PostizIntegration | null>(null)
+  const popupRef = useRef<Window | null>(null)
+  const pollTimerRef = useRef<number | null>(null)
+  const pollDeadlineRef = useRef<number>(0)
+  const linkedinConnectingRef = useRef(false)
+
+  const stopPolling = useCallback(() => {
+    if (pollTimerRef.current != null) {
+      window.clearInterval(pollTimerRef.current)
+      pollTimerRef.current = null
+    }
+  }, [])
+
+  const closePopup = useCallback(() => {
+    if (popupRef.current && !popupRef.current.closed) {
+      popupRef.current.close()
+    }
+    popupRef.current = null
+  }, [])
+
+  const applyConnected = useCallback(
+    (nextIntegration: PostizIntegration | null) => {
+      linkedinConnectingRef.current = false
+      setIntegration(nextIntegration)
+      setClaimCandidates([])
+      setUiState('connected')
+      setErrorMessage(null)
+      stopPolling()
+      closePopup()
+    },
+    [closePopup, stopPolling],
+  )
+
+  const applyClaimCandidates = useCallback(
+    (candidates: PostizIntegration[]) => {
+      linkedinConnectingRef.current = false
       setClaimCandidates(candidates)
       setUiState('choose_account')
       setErrorMessage(null)
@@ -342,10 +781,11 @@ function CalendarPostizPanel({ avatarId }: { avatarId: string }) {
       if (event.origin !== window.location.origin) {
         return
       }
-      if (!isPostizParentMessage(event.data)) {
+      if (!linkedinConnectingRef.current || !isPostizParentMessage(event.data)) {
         return
       }
 
+      linkedinConnectingRef.current = false
       stopPolling()
       closePopup()
       setUiState('error')
@@ -440,6 +880,7 @@ function CalendarPostizPanel({ avatarId }: { avatarId: string }) {
     pollTimerRef.current = window.setInterval(() => {
       void (async () => {
         if (Date.now() > pollDeadlineRef.current) {
+          linkedinConnectingRef.current = false
           stopPolling()
           closePopup()
           try {
@@ -490,11 +931,13 @@ function CalendarPostizPanel({ avatarId }: { avatarId: string }) {
   async function handleConnectLinkedIn() {
     setConnectPrepOpen(false)
     setErrorMessage(null)
+    linkedinConnectingRef.current = true
     setUiState('connecting')
 
     const popup = window.open('about:blank', POPUP_NAME, 'width=640,height=720')
     popupRef.current = popup
     if (!popup) {
+      linkedinConnectingRef.current = false
       setUiState('error')
       setErrorMessage(t('postiz.calendar.popupBlocked'))
       return
@@ -505,6 +948,7 @@ function CalendarPostizPanel({ avatarId }: { avatarId: string }) {
       popup.location.href = result.authorization_url
       startPolling()
     } catch (error) {
+      linkedinConnectingRef.current = false
       popup.close()
       popupRef.current = null
       setUiState('error')
@@ -556,6 +1000,8 @@ function CalendarPostizPanel({ avatarId }: { avatarId: string }) {
         </div>
       ) : null}
 
+      <div className="grid items-start gap-4 lg:grid-cols-2">
+        <div className="min-w-0">
       {uiState === 'checking' && (
         <section className={`${CALENDAR_CARD} p-8 sm:p-10`}>
           <p className="text-sm text-ink-muted">{t('postiz.calendar.checking')}</p>
@@ -716,8 +1162,6 @@ function CalendarPostizPanel({ avatarId }: { avatarId: string }) {
               {t('postiz.calendar.reconnectSwitchHint')}
             </p>
           </section>
-
-          <AvatarCalendarBoard avatarId={avatarId} />
         </div>
       )}
 
@@ -750,6 +1194,18 @@ function CalendarPostizPanel({ avatarId }: { avatarId: string }) {
           </div>
         </section>
       )}
+        </div>
+        <XChannelPanel avatarId={avatarId} onIntegrationChange={setXIntegration} />
+      </div>
+
+      {uiState === 'connected' || xIntegration ? (
+        <div className="mt-5">
+          <AvatarCalendarBoard
+            avatarId={avatarId}
+            xIntegrationId={xIntegration?.id ?? null}
+          />
+        </div>
+      ) : null}
 
       <ConfirmDialog
         open={connectPrepOpen}
@@ -780,7 +1236,13 @@ function CalendarPostizPanel({ avatarId }: { avatarId: string }) {
   )
 }
 
-function AvatarCalendarBoard({ avatarId }: { avatarId: string }) {
+function AvatarCalendarBoard({
+  avatarId,
+  xIntegrationId,
+}: {
+  avatarId: string
+  xIntegrationId: string | null
+}) {
   const { t, i18n } = useTranslation()
   const now = new Date()
   const [viewYear, setViewYear] = useState(now.getFullYear())
@@ -797,6 +1259,7 @@ function AvatarCalendarBoard({ avatarId }: { avatarId: string }) {
   const [formContent, setFormContent] = useState('')
   const [formWhen, setFormWhen] = useState('')
   const [formError, setFormError] = useState<string | null>(null)
+  const [composerPlatform, setComposerPlatform] = useState<PostizPlatform>('linkedin')
   const [attachments, setAttachments] = useState<AttachedMedia[]>([])
   const [reloadToken, setReloadToken] = useState(0)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
@@ -950,6 +1413,7 @@ function AvatarCalendarBoard({ avatarId }: { avatarId: string }) {
   function openCreate(day?: number) {
     setModalMode('create')
     setEditingPost(null)
+    setComposerPlatform('linkedin')
     setFormContent('')
     setFormError(null)
     clearAttachments()
@@ -964,7 +1428,15 @@ function AvatarCalendarBoard({ avatarId }: { avatarId: string }) {
     setModalOpen(true)
   }
 
+  function isXPost(post: PostizCalendarPost): boolean {
+    return xIntegrationId != null && post.integration_id === xIntegrationId
+  }
+
   function openEdit(post: PostizCalendarPost) {
+    if (isXPost(post)) {
+      return
+    }
+    setComposerPlatform('linkedin')
     setModalMode('edit')
     setEditingPost(post)
     setFormContent(post.content)
@@ -995,9 +1467,12 @@ function AvatarCalendarBoard({ avatarId }: { avatarId: string }) {
     }
     setFormError(null)
 
+    const maxImages =
+      composerPlatform === 'x' ? POSTIZ_MAX_X_POST_IMAGES : POSTIZ_MAX_POST_IMAGES
     const validation = validateNewFiles(
       attachmentsRef.current.map((item) => ({ kind: item.kind })),
       files,
+      maxImages,
     )
     if (!validation.ok) {
       setFormError(
@@ -1171,6 +1646,7 @@ function AvatarCalendarBoard({ avatarId }: { avatarId: string }) {
         content: formContent,
         publishDate,
         images,
+        ...(composerPlatform === 'x' ? { platform: 'x' as const } : {}),
       })
       setModalOpen(false)
       clearAttachments()
@@ -1277,6 +1753,15 @@ function AvatarCalendarBoard({ avatarId }: { avatarId: string }) {
     )
   }, [i18n.language])
 
+  const composerMaxImages =
+    composerPlatform === 'x' ? POSTIZ_MAX_X_POST_IMAGES : POSTIZ_MAX_POST_IMAGES
+  const composerImageCount = attachments.filter((item) => item.kind === 'image').length
+  const composerOverImageLimit = composerImageCount > composerMaxImages
+  const mediaBlocksSave =
+    composerOverImageLimit ||
+    attachments.some((item) => item.status === 'uploading') ||
+    attachments.some((item) => item.status === 'error')
+
   return (
     <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:gap-6">
       <aside className={`${CALENDAR_CARD} w-full shrink-0 p-4 sm:p-5 lg:w-[17.5rem]`}>
@@ -1305,9 +1790,13 @@ function AvatarCalendarBoard({ avatarId }: { avatarId: string }) {
                 <button
                   type="button"
                   onClick={() => openEdit(post)}
+                  title={
+                    isXPost(post) ? t('postiz.calendar.x.noEdit') : undefined
+                  }
                   className="group w-full rounded-2xl border border-border-hairline bg-canvas px-3 py-2.5 text-left transition-all duration-200 hover:-translate-y-px hover:border-[rgba(90,60,130,0.2)] hover:bg-canvas-raised hover:shadow-[0_4px_12px_rgba(23,21,37,0.05)]"
                 >
                   <p className="text-[11px] font-medium text-ink-muted">
+                    {isXPost(post) ? `${t('postiz.calendar.platformX')} · ` : ''}
                     {formatPostDateTime(post.publish_date, i18n.language)}
                   </p>
                   <p className="mt-1 line-clamp-2 text-sm font-medium text-ink">
@@ -1411,13 +1900,18 @@ function AvatarCalendarBoard({ avatarId }: { avatarId: string }) {
                                 type="button"
                                 onClick={() => openEdit(post)}
                                 className={`block w-full rounded-lg border px-1.5 py-1 text-left transition-all duration-150 hover:-translate-y-px hover:shadow-[0_2px_8px_rgba(23,21,37,0.06)] ${pastelEventChipClass(post.state)}`}
-                                title={post.content}
+                                title={
+                                  isXPost(post)
+                                    ? t('postiz.calendar.x.noEdit')
+                                    : post.content
+                                }
                               >
                                 <span className="flex items-center gap-1 text-[10px] font-medium text-ink sm:text-[11px]">
                                   <span
                                     className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${pastelDotClass(post.state)}`}
                                     aria-hidden="true"
                                   />
+                                  {isXPost(post) ? `${t('postiz.calendar.platformX')} · ` : ''}
                                   {timeLabel}
                                 </span>
                                 <span className="mt-0.5 block truncate text-[10px] text-ink sm:text-[11px]">
@@ -1460,12 +1954,51 @@ function AvatarCalendarBoard({ avatarId }: { avatarId: string }) {
                 className="text-2xl font-semibold tracking-tight text-ink"
               >
                 {modalMode === 'create'
-                  ? t('postiz.calendar.createPostTitle')
+                  ? composerPlatform === 'x'
+                    ? t('postiz.calendar.x.createTitle')
+                    : t('postiz.calendar.createPostTitle')
                   : t('postiz.calendar.editPostTitle')}
               </h3>
               <p className="mt-2 text-sm text-ink-muted">
-                {t('postiz.calendar.mediaHint', { max: POSTIZ_MAX_POST_IMAGES })}
+                {t('postiz.calendar.mediaHint', {
+                  max:
+                    composerPlatform === 'x'
+                      ? POSTIZ_MAX_X_POST_IMAGES
+                      : POSTIZ_MAX_POST_IMAGES,
+                })}
               </p>
+
+              {modalMode === 'create' ? (
+                <fieldset className="mt-4">
+                  <legend className="text-sm font-medium text-ink">
+                    {t('postiz.calendar.composerPlatform')}
+                  </legend>
+                  <div className="mt-2 flex gap-2">
+                    <button
+                      type="button"
+                      className={
+                        composerPlatform === 'linkedin'
+                          ? 'contos-btn contos-btn--rect contos-btn--primary text-xs'
+                          : 'contos-btn contos-btn--rect contos-btn--secondary text-xs'
+                      }
+                      onClick={() => setComposerPlatform('linkedin')}
+                    >
+                      {t('postiz.calendar.platformLinkedIn')}
+                    </button>
+                    <button
+                      type="button"
+                      className={
+                        composerPlatform === 'x'
+                          ? 'contos-btn contos-btn--rect contos-btn--primary text-xs'
+                          : 'contos-btn contos-btn--rect contos-btn--secondary text-xs'
+                      }
+                      onClick={() => setComposerPlatform('x')}
+                    >
+                      {t('postiz.calendar.platformX')}
+                    </button>
+                  </div>
+                </fieldset>
+              ) : null}
 
               {editingPost ? (
                 <p className="mt-3">
@@ -1484,8 +2017,15 @@ function AvatarCalendarBoard({ avatarId }: { avatarId: string }) {
                   onChange={(event) => setFormContent(event.target.value)}
                   rows={4}
                   className="mt-1 w-full rounded-2xl border border-border-hairline bg-canvas px-3 py-2 text-sm text-ink"
-                  maxLength={3000}
+                  maxLength={composerPlatform === 'x' ? undefined : 3000}
                 />
+                {composerPlatform === 'x' ? (
+                  <span className="mt-1 block text-xs text-ink-muted">
+                    {t('postiz.calendar.x.charCount', {
+                      count: postizContentLength(formContent),
+                    })}
+                  </span>
+                ) : null}
               </label>
 
               <div className="mt-4">
@@ -1499,6 +2039,9 @@ function AvatarCalendarBoard({ avatarId }: { avatarId: string }) {
                       saving ||
                       isAddMediaDisabled(
                         attachments.map((item) => ({ kind: item.kind })),
+                        composerPlatform === 'x'
+                          ? POSTIZ_MAX_X_POST_IMAGES
+                          : POSTIZ_MAX_POST_IMAGES,
                       )
                     }
                     className="contos-btn contos-btn--rect contos-btn--secondary text-xs"
@@ -1616,12 +2159,7 @@ function AvatarCalendarBoard({ avatarId }: { avatarId: string }) {
                 <>
                   <button
                     type="button"
-                    disabled={
-                      saving ||
-                      !formContent.trim() ||
-                      attachments.some((item) => item.status === 'uploading') ||
-                      attachments.some((item) => item.status === 'error')
-                    }
+                    disabled={saving || !formContent.trim() || mediaBlocksSave}
                     className="contos-btn contos-btn--rect contos-btn--primary"
                     onClick={() => void submitPost('now')}
                   >
@@ -1633,8 +2171,7 @@ function AvatarCalendarBoard({ avatarId }: { avatarId: string }) {
                       saving ||
                       !formContent.trim() ||
                       !formWhen ||
-                      attachments.some((item) => item.status === 'uploading') ||
-                      attachments.some((item) => item.status === 'error')
+                      mediaBlocksSave
                     }
                     className="contos-btn contos-btn--rect contos-btn--secondary"
                     onClick={() => void submitPost('schedule')}
@@ -1643,12 +2180,7 @@ function AvatarCalendarBoard({ avatarId }: { avatarId: string }) {
                   </button>
                   <button
                     type="button"
-                    disabled={
-                      saving ||
-                      !formContent.trim() ||
-                      attachments.some((item) => item.status === 'uploading') ||
-                      attachments.some((item) => item.status === 'error')
-                    }
+                    disabled={saving || !formContent.trim() || mediaBlocksSave}
                     className="contos-btn contos-btn--rect contos-btn--secondary"
                     onClick={() => void submitPost('draft')}
                   >
@@ -1663,8 +2195,7 @@ function AvatarCalendarBoard({ avatarId }: { avatarId: string }) {
                       saving ||
                       !formContent.trim() ||
                       !formWhen ||
-                      attachments.some((item) => item.status === 'uploading') ||
-                      attachments.some((item) => item.status === 'error')
+                      mediaBlocksSave
                     }
                     className="contos-btn contos-btn--rect contos-btn--primary"
                     onClick={() => void submitUpdate()}

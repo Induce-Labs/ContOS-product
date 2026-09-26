@@ -21,6 +21,7 @@ from app.clients.postiz_client import (
 from app.config import Settings
 from app.errors import (
     PostizAuthorizationInvalidError,
+    PostizBadRequestError,
     PostizIntegrationClaimError,
     PostizNotConnectedError,
     PostizPostNotFoundError,
@@ -43,6 +44,9 @@ MIGRATION_AVATAR_SCOPE = (
     / "supabase"
     / "migrations"
     / "20260922000000_postiz_connections_avatar_scope.sql"
+)
+MIGRATION_X_INTEGRATION_ID = (
+    REPO_ROOT / "supabase" / "migrations" / "20260925000000_postiz_x_integration_id.sql"
 )
 
 USER_A = UUID("11111111-1111-1111-1111-111111111111")
@@ -105,6 +109,7 @@ def _connection(
     avatar_id: UUID = AVATAR_A,
     org_id: str = "org-a",
     integration_id: str | None = None,
+    x_integration_id: str | None = None,
 ) -> dict[str, Any]:
     fernet = Fernet(settings.postiz_token_encryption_key.encode())
     return {
@@ -113,6 +118,7 @@ def _connection(
         "encrypted_access_token": fernet.encrypt(token).decode(),
         "postiz_organization_id": org_id,
         "postiz_integration_id": integration_id,
+        "postiz_x_integration_id": x_integration_id,
     }
 
 
@@ -1035,6 +1041,14 @@ class TestPostizMigrationAndSecrets:
     def test_integration_id_migration_has_partial_unique_index(self) -> None:
         sql = MIGRATION_INTEGRATION_ID.read_text(encoding="utf-8")
         assert "postiz_connections_postiz_integration_id_unique" in sql
+
+    def test_x_integration_id_migration_is_separate_from_linkedin(self) -> None:
+        sql = MIGRATION_X_INTEGRATION_ID.read_text(encoding="utf-8")
+        assert "postiz_x_integration_id" in sql
+        assert "postiz_connections_postiz_x_integration_id_unique" in sql
+        assert "WHERE postiz_x_integration_id IS NOT NULL" in sql
+        assert "DROP COLUMN" not in sql.upper()
+        assert "postiz_integration_id text" not in sql
 
     def test_avatar_scope_migration(self) -> None:
         sql = MIGRATION_AVATAR_SCOPE.read_text(encoding="utf-8")
@@ -1959,3 +1973,562 @@ class TestPostizMediaPosts:
         )
         assert len(posts) == 1
         assert [image.id for image in posts[0].images] == ["m1", "m2"]
+
+
+def _x_auth_url() -> str:
+    return "https://api.twitter.com/oauth/authenticate?oauth_token=request-token"
+
+
+class TestPostizX:
+    """X connect/claim/posts beside LinkedIn. Postiz is mocked; no live X API."""
+
+    def _ready(
+        self,
+        *,
+        avatar_id: UUID = AVATAR_A,
+        user_id: UUID = USER_A,
+        linkedin_id: str | None = "li-a",
+        x_id: str | None = "x-a",
+        token: bytes = b"pos_token_a",
+        max_length: Any = 280,
+    ) -> tuple[PostizPostsService, MagicMock, MagicMock, Settings]:
+        settings = _settings()
+        client = MagicMock()
+        repository = MagicMock()
+        repository.get_connection.return_value = _connection(
+            settings=settings,
+            avatar_id=avatar_id,
+            user_id=user_id,
+            integration_id=linkedin_id,
+            x_integration_id=x_id,
+            token=token,
+        )
+        client.get_integration_settings.return_value = {
+            "output": {"maxLength": max_length},
+        }
+        client.create_post.return_value = [{"postId": "px"}]
+        client.get_media.side_effect = lambda _token, media_id: {
+            "id": media_id,
+            "path": f"https://cdn.example.com/{media_id}.jpg",
+        }
+        service = _posts_service(settings=settings, client=client, repository=repository)
+        return service, client, repository, settings
+
+    def test_x_connect_calls_social_x_and_leaves_linkedin_id(self) -> None:
+        settings = _settings()
+        client = MagicMock()
+        repository = MagicMock()
+        redis_client = FakeRedis()
+        repository.get_connection.return_value = _connection(
+            settings=settings,
+            integration_id="li-a",
+            x_integration_id=None,
+        )
+        client.list_integrations.return_value = [
+            {"id": "li-a", "name": "LI", "identifier": "linkedin", "disabled": False},
+        ]
+        client.get_x_authorization_url.return_value = _x_auth_url()
+        service = _service(
+            settings=settings,
+            client=client,
+            repository=repository,
+            redis_client=redis_client,
+        )
+        result = service.start_x_connect(contos_user_id=USER_A, avatar_id=AVATAR_A)
+        assert result.flow == "x"
+        assert result.authorization_url == _x_auth_url()
+        client.get_x_authorization_url.assert_called_once()
+        client.get_linkedin_authorization_url.assert_not_called()
+        repository.claim_integration.assert_not_called()
+        repository.claim_x_integration.assert_not_called()
+        assert any(key.startswith("postiz:x:snapshot:") for key in redis_client.store)
+        assert not any(key.startswith("postiz:linkedin:snapshot:") for key in redis_client.store)
+
+    def test_x_claim_stores_x_id_and_rejects_linkedin_identifier(self) -> None:
+        settings = _settings()
+        client = MagicMock()
+        repository = MagicMock()
+        redis_client = FakeRedis()
+        repository.get_connection.return_value = _connection(
+            settings=settings,
+            integration_id="li-a",
+        )
+        client.list_integrations.return_value = []
+        client.get_x_authorization_url.return_value = _x_auth_url()
+        service = _service(
+            settings=settings,
+            client=client,
+            repository=repository,
+            redis_client=redis_client,
+        )
+        service.start_x_connect(contos_user_id=USER_A, avatar_id=AVATAR_A)
+
+        client.list_integrations.return_value = [
+            {"id": "li-a", "name": "LI", "identifier": "linkedin", "disabled": False},
+        ]
+        with pytest.raises(PostizIntegrationClaimError, match="not found"):
+            service.claim_x_integration(
+                contos_user_id=USER_A,
+                avatar_id=AVATAR_A,
+                integration_id="li-a",
+            )
+        repository.claim_x_integration.assert_not_called()
+        repository.claim_integration.assert_not_called()
+
+        client.list_integrations.return_value = [
+            {"id": "x-a", "name": "XA", "identifier": "x", "disabled": False},
+            {"id": "li-a", "name": "LI", "identifier": "linkedin", "disabled": False},
+        ]
+        repository.get_connection_by_x_integration_id.return_value = None
+        repository.claim_x_integration.return_value = _connection(
+            settings=settings,
+            integration_id="li-a",
+            x_integration_id="x-a",
+        )
+        status = service.claim_x_integration(
+            contos_user_id=USER_A,
+            avatar_id=AVATAR_A,
+            integration_id="x-a",
+        )
+        assert status.connected is True
+        assert status.integration is not None
+        assert status.integration.identifier == "x"
+        assert status.integration.id == "x-a"
+        repository.claim_x_integration.assert_called_once_with(
+            contos_user_id=USER_A,
+            avatar_id=AVATAR_A,
+            postiz_x_integration_id="x-a",
+        )
+        repository.claim_integration.assert_not_called()
+
+    def test_x_claim_and_disconnect_are_avatar_scoped(self) -> None:
+        settings = _settings()
+        client = MagicMock()
+        repository = MagicMock()
+        redis_client = FakeRedis()
+        connections = {
+            AVATAR_A: _connection(
+                settings=settings,
+                avatar_id=AVATAR_A,
+                integration_id="li-a",
+                x_integration_id="x-a",
+                token=b"pos_token_a",
+            ),
+            AVATAR_B: _connection(
+                settings=settings,
+                avatar_id=AVATAR_B,
+                user_id=USER_A,
+                org_id="org-b",
+                integration_id="li-b",
+                x_integration_id=None,
+                token=b"pos_token_b",
+            ),
+        }
+        repository.get_connection.side_effect = lambda avatar_id: connections[avatar_id]
+        client.list_integrations.return_value = [
+            {"id": "x-a", "name": "XA", "identifier": "x", "disabled": False},
+        ]
+        client.get_x_authorization_url.return_value = _x_auth_url()
+        service = _service(
+            settings=settings,
+            client=client,
+            repository=repository,
+            redis_client=redis_client,
+        )
+        service.start_x_connect(contos_user_id=USER_A, avatar_id=AVATAR_B)
+        repository.get_connection_by_x_integration_id.return_value = connections[AVATAR_A]
+        with pytest.raises(PostizIntegrationClaimError, match="another ContOS avatar"):
+            service.claim_x_integration(
+                contos_user_id=USER_A,
+                avatar_id=AVATAR_B,
+                integration_id="x-a",
+            )
+        repository.claim_x_integration.assert_not_called()
+
+        posts, posts_client, posts_repo, _posts_settings = self._ready()
+        posts.disconnect_x(contos_user_id=USER_A, avatar_id=AVATAR_A)
+        posts_client.delete_integration.assert_called_once()
+        assert posts_client.delete_integration.call_args.args[1] == "x-a"
+        posts_repo.clear_x_integration_id.assert_called_once_with(AVATAR_A)
+        posts_repo.clear_integration_id.assert_not_called()
+
+    def test_x_post_uses_x_integration_and_type(self) -> None:
+        service, client, _repository, _settings_obj = self._ready()
+        service.create_x_post(
+            contos_user_id=USER_A,
+            avatar_id=AVATAR_A,
+            post_type="schedule",
+            content="Hello X",
+            publish_date="2026-09-23T15:30:00Z",
+        )
+        client.get_integration_settings.assert_called_once_with("pos_token_a", "x-a")
+        payload = client.create_post.call_args.args[1]
+        assert payload["type"] == "schedule"
+        assert payload["posts"][0]["integration"]["id"] == "x-a"
+        assert payload["posts"][0]["settings"] == {
+            "__type": "x",
+            "who_can_reply_post": "everyone",
+        }
+        assert payload["shortLink"] is False
+
+    def test_x_post_settings_include_reply_audience_for_every_write_type(self) -> None:
+        service, client, _repository, _settings_obj = self._ready()
+        for post_type in ("now", "schedule", "draft"):
+            client.create_post.reset_mock()
+            service.create_x_post(
+                contos_user_id=USER_A,
+                avatar_id=AVATAR_A,
+                post_type=post_type,
+                content="Hello X",
+                publish_date="2026-09-23T15:30:00Z",
+            )
+            settings = client.create_post.call_args.args[1]["posts"][0]["settings"]
+            assert settings["__type"] == "x"
+            assert settings["who_can_reply_post"] == "everyone"
+
+    def test_x_posts_are_isolated_by_avatar_token_and_id(self) -> None:
+        settings = _settings()
+        client = MagicMock()
+        repository = MagicMock()
+        connections = {
+            AVATAR_A: _connection(
+                settings=settings,
+                avatar_id=AVATAR_A,
+                integration_id="li-a",
+                x_integration_id="x-a",
+                token=b"pos_token_a",
+            ),
+            AVATAR_B: _connection(
+                settings=settings,
+                avatar_id=AVATAR_B,
+                org_id="org-b",
+                integration_id="li-b",
+                x_integration_id="x-b",
+                token=b"pos_token_b",
+            ),
+        }
+        repository.get_connection.side_effect = lambda avatar_id: connections[avatar_id]
+        client.get_integration_settings.return_value = {"output": {"maxLength": 280}}
+        client.create_post.return_value = [{"postId": "px"}]
+        service = _posts_service(settings=settings, client=client, repository=repository)
+
+        service.create_x_post(
+            contos_user_id=USER_A,
+            avatar_id=AVATAR_A,
+            post_type="now",
+            content="From A",
+            publish_date="2026-09-23T15:30:00Z",
+        )
+        service.create_x_post(
+            contos_user_id=USER_A,
+            avatar_id=AVATAR_B,
+            post_type="now",
+            content="From B",
+            publish_date="2026-09-23T15:30:00Z",
+        )
+        assert client.get_integration_settings.call_args_list[0].args == (
+            "pos_token_a",
+            "x-a",
+        )
+        assert client.get_integration_settings.call_args_list[1].args == (
+            "pos_token_b",
+            "x-b",
+        )
+        assert client.create_post.call_args_list[0].args[1]["posts"][0]["integration"]["id"] == "x-a"
+        assert client.create_post.call_args_list[1].args[1]["posts"][0]["integration"]["id"] == "x-b"
+        assert connections[AVATAR_A]["postiz_integration_id"] == "li-a"
+        assert connections[AVATAR_B]["postiz_integration_id"] == "li-b"
+
+    def test_x_media_boundaries(self) -> None:
+        from app.services.postiz_posts import MediaRef
+
+        service, client, _repository, _settings_obj = self._ready()
+        four = [
+            MediaRef(id=f"m{i}", path=f"https://cdn.example.com/m{i}.jpg")
+            for i in range(4)
+        ]
+        client.get_media.side_effect = lambda _token, media_id: {
+            "id": media_id,
+            "path": f"https://cdn.example.com/{media_id}.jpg",
+        }
+        service.create_x_post(
+            contos_user_id=USER_A,
+            avatar_id=AVATAR_A,
+            post_type="now",
+            content="Four",
+            publish_date="2026-09-23T15:30:00Z",
+            images=four,
+        )
+        images = client.create_post.call_args.args[1]["posts"][0]["value"][0]["image"]
+        assert len(images) == 4
+
+        five = [
+            MediaRef(id=f"m{i}", path=f"https://cdn.example.com/m{i}.jpg")
+            for i in range(5)
+        ]
+        with pytest.raises(PostizBadRequestError, match="at most 4"):
+            service.create_x_post(
+                contos_user_id=USER_A,
+                avatar_id=AVATAR_A,
+                post_type="now",
+                content="Five",
+                publish_date="2026-09-23T15:30:00Z",
+                images=five,
+            )
+
+        client.get_media.side_effect = lambda _token, media_id: {
+            "id": media_id,
+            "path": f"https://cdn.example.com/{media_id}.mp4",
+        }
+        service.create_x_post(
+            contos_user_id=USER_A,
+            avatar_id=AVATAR_A,
+            post_type="draft",
+            content="Video",
+            publish_date="2026-09-23T15:30:00Z",
+            images=[MediaRef(id="v1", path="https://cdn.example.com/v1.mp4")],
+        )
+        video = client.create_post.call_args.args[1]["posts"][0]["value"][0]["image"]
+        assert video == [{"id": "v1", "path": "https://cdn.example.com/v1.mp4"}]
+
+        with pytest.raises(PostizBadRequestError, match="video and image"):
+            service.create_x_post(
+                contos_user_id=USER_A,
+                avatar_id=AVATAR_A,
+                post_type="now",
+                content="Mix",
+                publish_date="2026-09-23T15:30:00Z",
+                images=[
+                    MediaRef(id="m1", path="https://cdn.example.com/m1.jpg"),
+                    MediaRef(id="v1", path="https://cdn.example.com/v1.mp4"),
+                ],
+            )
+        with pytest.raises(PostizBadRequestError, match="at most one video"):
+            service.create_x_post(
+                contos_user_id=USER_A,
+                avatar_id=AVATAR_A,
+                post_type="now",
+                content="Two videos",
+                publish_date="2026-09-23T15:30:00Z",
+                images=[
+                    MediaRef(id="v1", path="https://cdn.example.com/v1.mp4"),
+                    MediaRef(id="v2", path="https://cdn.example.com/v2.mp4"),
+                ],
+            )
+
+    def test_x_length_follows_postiz_max_length(self) -> None:
+        service, client, _repository, _settings_obj = self._ready(max_length=280)
+        service.create_x_post(
+            contos_user_id=USER_A,
+            avatar_id=AVATAR_A,
+            post_type="now",
+            content="a" * 280,
+            publish_date="2026-09-23T15:30:00Z",
+        )
+        with pytest.raises(PostizBadRequestError, match="1–280"):
+            service.create_x_post(
+                contos_user_id=USER_A,
+                avatar_id=AVATAR_A,
+                post_type="now",
+                content="a" * 281,
+                publish_date="2026-09-23T15:30:00Z",
+            )
+
+        client.get_integration_settings.return_value = {"output": {"maxLength": 4000}}
+        service.create_x_post(
+            contos_user_id=USER_A,
+            avatar_id=AVATAR_A,
+            post_type="now",
+            content="b" * 4000,
+            publish_date="2026-09-23T15:30:00Z",
+        )
+        with pytest.raises(PostizBadRequestError, match="1–4000"):
+            service.create_x_post(
+                contos_user_id=USER_A,
+                avatar_id=AVATAR_A,
+                post_type="now",
+                content="b" * 4001,
+                publish_date="2026-09-23T15:30:00Z",
+            )
+
+        for unexpected in (None, "4000", 100, True):
+            client.create_post.reset_mock()
+            client.get_integration_settings.return_value = {
+                "output": {"maxLength": unexpected},
+            }
+            service.create_x_post(
+                contos_user_id=USER_A,
+                avatar_id=AVATAR_A,
+                post_type="now",
+                content="c" * 280,
+                publish_date="2026-09-23T15:30:00Z",
+            )
+            with pytest.raises(PostizBadRequestError, match="1–280"):
+                service.create_x_post(
+                    contos_user_id=USER_A,
+                    avatar_id=AVATAR_A,
+                    post_type="now",
+                    content="c" * 281,
+                    publish_date="2026-09-23T15:30:00Z",
+                )
+
+        client.get_integration_settings.return_value = {}
+        with pytest.raises(PostizBadRequestError, match="1–280"):
+            service.create_x_post(
+                contos_user_id=USER_A,
+                avatar_id=AVATAR_A,
+                post_type="now",
+                content="d" * 281,
+                publish_date="2026-09-23T15:30:00Z",
+            )
+
+    def test_x_update_does_not_fetch_settings(self) -> None:
+        service, client, _repository, _settings_obj = self._ready()
+        with pytest.raises(PostizBadRequestError, match="not supported"):
+            service.create_x_post(
+                contos_user_id=USER_A,
+                avatar_id=AVATAR_A,
+                post_type="update",
+                content="Edit",
+                publish_date="2026-09-23T15:30:00Z",
+                post_id="px",
+            )
+        client.get_integration_settings.assert_not_called()
+        client.create_post.assert_not_called()
+
+    def test_list_returns_linkedin_and_x_posts_for_same_avatar(self) -> None:
+        settings = _settings()
+        client = MagicMock()
+        repository = MagicMock()
+        repository.get_connection.return_value = _connection(
+            settings=settings,
+            integration_id="li-a",
+            x_integration_id="x-a",
+            token=b"pos_token_a",
+        )
+        client.list_posts.return_value = [
+            _raw_post(post_id="pli", content="LinkedIn", integration_id="li-a"),
+            _raw_post(post_id="px", content="X", integration_id="x-a"),
+            _raw_post(post_id="other", content="Other", integration_id="li-b"),
+        ]
+        service = _posts_service(settings=settings, client=client, repository=repository)
+        posts = service.list_posts(
+            contos_user_id=USER_A,
+            avatar_id=AVATAR_A,
+            start_date="2026-09-01T00:00:00.000Z",
+            end_date="2026-09-30T23:59:59.000Z",
+        )
+        assert {post.id for post in posts} == {"pli", "px"}
+
+    def test_x_only_avatar_can_list_and_upload(self) -> None:
+        settings = _settings()
+        client = MagicMock()
+        repository = MagicMock()
+        repository.get_connection.return_value = _connection(
+            settings=settings,
+            integration_id=None,
+            x_integration_id="x-a",
+            token=b"pos_token_a",
+        )
+        client.list_posts.return_value = [
+            _raw_post(post_id="px", content="X only", integration_id="x-a"),
+            _raw_post(post_id="pli", content="Not ours", integration_id="li-a"),
+        ]
+        client.upload_file.return_value = {
+            "id": "img-1",
+            "name": "a.jpg",
+            "path": "https://cdn.example.com/a.jpg",
+            "originalName": "a.jpg",
+        }
+        service = _posts_service(settings=settings, client=client, repository=repository)
+        posts = service.list_posts(
+            contos_user_id=USER_A,
+            avatar_id=AVATAR_A,
+            start_date="2026-09-01T00:00:00.000Z",
+            end_date="2026-09-30T23:59:59.000Z",
+        )
+        assert [post.id for post in posts] == ["px"]
+        media = service.upload_media(
+            contos_user_id=USER_A,
+            avatar_id=AVATAR_A,
+            filename="a.jpg",
+            content=b"jpeg-bytes",
+            content_type="image/jpeg",
+        )
+        assert media.id == "img-1"
+        assert client.upload_file.call_args.args[0] == "pos_token_a"
+
+    def test_linkedin_only_list_and_upload_ignore_other_channel_ids(self) -> None:
+        settings = _settings()
+        client = MagicMock()
+        repository = MagicMock()
+        repository.get_connection.return_value = _connection(
+            settings=settings,
+            integration_id="li-a",
+            x_integration_id=None,
+            token=b"pos_token_a",
+        )
+        client.list_posts.return_value = [
+            _raw_post(post_id="pli", content="LinkedIn", integration_id="li-a"),
+            _raw_post(post_id="px", content="X", integration_id="x-a"),
+        ]
+        client.upload_file.return_value = {
+            "id": "img-2",
+            "path": "https://cdn.example.com/b.jpg",
+        }
+        service = _posts_service(settings=settings, client=client, repository=repository)
+        posts = service.list_posts(
+            contos_user_id=USER_A,
+            avatar_id=AVATAR_A,
+            start_date="2026-09-01T00:00:00.000Z",
+            end_date="2026-09-30T23:59:59.000Z",
+        )
+        assert [post.id for post in posts] == ["pli"]
+        service.upload_media(
+            contos_user_id=USER_A,
+            avatar_id=AVATAR_A,
+            filename="b.jpg",
+            content=b"jpeg-bytes",
+            content_type="image/jpeg",
+        )
+        assert client.upload_file.call_args.args[0] == "pos_token_a"
+
+    def test_channel_ids_are_not_shared_across_avatars(self) -> None:
+        settings = _settings()
+        client = MagicMock()
+        repository = MagicMock()
+        connections = {
+            AVATAR_A: _connection(
+                settings=settings,
+                avatar_id=AVATAR_A,
+                integration_id="li-a",
+                x_integration_id="x-a",
+                token=b"pos_token_a",
+            ),
+            AVATAR_B: _connection(
+                settings=settings,
+                avatar_id=AVATAR_B,
+                org_id="org-b",
+                integration_id="li-b",
+                x_integration_id="x-b",
+                token=b"pos_token_b",
+            ),
+        }
+        repository.get_connection.side_effect = lambda avatar_id: connections[avatar_id]
+        client.list_posts.return_value = [
+            _raw_post(post_id="pli-a", content="A LI", integration_id="li-a"),
+            _raw_post(post_id="px-a", content="A X", integration_id="x-a"),
+            _raw_post(post_id="pli-b", content="B LI", integration_id="li-b"),
+            _raw_post(post_id="px-b", content="B X", integration_id="x-b"),
+        ]
+        service = _posts_service(settings=settings, client=client, repository=repository)
+        window = {
+            "start_date": "2026-09-01T00:00:00.000Z",
+            "end_date": "2026-09-30T23:59:59.000Z",
+        }
+        a_posts = service.list_posts(contos_user_id=USER_A, avatar_id=AVATAR_A, **window)
+        b_posts = service.list_posts(contos_user_id=USER_A, avatar_id=AVATAR_B, **window)
+        assert {post.integration_id for post in a_posts} == {"li-a", "x-a"}
+        assert {post.integration_id for post in b_posts} == {"li-b", "x-b"}
+        assert "li-a" not in {post.integration_id for post in b_posts}
+        assert "x-a" not in {post.integration_id for post in b_posts}

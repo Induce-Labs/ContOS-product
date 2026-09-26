@@ -23,6 +23,62 @@ export type PostizIntegration = {
   picture: string | null
 }
 
+export type PostizPlatform = 'linkedin' | 'x'
+
+export function postizContentLength(content: string): number {
+  return content.length
+}
+
+export function buildPostizAvatarSearch(
+  avatarId: string,
+  platform: PostizPlatform = 'linkedin',
+): URLSearchParams {
+  const params = new URLSearchParams()
+  params.set('avatar_id', avatarId.trim())
+  if (platform === 'x') {
+    params.set('platform', 'x')
+  }
+  return params
+}
+
+export function buildPostizClaimBody(
+  avatarId: string,
+  integrationId: string,
+  platform: PostizPlatform = 'linkedin',
+): { avatar_id: string; integration_id: string; platform?: 'x' } {
+  return {
+    avatar_id: avatarId.trim(),
+    integration_id: integrationId,
+    ...(platform === 'x' ? { platform: 'x' as const } : {}),
+  }
+}
+
+export function buildPostizCreateBody(input: {
+  avatarId: string
+  type: PostizPostType
+  content: string
+  publishDate: string
+  postId?: string
+  images?: Array<{ id: string; path: string; alt?: string | null; thumbnail?: string | null }>
+  platform?: PostizPlatform
+}): Record<string, unknown> {
+  const platform = input.platform ?? 'linkedin'
+  return {
+    avatar_id: input.avatarId.trim(),
+    type: input.type,
+    content: input.content,
+    publish_date: input.publishDate,
+    post_id: input.postId ?? null,
+    images: (input.images ?? []).map((image) => ({
+      id: image.id,
+      path: image.path,
+      ...(image.alt ? { alt: image.alt } : {}),
+      ...(image.thumbnail ? { thumbnail: image.thumbnail } : {}),
+    })),
+    ...(platform === 'x' ? { platform: 'x' as const } : {}),
+  }
+}
+
 export type PostizStatusResponse = {
   connected: boolean
   integration: PostizIntegration | null
@@ -139,11 +195,17 @@ function requireAvatarId(avatarId: string): string {
   return trimmed
 }
 
-export async function getPostizStatus(avatarId: string): Promise<PostizStatusResponse> {
+export async function getPostizStatus(
+  avatarId: string,
+  platform: PostizPlatform = 'linkedin',
+): Promise<PostizStatusResponse> {
   const accessToken = await requireAccessToken()
   const id = requireAvatarId(avatarId)
   const url = new URL(`${getApiBaseUrl()}/api/postiz/status`)
-  url.searchParams.set('avatar_id', id)
+  const search = buildPostizAvatarSearch(id, platform)
+  search.forEach((value, key) => {
+    url.searchParams.set(key, value)
+  })
 
   const response = await fetch(url.toString(), {
     method: 'GET',
@@ -162,6 +224,7 @@ export async function getPostizStatus(avatarId: string): Promise<PostizStatusRes
 export async function claimPostizIntegration(
   avatarId: string,
   integrationId: string,
+  platform: PostizPlatform = 'linkedin',
 ): Promise<PostizStatusResponse> {
   const accessToken = await requireAccessToken()
   const id = requireAvatarId(avatarId)
@@ -171,7 +234,7 @@ export async function claimPostizIntegration(
       'Content-Type': 'application/json',
       Authorization: `Bearer ${accessToken}`,
     },
-    body: JSON.stringify({ avatar_id: id, integration_id: integrationId }),
+    body: JSON.stringify(buildPostizClaimBody(id, integrationId, platform)),
   })
 
   if (!response.ok) {
@@ -181,11 +244,17 @@ export async function claimPostizIntegration(
   return parseStatusResponse(await response.json(), 'claim')
 }
 
-export async function startPostizConnect(avatarId: string): Promise<PostizConnectResponse> {
+export async function startPostizConnect(
+  avatarId: string,
+  platform: PostizPlatform = 'linkedin',
+): Promise<PostizConnectResponse> {
   const accessToken = await requireAccessToken()
   const id = requireAvatarId(avatarId)
   const url = new URL(`${getApiBaseUrl()}/api/postiz/connect`)
-  url.searchParams.set('avatar_id', id)
+  const search = buildPostizAvatarSearch(id, platform)
+  search.forEach((value, key) => {
+    url.searchParams.set(key, value)
+  })
 
   const response = await fetch(url.toString(), {
     method: 'GET',
@@ -218,6 +287,7 @@ export type PostizPostType = 'now' | 'schedule' | 'draft' | 'update'
 export type PostizPostStatus = 'draft' | 'schedule'
 
 export const POSTIZ_MAX_POST_IMAGES = 10
+export const POSTIZ_MAX_X_POST_IMAGES = 4
 /** Mirrors ContOS backend `_MAX_VIDEO_BYTES` (1 GB). Frontend UX guard only. */
 export const POSTIZ_MAX_VIDEO_BYTES = 1024 * 1024 * 1024
 export const POSTIZ_VIDEO_MIME = 'video/mp4'
@@ -418,6 +488,7 @@ export async function createPostizPost(input: {
   publishDate: string
   postId?: string
   images?: Array<{ id: string; path: string; alt?: string | null; thumbnail?: string | null }>
+  platform?: PostizPlatform
 }): Promise<unknown> {
   const accessToken = await requireAccessToken()
   const id = requireAvatarId(input.avatarId)
@@ -427,19 +498,12 @@ export async function createPostizPost(input: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${accessToken}`,
     },
-    body: JSON.stringify({
-      avatar_id: id,
-      type: input.type,
-      content: input.content,
-      publish_date: input.publishDate,
-      post_id: input.postId ?? null,
-      images: (input.images ?? []).map((image) => ({
-        id: image.id,
-        path: image.path,
-        ...(image.alt ? { alt: image.alt } : {}),
-        ...(image.thumbnail ? { thumbnail: image.thumbnail } : {}),
-      })),
-    }),
+    body: JSON.stringify(
+      buildPostizCreateBody({
+        ...input,
+        avatarId: id,
+      }),
+    ),
   })
 
   if (!response.ok) {
@@ -545,11 +609,15 @@ export async function deletePostizPost(avatarId: string, postId: string): Promis
 
 export async function disconnectPostizIntegration(
   avatarId: string,
+  platform: PostizPlatform = 'linkedin',
 ): Promise<PostizDisconnectResponse> {
   const accessToken = await requireAccessToken()
   const id = requireAvatarId(avatarId)
   const url = new URL(`${getApiBaseUrl()}/api/postiz/integration`)
-  url.searchParams.set('avatar_id', id)
+  const search = buildPostizAvatarSearch(id, platform)
+  search.forEach((value, key) => {
+    url.searchParams.set(key, value)
+  })
 
   const response = await fetch(url.toString(), {
     method: 'DELETE',

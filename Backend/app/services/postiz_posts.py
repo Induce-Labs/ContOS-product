@@ -39,6 +39,7 @@ _ISO_DATETIME_RE = re.compile(
 )
 
 MAX_POST_IMAGES = 10
+MAX_X_POST_IMAGES = 4
 _IMAGE_EXTENSIONS = frozenset({".png", ".jpg", ".jpeg", ".gif", ".webp"})
 _VIDEO_MIME = "video/mp4"
 _VIDEO_EXTENSION = ".mp4"
@@ -161,7 +162,7 @@ class PostizPostsService:
     ) -> list[CalendarPost]:
         start = self._require_iso_datetime(start_date, field_name="start_date")
         end = self._require_iso_datetime(end_date, field_name="end_date")
-        access_token, integration_id = self._require_connected_context(
+        access_token, channel_ids = self._require_any_channel_context(
             contos_user_id=contos_user_id,
             avatar_id=avatar_id,
         )
@@ -173,7 +174,7 @@ class PostizPostsService:
         return [
             mapped
             for mapped in (self._map_post(item) for item in raw_posts)
-            if mapped is not None and mapped.integration_id == integration_id
+            if mapped is not None and mapped.integration_id in channel_ids
         ]
 
     def upload_media(
@@ -196,7 +197,7 @@ class PostizPostsService:
         _validate_upload_mime_and_extension(mime=mime, filename=filename or "upload")
         _validate_upload_size(mime, len(content))
 
-        access_token, _integration_id = self._require_connected_context(
+        access_token, _channel_ids = self._require_any_channel_context(
             contos_user_id=contos_user_id,
             avatar_id=avatar_id,
         )
@@ -314,6 +315,98 @@ class PostizPostsService:
         )
         return result
 
+    def create_x_post(
+        self,
+        *,
+        contos_user_id: UUID,
+        avatar_id: UUID,
+        post_type: PostType,
+        content: str,
+        publish_date: str,
+        post_id: str | None = None,
+        images: Sequence[MediaRef] | None = None,
+    ) -> Any:
+        """Create an X post through Postiz. Does not use the LinkedIn integration id."""
+        if post_type == "update":
+            raise PostizBadRequestError(
+                "Updating an X post is not supported in this step.",
+            )
+        if post_id is not None and post_id.strip():
+            raise PostizBadRequestError("post_id is only allowed when type is update.")
+
+        cleaned_content = content.strip()
+        if not cleaned_content:
+            raise PostizBadRequestError("Post content must not be empty.")
+
+        date_value = self._require_iso_datetime(publish_date, field_name="publish_date")
+        access_token, integration_id = self._require_x_context(
+            contos_user_id=contos_user_id,
+            avatar_id=avatar_id,
+        )
+        normalized_images = self._normalize_images(
+            images,
+            max_images=MAX_X_POST_IMAGES,
+        )
+        self._assert_media_owned_by_avatar_org(
+            access_token=access_token,
+            images=normalized_images,
+        )
+
+        settings_payload = self._client.get_integration_settings(
+            access_token,
+            integration_id,
+        )
+        limit = self._oauth.x_character_limit(settings_payload)
+        if len(cleaned_content) > limit:
+            raise PostizBadRequestError(
+                f"X post content must be 1–{limit} characters. "
+                f"Postiz reported a limit of {limit} characters for this integration. "
+                f"Got {len(cleaned_content)}.",
+            )
+
+        value_entry: dict[str, Any] = {
+            "content": cleaned_content,
+            "image": [
+                {
+                    "id": item.id,
+                    "path": item.path,
+                    **({"alt": item.alt} if item.alt else {}),
+                    **({"thumbnail": item.thumbnail} if item.thumbnail else {}),
+                }
+                for item in normalized_images
+            ],
+        }
+        payload = {
+            "type": post_type,
+            "shortLink": False,
+            "date": date_value,
+            "tags": [],
+            "posts": [
+                {
+                    "integration": {"id": integration_id},
+                    "value": [value_entry],
+                    "settings": {
+                        "__type": "x",
+                        "who_can_reply_post": "everyone",
+                    },
+                },
+            ],
+        }
+        result = self._client.create_post(access_token, payload)
+        logger.info(
+            "Created Postiz X post",
+            extra={
+                "contos_user_id": str(contos_user_id),
+                "avatar_id": str(avatar_id),
+                "post_type": post_type,
+                "postiz_x_integration_id": integration_id,
+                "image_count": len(normalized_images),
+                "content_length": len(cleaned_content),
+                "reported_max_length": limit,
+            },
+        )
+        return result
+
     def change_post_status(
         self,
         *,
@@ -411,6 +504,44 @@ class PostizPostsService:
         )
         return DisconnectResult(disconnected=True, warning=warning)
 
+    def disconnect_x(
+        self,
+        *,
+        contos_user_id: UUID,
+        avatar_id: UUID,
+    ) -> DisconnectResult:
+        """Disconnect this avatar's X integration only. LinkedIn id is left unchanged."""
+        connection = self._require_avatar_connection(
+            contos_user_id=contos_user_id,
+            avatar_id=avatar_id,
+        )
+        integration_id = connection.get("postiz_x_integration_id")
+        if not isinstance(integration_id, str) or not integration_id.strip():
+            raise PostizNotConnectedError(
+                "This avatar has no X integration to disconnect.",
+            )
+
+        access_token = self._oauth.decrypt_access_token(
+            connection["encrypted_access_token"],
+        )
+        self._client.delete_integration(access_token, integration_id.strip())
+        self._repository.clear_x_integration_id(avatar_id)
+        self._oauth.clear_x_caches(avatar_id)
+
+        warning = (
+            "X was disconnected for this avatar only. The Postiz organization and "
+            "LinkedIn integration for this avatar were not removed."
+        )
+        logger.info(
+            "Disconnected avatar X integration",
+            extra={
+                "contos_user_id": str(contos_user_id),
+                "avatar_id": str(avatar_id),
+                "postiz_x_integration_id": integration_id.strip(),
+            },
+        )
+        return DisconnectResult(disconnected=True, warning=warning)
+
     def _require_connected_context(
         self,
         *,
@@ -425,6 +556,56 @@ class PostizPostsService:
         if not isinstance(integration_id, str) or not integration_id.strip():
             raise PostizNotConnectedError(
                 "Connect LinkedIn for this avatar before managing calendar posts.",
+            )
+        access_token = self._oauth.decrypt_access_token(
+            connection["encrypted_access_token"],
+        )
+        return access_token, integration_id.strip()
+
+    def _stored_channel_ids(self, connection: dict[str, Any]) -> set[str]:
+        """LinkedIn and X ids on this avatar row only. Blank values are ignored."""
+        ids: set[str] = set()
+        for key in ("postiz_integration_id", "postiz_x_integration_id"):
+            value = connection.get(key)
+            if isinstance(value, str) and value.strip():
+                ids.add(value.strip())
+        return ids
+
+    def _require_any_channel_context(
+        self,
+        *,
+        contos_user_id: UUID,
+        avatar_id: UUID,
+    ) -> tuple[str, set[str]]:
+        """Org token plus this avatar's LinkedIn and/or X ids. Neither id means not connected."""
+        connection = self._require_avatar_connection(
+            contos_user_id=contos_user_id,
+            avatar_id=avatar_id,
+        )
+        channel_ids = self._stored_channel_ids(connection)
+        if not channel_ids:
+            raise PostizNotConnectedError(
+                "Connect LinkedIn for this avatar before managing calendar posts.",
+            )
+        access_token = self._oauth.decrypt_access_token(
+            connection["encrypted_access_token"],
+        )
+        return access_token, channel_ids
+
+    def _require_x_context(
+        self,
+        *,
+        contos_user_id: UUID,
+        avatar_id: UUID,
+    ) -> tuple[str, str]:
+        connection = self._require_avatar_connection(
+            contos_user_id=contos_user_id,
+            avatar_id=avatar_id,
+        )
+        integration_id = connection.get("postiz_x_integration_id")
+        if not isinstance(integration_id, str) or not integration_id.strip():
+            raise PostizNotConnectedError(
+                "Connect X for this avatar before creating X posts.",
             )
         access_token = self._oauth.decrypt_access_token(
             connection["encrypted_access_token"],
@@ -475,12 +656,17 @@ class PostizPostsService:
             "Post was not found for this avatar's LinkedIn channel.",
         )
 
-    def _normalize_images(self, images: Sequence[MediaRef] | None) -> list[MediaRef]:
+    def _normalize_images(
+        self,
+        images: Sequence[MediaRef] | None,
+        *,
+        max_images: int = MAX_POST_IMAGES,
+    ) -> list[MediaRef]:
         if images is None:
             return []
-        if len(images) > MAX_POST_IMAGES:
+        if len(images) > max_images:
             raise PostizBadRequestError(
-                f"A post may include at most {MAX_POST_IMAGES} images.",
+                f"A post may include at most {max_images} images.",
             )
         normalized: list[MediaRef] = []
         video_count = 0
