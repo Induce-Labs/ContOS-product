@@ -73,7 +73,7 @@ export function AuthAlert({ message, tone = 'error' }: AuthAlertProps) {
   const toneClasses =
     tone === 'success'
       ? 'border-signal-positive/30 bg-signal-positive/10 text-signal-positive'
-      : 'border-red-200 bg-red-50 text-red-700'
+      : 'border-red-200 bg-red-50 text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200'
 
   return (
     <div className={`rounded-xl border px-4 py-3 text-sm ${toneClasses}`} role="alert">

@@ -325,18 +325,40 @@ class PostizPostsService:
         publish_date: str,
         post_id: str | None = None,
         images: Sequence[MediaRef] | None = None,
+        thread: Sequence[str] | None = None,
     ) -> Any:
-        """Create an X post through Postiz. Does not use the LinkedIn integration id."""
-        if post_type == "update":
-            raise PostizBadRequestError(
-                "Updating an X post is not supported in this step.",
-            )
-        if post_id is not None and post_id.strip():
+        """Create an X post through Postiz. Does not use the LinkedIn integration id.
+
+        ``thread`` is the ordered entry list. When omitted, ``content`` is the only
+        entry. Original text is sent to Postiz; emptiness and length use the trimmed text.
+        Media is attached only to the first entry.
+        """
+        updating = post_type == "update"
+        if updating:
+            if not post_id or not post_id.strip():
+                raise PostizBadRequestError("post_id is required when type is update.")
+            if thread is not None and (
+                len(thread) != 1 or thread[0] != content
+            ):
+                raise PostizBadRequestError(
+                    "An X update edits the first post only. "
+                    "content must equal that post, with no extra replies.",
+                )
+        elif post_id is not None and post_id.strip():
             raise PostizBadRequestError("post_id is only allowed when type is update.")
 
-        cleaned_content = content.strip()
-        if not cleaned_content:
-            raise PostizBadRequestError("Post content must not be empty.")
+        entries = [content] if updating else (list(thread) if thread is not None else [content])
+        if not entries:
+            raise PostizBadRequestError("X post must include at least one entry.")
+        if thread is not None and content != entries[0]:
+            raise PostizBadRequestError(
+                "content must equal the first X thread entry.",
+            )
+        for index, entry in enumerate(entries):
+            if not isinstance(entry, str) or not entry.strip():
+                raise PostizBadRequestError(
+                    f"X thread entry {index + 1} must not be empty.",
+                )
 
         date_value = self._require_iso_datetime(publish_date, field_name="publish_date")
         access_token, integration_id = self._require_x_context(
@@ -352,30 +374,52 @@ class PostizPostsService:
             images=normalized_images,
         )
 
+        owned_id: str | None = None
+        if updating:
+            owned = self._require_owned_post(
+                access_token=access_token,
+                integration_id=integration_id,
+                post_id=post_id.strip(),  # type: ignore[union-attr]
+                channel_label="X",
+            )
+            if owned.state not in {"DRAFT", "QUEUE"}:
+                raise PostizBadRequestError(
+                    "Only draft and scheduled X posts can be edited. "
+                    f"This post is {owned.state}.",
+                )
+            owned_id = owned.id
+
         settings_payload = self._client.get_integration_settings(
             access_token,
             integration_id,
         )
         limit = self._oauth.x_character_limit(settings_payload)
-        if len(cleaned_content) > limit:
-            raise PostizBadRequestError(
-                f"X post content must be 1–{limit} characters. "
-                f"Postiz reported a limit of {limit} characters for this integration. "
-                f"Got {len(cleaned_content)}.",
-            )
+        for index, entry in enumerate(entries):
+            trimmed_length = len(entry.strip())
+            if trimmed_length > limit:
+                raise PostizBadRequestError(
+                    f"X thread entry {index + 1} must be 1–{limit} characters. "
+                    f"Postiz reported a limit of {limit} characters for this integration. "
+                    f"Got {trimmed_length}.",
+                )
 
-        value_entry: dict[str, Any] = {
-            "content": cleaned_content,
-            "image": [
-                {
-                    "id": item.id,
-                    "path": item.path,
-                    **({"alt": item.alt} if item.alt else {}),
-                    **({"thumbnail": item.thumbnail} if item.thumbnail else {}),
-                }
-                for item in normalized_images
-            ],
-        }
+        image_payload = [
+            {
+                "id": item.id,
+                "path": item.path,
+                **({"alt": item.alt} if item.alt else {}),
+                **({"thumbnail": item.thumbnail} if item.thumbnail else {}),
+            }
+            for item in normalized_images
+        ]
+        value = [
+            {
+                "content": entry,
+                "image": image_payload if index == 0 else [],
+                **({"id": owned_id} if index == 0 and owned_id else {}),
+            }
+            for index, entry in enumerate(entries)
+        ]
         payload = {
             "type": post_type,
             "shortLink": False,
@@ -384,7 +428,7 @@ class PostizPostsService:
             "posts": [
                 {
                     "integration": {"id": integration_id},
-                    "value": [value_entry],
+                    "value": value,
                     "settings": {
                         "__type": "x",
                         "who_can_reply_post": "everyone",
@@ -401,7 +445,8 @@ class PostizPostsService:
                 "post_type": post_type,
                 "postiz_x_integration_id": integration_id,
                 "image_count": len(normalized_images),
-                "content_length": len(cleaned_content),
+                "thread_entry_count": len(entries),
+                "content_length": len(entries[0].strip()),
                 "reported_max_length": limit,
             },
         )
@@ -635,6 +680,7 @@ class PostizPostsService:
         access_token: str,
         integration_id: str,
         post_id: str,
+        channel_label: str = "LinkedIn",
     ) -> CalendarPost:
         cleaned = post_id.strip()
         if not cleaned:
@@ -653,7 +699,7 @@ class PostizPostsService:
                 return mapped
 
         raise PostizPostNotFoundError(
-            "Post was not found for this avatar's LinkedIn channel.",
+            f"Post was not found for this avatar's {channel_label} channel.",
         )
 
     def _normalize_images(

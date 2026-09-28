@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
+import { ConfirmDialog } from '../ConfirmDialog'
 import {
   MAX_AVATARS,
   avatarTypeLabel,
@@ -27,6 +28,7 @@ export function ProjectSwitcher({
   const location = useLocation()
   const [open, setOpen] = useState(false)
   const [busyAvatarId, setBusyAvatarId] = useState<string | null>(null)
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const containerRef = useRef<HTMLDivElement | null>(null)
   const atAvatarCap = projects.length >= MAX_AVATARS
@@ -77,23 +79,32 @@ export function ProjectSwitcher({
     }
   }
 
-  async function handleDelete(avatarId: string) {
-    if (!window.confirm(t('projectSwitcher.deleteConfirm'))) {
+  function requestDelete(avatarId: string) {
+    setActionError(null)
+    setDeleteTargetId(avatarId)
+    setOpen(false)
+  }
+
+  async function confirmDelete() {
+    if (!deleteTargetId) {
       return
     }
 
+    const avatarId = deleteTargetId
     setActionError(null)
     setBusyAvatarId(avatarId)
     try {
       await deleteAvatar(avatarId)
       const next = projects.filter((project) => project.id !== avatarId)
       onAvatarsChanged(next)
+      setDeleteTargetId(null)
       if (activeProject?.id === avatarId) {
         const fallback = next.find((project) => project.is_default) ?? next[0]
-        setOpen(false)
         navigate(fallback ? `/dashboard/${fallback.id}` : '/dashboard')
       }
     } catch (error) {
+      setDeleteTargetId(null)
+      setOpen(true)
       setActionError(
         error instanceof Error ? error.message : t('projectSwitcher.failedDelete'),
       )
@@ -113,8 +124,8 @@ export function ProjectSwitcher({
         aria-label={t('projectSwitcher.selectProject')}
         className={
           collapsed
-            ? 'flex h-10 w-10 items-center justify-center rounded-xl border border-border-hairline bg-canvas text-sm font-semibold text-ink transition hover:border-accent-primary/40'
-            : 'inline-flex w-full max-w-full items-center gap-2 rounded-full border border-border-hairline bg-canvas px-3.5 py-2 text-sm text-ink transition hover:border-accent-primary/40'
+            ? 'flex h-10 w-10 items-center justify-center rounded-xl bg-[#ebe4fe] text-sm font-semibold text-ink transition dark:border dark:border-border-hairline dark:bg-canvas-raised'
+            : 'inline-flex w-full max-w-full items-center gap-2 rounded-full border border-transparent bg-[#ebe4fe] px-3.5 py-2 text-sm text-ink transition dark:border-border-hairline dark:bg-canvas-raised'
         }
       >
         {collapsed ? (
@@ -178,7 +189,7 @@ export function ProjectSwitcher({
                       <button
                         type="button"
                         disabled={busyAvatarId === project.id}
-                        onClick={() => void handleDelete(project.id)}
+                        onClick={() => requestDelete(project.id)}
                         className="rounded-lg px-2 py-0.5 text-[11px] text-red-600 hover:bg-red-50"
                       >
                         {t('projectSwitcher.delete')}
@@ -207,6 +218,24 @@ export function ProjectSwitcher({
           )}
         </div>
       ) : null}
+
+      <ConfirmDialog
+        open={deleteTargetId !== null}
+        title={t('projectSwitcher.deleteDialogTitle', {
+          name:
+            projects.find((project) => project.id === deleteTargetId)?.name ??
+            t('projectSwitcher.deleteDialogFallbackName'),
+        })}
+        description={t('projectSwitcher.deleteDialogBody')}
+        confirmLabel={t('projectSwitcher.deleteDialogConfirm')}
+        confirming={deleteTargetId !== null && busyAvatarId === deleteTargetId}
+        onConfirm={() => void confirmDelete()}
+        onCancel={() => {
+          if (busyAvatarId !== deleteTargetId) {
+            setDeleteTargetId(null)
+          }
+        }}
+      />
     </div>
   )
 }

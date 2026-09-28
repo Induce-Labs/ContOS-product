@@ -1,5 +1,6 @@
 import type { FormEvent } from 'react'
-import { useState } from 'react'
+import { useEffect, useId, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { AuthAlert, PrimaryButton } from '../auth/AuthButtons'
 import { AuthFormField } from '../auth/AuthFormField'
@@ -14,6 +15,7 @@ import { normalizeTwitterInputs, validateTwitterInput } from '../../lib/twitter'
 import { enqueueCompetitorScrapeJobsOrThrow } from '../../lib/api'
 import { updateProjectStatus } from '../../lib/projects'
 import type { CompetitorPlatform } from '../../types/contos'
+import { PlatformSelect } from './PlatformSelect'
 
 type CompetitorDraft = {
   value: string
@@ -34,6 +36,7 @@ export function AddCompetitorPanel({
   onSuccess,
 }: AddCompetitorPanelProps) {
   const { t } = useTranslation()
+  const titleId = useId()
   const remainingSlots = MAX_COMPETITORS_PER_AVATAR - existingCompetitors.length
   const [inputs, setInputs] = useState<CompetitorDraft[]>([
     { value: '', platform: 'instagram' },
@@ -167,88 +170,120 @@ export function AddCompetitorPanel({
     }
   }
 
-  return (
-    <section className="rounded-[2rem] border border-accent-primary/30 bg-canvas-raised p-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h2 className="text-lg font-semibold text-ink">{t('competitors.addPanel.title')}</h2>
-          <p className="mt-1 text-sm text-ink-muted">
-            {t('competitors.addPanel.subtitle', { count: remainingSlots })}
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="rounded-xl border border-border-hairline px-3 py-1.5 text-sm text-ink-muted hover:bg-canvas"
-        >
-          {t('competitors.addPanel.close')}
-        </button>
-      </div>
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
 
-      {errorMessage ? (
-        <div className="mt-4">
-          <AuthAlert message={errorMessage} />
-        </div>
-      ) : null}
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape' && !isSubmitting) {
+        onClose()
+      }
+    }
 
-      <form className="mt-6 space-y-4" onSubmit={(event) => void handleSubmit(event)}>
-        {inputs.map((entry, index) => (
-          <div key={`add-competitor-${index}`} className="space-y-2">
-            <div className="flex flex-wrap gap-2">
-              <select
-                value={entry.platform}
-                onChange={(event) =>
-                  updatePlatform(index, event.target.value as CompetitorPlatform)
-                }
-                className="rounded-xl border border-border-hairline bg-canvas px-3 py-2 text-sm text-ink"
-              >
-                <option value="instagram">{t('common.platforms.instagram')}</option>
-                <option value="linkedin">{t('common.platforms.linkedin')}</option>
-                <option value="twitter">{t('common.platforms.twitter')}</option>
-              </select>
-              {inputs.length > 1 ? (
-                <button
-                  type="button"
-                  onClick={() => removeInputField(index)}
-                  className="contos-btn contos-btn--rect contos-btn--secondary text-ink-muted"
-                >
-                  {t('common.remove')}
-                </button>
-              ) : null}
-            </div>
-            <AuthFormField
-              label={t('onboarding.competitors.competitorLabel', { n: index + 1 })}
-              name={`add-competitor-${index}`}
-              placeholder={
-                entry.platform === 'linkedin'
-                  ? t('onboarding.competitors.placeholderLinkedIn')
-                  : entry.platform === 'twitter'
-                    ? t('onboarding.competitors.placeholderTwitter')
-                    : t('onboarding.competitors.placeholderInstagram')
-              }
-              value={entry.value}
-              onChange={(event) => updateInput(index, event.target.value)}
-              error={fieldErrors[`competitor-${index}`]}
-            />
+    window.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.body.style.overflow = previousOverflow
+      window.removeEventListener('keydown', onKeyDown)
+    }
+  }, [isSubmitting, onClose])
+
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-end justify-center p-4 sm:items-center">
+      <button
+        type="button"
+        aria-label={t('competitors.addPanel.close')}
+        className="absolute inset-0 bg-ink/40 backdrop-blur-[2px] dark:bg-black/60"
+        onClick={() => {
+          if (!isSubmitting) {
+            onClose()
+          }
+        }}
+      />
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className="relative max-h-[min(40rem,calc(100dvh-2rem))] w-full max-w-lg overflow-y-auto rounded-[1.75rem] border border-border-hairline bg-canvas-raised p-6 shadow-[0_24px_64px_rgba(28,27,41,0.18)] sm:p-7"
+      >
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 id={titleId} className="text-lg font-semibold text-ink">
+              {t('competitors.addPanel.title')}
+            </h2>
+            <p className="mt-1 text-sm text-ink-muted">
+              {t('competitors.addPanel.subtitle', { count: remainingSlots })}
+            </p>
           </div>
-        ))}
-
-        {inputs.length < remainingSlots ? (
           <button
             type="button"
-            onClick={addInputField}
-            className="contos-btn contos-btn--rect contos-btn--secondary border-dashed text-accent-primary-deep"
+            onClick={onClose}
+            disabled={isSubmitting}
+            className="rounded-xl border border-border-hairline px-3 py-1.5 text-sm text-ink-muted hover:bg-canvas disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {t('competitors.addPanel.addAnother')}
+            {t('competitors.addPanel.close')}
           </button>
+        </div>
+
+        {errorMessage ? (
+          <div className="mt-4">
+            <AuthAlert message={errorMessage} />
+          </div>
         ) : null}
 
-        <PrimaryButton disabled={isSubmitting}>
-          {isSubmitting
-            ? t('competitors.addPanel.submitting')
-            : t('competitors.addPanel.submit')}
-        </PrimaryButton>
-      </form>
-    </section>
+        <form className="mt-6 space-y-4" onSubmit={(event) => void handleSubmit(event)}>
+          {inputs.map((entry, index) => (
+            <div key={`add-competitor-${index}`} className="space-y-2">
+              <div className="flex flex-wrap gap-2">
+                <PlatformSelect
+                  value={entry.platform}
+                  disabled={isSubmitting}
+                  onChange={(platform) => updatePlatform(index, platform)}
+                />
+                {inputs.length > 1 ? (
+                  <button
+                    type="button"
+                    onClick={() => removeInputField(index)}
+                    className="contos-btn contos-btn--rect contos-btn--secondary text-ink-muted"
+                  >
+                    {t('common.remove')}
+                  </button>
+                ) : null}
+              </div>
+              <AuthFormField
+                label={t('onboarding.competitors.competitorLabel', { n: index + 1 })}
+                name={`add-competitor-${index}`}
+                placeholder={
+                  entry.platform === 'linkedin'
+                    ? t('onboarding.competitors.placeholderLinkedIn')
+                    : entry.platform === 'twitter'
+                      ? t('onboarding.competitors.placeholderTwitter')
+                      : t('onboarding.competitors.placeholderInstagram')
+                }
+                value={entry.value}
+                onChange={(event) => updateInput(index, event.target.value)}
+                error={fieldErrors[`competitor-${index}`]}
+              />
+            </div>
+          ))}
+
+          {inputs.length < remainingSlots ? (
+            <button
+              type="button"
+              onClick={addInputField}
+              className="contos-btn contos-btn--rect contos-btn--secondary border-dashed text-accent-primary-deep"
+            >
+              {t('competitors.addPanel.addAnother')}
+            </button>
+          ) : null}
+
+          <PrimaryButton disabled={isSubmitting}>
+            {isSubmitting
+              ? t('competitors.addPanel.submitting')
+              : t('competitors.addPanel.submit')}
+          </PrimaryButton>
+        </form>
+      </section>
+    </div>,
+    document.body,
   )
 }

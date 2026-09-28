@@ -313,6 +313,47 @@ export function switchChatSession(store: ChatStore, sessionId: string): ChatStor
 }
 
 /**
+ * Remove one session. If it was active, the newest remaining session becomes
+ * active. If none remain, the store is a single empty thread.
+ */
+export function deleteChatSession(
+  store: ChatStore,
+  sessionId: string,
+  welcomeMessage: StoredChatMessage,
+): ChatStore {
+  if (!store.sessions.some((session) => session.id === sessionId)) {
+    throw new Error(`Chat session not found: ${sessionId}`)
+  }
+
+  const sessions = store.sessions.filter((session) => session.id !== sessionId)
+  if (sessions.length === 0) {
+    return createEmptyStore(welcomeMessage)
+  }
+
+  const activeSessionId =
+    store.activeSessionId === sessionId
+      ? listChatSessions({ ...store, sessions, activeSessionId: sessions[0].id })[0].id
+      : store.activeSessionId
+
+  return {
+    version: STORE_VERSION,
+    activeSessionId,
+    sessions,
+  }
+}
+
+export const CHAT_DELETE_EVENT = 'contos-chat-delete'
+export const CHAT_DELETE_REVERT_EVENT = 'contos-chat-delete-revert'
+
+export type ChatDeleteEventDetail = {
+  projectId: string
+  sessionId: string
+  handled: boolean
+  previous?: ChatStore
+  next?: ChatStore
+}
+
+/**
  * Start a fresh thread. If the active session has no user messages, reuse it
  * instead of stacking empty "New chat" entries.
  */

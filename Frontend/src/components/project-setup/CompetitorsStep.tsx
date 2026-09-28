@@ -1,12 +1,21 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useLocation } from 'react-router-dom'
 import { AuthAlert } from '../auth/AuthButtons'
 import type { CompetitorDraft } from '../../hooks/useCompetitorIntake'
+import { useTheme } from '../../hooks/useTheme'
 import {
   MAX_COMPETITORS_PER_AVATAR,
   RECOMMENDED_COMPETITORS_PER_AVATAR,
 } from '../../lib/competitors'
 import type { CompetitorPlatform } from '../../types/contos'
+
+/** Local `.dark` so this screen follows the account preference without darkening the rest of the new-project wizard. First-time `/onboarding` stays light. */
+function useCompetitorsDarkShell(): boolean {
+  const { theme } = useTheme()
+  const { pathname } = useLocation()
+  return theme === 'dark' && !pathname.startsWith('/onboarding')
+}
 
 export type CompetitorsStepProps = {
   competitorInputs: CompetitorDraft[]
@@ -193,7 +202,7 @@ function PlatformPicker({
     {
       value: 'twitter',
       label: twitterLabel,
-      icon: <TwitterIcon className="h-4 w-4 shrink-0 text-neutral-900" />,
+      icon: <TwitterIcon className="h-4 w-4 shrink-0 text-neutral-900 dark:text-ink" />,
     },
   ]
 
@@ -208,20 +217,20 @@ function PlatformPicker({
         aria-expanded={open}
         aria-controls={listId}
         onClick={() => setOpen((prev) => !prev)}
-        className="flex w-full cursor-pointer items-center justify-between gap-2 rounded-xl border border-neutral-200 bg-[#faf9fd] px-4 py-2.5 text-left text-xs font-medium text-neutral-800 transition-all hover:border-neutral-300 disabled:cursor-not-allowed disabled:opacity-60 sm:text-sm"
+        className="flex w-full cursor-pointer items-center justify-between gap-2 rounded-xl border border-border-hairline bg-canvas px-4 py-2.5 text-left text-xs font-medium text-ink transition-all hover:border-ink-muted/40 disabled:cursor-not-allowed disabled:opacity-60 sm:text-sm"
       >
         <span className="flex min-w-0 items-center gap-2">
           {selected.icon}
           <span className="break-words">{selected.label}</span>
         </span>
-        <ChevronDownIcon className="h-3.5 w-3.5 shrink-0 text-neutral-400" />
+        <ChevronDownIcon className="h-3.5 w-3.5 shrink-0 text-ink-muted" />
       </button>
 
       {open ? (
         <div
           id={listId}
           role="listbox"
-          className="absolute left-0 right-0 top-full z-30 mt-1.5 rounded-xl border border-neutral-200 bg-white py-1 shadow-lg"
+          className="absolute left-0 right-0 top-full z-30 mt-1.5 rounded-xl border border-border-hairline bg-canvas-raised py-1 shadow-lg dark:shadow-[0_8px_24px_rgba(0,0,0,0.45)]"
         >
           {options.map((option) => (
             <button
@@ -233,7 +242,7 @@ function PlatformPicker({
                 onChange(option.value)
                 setOpen(false)
               }}
-              className="flex w-full cursor-pointer items-center gap-2.5 px-3.5 py-2 text-left text-xs font-medium text-neutral-700 transition-colors hover:bg-neutral-50 hover:text-neutral-900"
+              className="flex w-full cursor-pointer items-center gap-2.5 px-3.5 py-2 text-left text-xs font-medium text-ink-muted transition-colors hover:bg-canvas hover:text-ink"
             >
               {option.icon}
               <span>{option.label}</span>
@@ -247,8 +256,11 @@ function PlatformPicker({
 
 export function CompetitorsStepLoading() {
   const { t } = useTranslation()
+  const darkShell = useCompetitorsDarkShell()
   return (
-    <div className="flex min-h-dvh items-center justify-center bg-canvas text-ink-muted">
+    <div
+      className={`flex min-h-dvh items-center justify-center bg-canvas text-ink-muted${darkShell ? ' dark' : ''}`}
+    >
       {t('onboarding.competitors.loading')}
     </div>
   )
@@ -259,9 +271,12 @@ export function CompetitorsStepUnavailable({
 }: {
   message: string
 }) {
+  const darkShell = useCompetitorsDarkShell()
   return (
-    <div className="flex min-h-dvh items-center justify-center bg-canvas px-4">
-      <div className="max-w-md space-y-4 rounded-[2rem] border border-red-200 bg-red-50 p-6 text-center text-sm text-red-700">
+    <div
+      className={`flex min-h-dvh items-center justify-center bg-canvas px-4${darkShell ? ' dark' : ''}`}
+    >
+      <div className="max-w-md space-y-4 rounded-[2rem] border border-red-200 bg-red-50 p-6 text-center text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200">
         <p>{message}</p>
       </div>
     </div>
@@ -283,6 +298,7 @@ export function CompetitorsStep({
   onBack,
 }: CompetitorsStepProps) {
   const { t } = useTranslation()
+  const darkShell = useCompetitorsDarkShell()
   const disabled = isSubmitting
   const count = competitorInputs.length
   const atRecommended = count >= RECOMMENDED_COMPETITORS_PER_AVATAR
@@ -293,15 +309,17 @@ export function CompetitorsStep({
   const submitDisplay = submitLabel.replace(/\s*→\s*$/u, '')
 
   return (
-    <div className="relative min-h-dvh overflow-auto bg-[#faf9fd] font-sans text-[#1c1c1c] antialiased selection:bg-neutral-900 selection:text-white">
+    <div
+      className={`relative min-h-dvh overflow-auto bg-canvas font-sans text-ink antialiased selection:bg-ink selection:text-canvas${darkShell ? ' dark' : ''}`}
+    >
       <div
         aria-hidden="true"
-        className="pointer-events-none fixed inset-0 z-0 bg-[radial-gradient(ellipse_75%_55%_at_15%_10%,rgba(238,230,253,0.55)_0%,rgba(247,244,253,0.25)_45%,rgba(255,255,255,0)_75%),radial-gradient(ellipse_70%_50%_at_85%_90%,rgba(235,225,252,0.45)_0%,rgba(247,244,253,0.2)_40%,rgba(255,255,255,0)_70%)]"
+        className="pointer-events-none fixed inset-0 z-0 bg-[radial-gradient(ellipse_75%_55%_at_15%_10%,rgba(238,230,253,0.55)_0%,rgba(247,244,253,0.25)_45%,rgba(255,255,255,0)_75%),radial-gradient(ellipse_70%_50%_at_85%_90%,rgba(235,225,252,0.45)_0%,rgba(247,244,253,0.2)_40%,rgba(255,255,255,0)_70%)] dark:bg-[radial-gradient(ellipse_75%_55%_at_15%_10%,rgba(37,22,77,0.45)_0%,rgba(13,13,13,0.2)_45%,rgba(13,13,13,0)_75%),radial-gradient(ellipse_70%_50%_at_85%_90%,rgba(37,22,77,0.35)_0%,rgba(13,13,13,0.15)_40%,rgba(13,13,13,0)_70%)]"
       />
 
       <div
         aria-hidden="true"
-        className="pointer-events-none fixed inset-x-0 top-0 z-10 h-28 bg-gradient-to-b from-black/[0.12] via-black/[0.02] to-transparent sm:h-36"
+        className="pointer-events-none fixed inset-x-0 top-0 z-10 h-28 bg-gradient-to-b from-black/[0.12] via-black/[0.02] to-transparent sm:h-36 dark:from-white/[0.06]"
       />
 
       <main className="relative z-20 mx-auto flex w-full max-w-4xl flex-col px-4 py-10 sm:px-6 sm:py-14 lg:px-8">
@@ -311,11 +329,11 @@ export function CompetitorsStep({
             {t('layout.brandName')}
           </span>
 
-          <h1 className="mb-3.5 break-words text-balance font-serif text-[32px] font-bold leading-[1.12] tracking-[-0.03em] text-neutral-900 sm:text-[42px] md:text-[48px]">
+          <h1 className="mb-3.5 break-words text-balance font-serif text-[32px] font-bold leading-[1.12] tracking-[-0.03em] text-ink sm:text-[42px] md:text-[48px]">
             {t('onboarding.competitors.title')}
           </h1>
 
-          <p className="mx-auto max-w-xl break-words text-sm leading-relaxed text-neutral-500 sm:text-base">
+          <p className="mx-auto max-w-xl break-words text-sm leading-relaxed text-ink-muted sm:text-base">
             {t('onboarding.competitors.body', {
               min: minCompetitors,
               max: maxCompetitors,
@@ -324,15 +342,15 @@ export function CompetitorsStep({
           </p>
         </header>
 
-        <div className="mb-6 flex w-full flex-col justify-between gap-3 rounded-2xl border border-[#ede7de] bg-white/80 p-4 text-xs backdrop-blur-sm sm:flex-row sm:items-center">
+        <div className="mb-6 flex w-full flex-col justify-between gap-3 rounded-2xl border border-border-hairline bg-canvas-raised/80 p-4 text-xs backdrop-blur-sm sm:flex-row sm:items-center">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="font-semibold text-neutral-800">
+            <span className="font-semibold text-ink">
               {count} of {maxCompetitors}
             </span>
-            <span className="text-neutral-400" aria-hidden="true">
+            <span className="text-ink-muted" aria-hidden="true">
               •
             </span>
-            <span className={atRecommended ? 'font-medium text-emerald-600' : 'font-medium text-accent-primary-deep'}>
+            <span className={atRecommended ? 'font-medium text-emerald-600 dark:text-signal-positive' : 'font-medium text-accent-primary-deep'}>
               {atRecommended
                 ? `${RECOMMENDED_COMPETITORS_PER_AVATAR}+`
                 : `Recommend ${RECOMMENDED_COMPETITORS_PER_AVATAR}`}
@@ -352,7 +370,7 @@ export function CompetitorsStep({
                       ? 'scale-110 bg-accent-primary shadow-sm'
                       : isRecommendedSlot
                         ? 'border-2 border-accent-primary bg-accent-primary-soft'
-                        : 'bg-neutral-200'
+                        : 'bg-border-hairline'
                   }`}
                 />
               )
@@ -375,11 +393,11 @@ export function CompetitorsStep({
               return (
                 <div
                   key={fieldKey}
-                  className="w-full rounded-[22px] border border-[#ede7de] bg-white p-4 shadow-[0_4px_20px_rgba(0,0,0,0.02)] sm:p-5"
+                  className="w-full rounded-[22px] border border-border-hairline bg-canvas-raised p-4 shadow-[0_4px_20px_rgba(0,0,0,0.02)] sm:p-5 dark:shadow-[0_4px_20px_rgba(0,0,0,0.35)]"
                 >
                   <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
                     <div className="flex items-center justify-between gap-2 sm:justify-start">
-                      <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-neutral-100 font-mono text-xs font-semibold text-neutral-400">
+                      <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-canvas font-mono text-xs font-semibold text-ink-muted">
                         {String(index + 1).padStart(2, '0')}
                       </span>
 
@@ -388,7 +406,7 @@ export function CompetitorsStep({
                           type="button"
                           onClick={() => onRemoveField(index)}
                           disabled={disabled}
-                          className="rounded-lg p-1.5 text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-red-500 disabled:opacity-60 sm:hidden"
+                          className="rounded-lg p-1.5 text-ink-muted transition-colors hover:bg-canvas hover:text-red-500 disabled:opacity-60 sm:hidden dark:hover:text-red-400"
                           aria-label={t('onboarding.competitors.remove')}
                         >
                           <TrashIcon className="h-4 w-4" />
@@ -423,10 +441,10 @@ export function CompetitorsStep({
                               ? t('onboarding.competitors.placeholderTwitter')
                               : t('onboarding.competitors.placeholderInstagram')
                         }
-                        className="w-full rounded-xl border border-neutral-200 bg-[#faf9fd] px-4 py-2.5 font-mono text-xs text-neutral-900 placeholder:text-neutral-400 transition-all focus:border-accent-primary focus:outline-none focus:ring-2 focus:ring-accent-primary/20 disabled:opacity-60 sm:text-sm"
+                        className="w-full rounded-xl border border-border-hairline bg-canvas px-4 py-2.5 font-mono text-xs text-ink placeholder:text-ink-muted transition-all focus:border-accent-primary focus:outline-none focus:ring-2 focus:ring-accent-primary/20 disabled:opacity-60 sm:text-sm"
                       />
                       {fieldError ? (
-                        <p className="mt-1.5 text-xs text-red-600">{fieldError}</p>
+                        <p className="mt-1.5 text-xs text-red-600 dark:text-red-400">{fieldError}</p>
                       ) : null}
                     </div>
 
@@ -435,7 +453,7 @@ export function CompetitorsStep({
                         type="button"
                         onClick={() => onRemoveField(index)}
                         disabled={disabled}
-                        className="hidden shrink-0 cursor-pointer rounded-lg p-2 text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-red-500 disabled:opacity-60 sm:flex"
+                        className="hidden shrink-0 cursor-pointer rounded-lg p-2 text-ink-muted transition-colors hover:bg-canvas hover:text-red-500 disabled:opacity-60 sm:flex dark:hover:text-red-400"
                         aria-label={t('onboarding.competitors.remove')}
                         title={t('onboarding.competitors.remove')}
                       >
@@ -454,7 +472,7 @@ export function CompetitorsStep({
                 type="button"
                 onClick={onAddField}
                 disabled={disabled}
-                className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-neutral-300 py-3.5 text-xs font-medium text-neutral-600 transition-all duration-200 hover:border-accent-primary hover:bg-accent-primary-soft/40 hover:text-accent-primary-deep active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60 sm:text-sm"
+                className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-border-hairline py-3.5 text-xs font-medium text-ink-muted transition-all duration-200 hover:border-accent-primary hover:bg-accent-primary-soft/40 hover:text-accent-primary-deep active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60 sm:text-sm"
               >
                 <PlusIcon className="h-4 w-4" />
                 <span>
@@ -462,18 +480,18 @@ export function CompetitorsStep({
                 </span>
               </button>
             ) : (
-              <div className="w-full rounded-2xl border border-neutral-200 bg-neutral-100/70 py-3 text-center text-xs font-medium text-neutral-500">
+              <div className="w-full rounded-2xl border border-border-hairline bg-canvas py-3 text-center text-xs font-medium text-ink-muted">
                 {t('onboarding.competitors.maxReached', { max: MAX_COMPETITORS_PER_AVATAR })}
               </div>
             )}
           </div>
 
-          <div className="flex w-full flex-col items-center justify-between gap-4 border-t border-neutral-200/80 pt-6 sm:flex-row">
+          <div className="flex w-full flex-col items-center justify-between gap-4 border-t border-border-hairline pt-6 sm:flex-row">
             <button
               type="button"
               onClick={onBack}
               disabled={disabled}
-              className="inline-flex items-center gap-2 self-start rounded-full px-2 py-3 text-xs font-medium text-neutral-500 transition-all hover:text-neutral-900 disabled:cursor-not-allowed disabled:opacity-60 sm:self-auto sm:px-3 sm:text-sm"
+              className="inline-flex items-center gap-2 self-start rounded-full px-2 py-3 text-xs font-medium text-ink-muted transition-all hover:text-ink disabled:cursor-not-allowed disabled:opacity-60 sm:self-auto sm:px-3 sm:text-sm"
             >
               <span aria-hidden="true">←</span>
               <span>{t('onboarding.competitors.back')}</span>

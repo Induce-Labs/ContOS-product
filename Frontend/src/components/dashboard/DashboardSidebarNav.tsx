@@ -1,12 +1,22 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
+import { ConfirmDialog } from '../ConfirmDialog'
 import { useAuth } from '../../hooks/useAuth'
 import type { AgentType } from '../../lib/agentsApi'
 import { isUiAgentType } from '../../lib/agentsApi'
+import { upsertRemoteChatStore } from '../../lib/agentChatRemote'
 import {
+  CHAT_DELETE_EVENT,
+  CHAT_DELETE_REVERT_EVENT,
+  deleteChatSession,
+  listChatSessions,
+  loadChatStore,
   peekLocalChatSessions,
+  saveChatStore,
+  type ChatDeleteEventDetail,
   type ChatSession,
+  type StoredChatMessage,
 } from '../../lib/agentChatStorage'
 
 type DashboardSidebarNavProps = {
@@ -128,8 +138,13 @@ function ChatHistoryDropdown({
   const { user } = useAuth()
   const navigate = useNavigate()
   const containerRef = useRef<HTMLDivElement | null>(null)
+  const deleteTargetRef = useRef<ChatSession | null>(null)
   const [open, setOpen] = useState(false)
   const [sessions, setSessions] = useState<ChatSession[]>([])
+  const [deleteTarget, setDeleteTarget] = useState<ChatSession | null>(null)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+  deleteTargetRef.current = deleteTarget
 
   useEffect(() => {
     if (!open) return
@@ -158,6 +173,7 @@ function ChatHistoryDropdown({
     if (!open) return
 
     function handlePointerDown(event: MouseEvent) {
+      if (deleteTargetRef.current) return
       if (!containerRef.current?.contains(event.target as Node)) {
         setOpen(false)
       }
@@ -185,15 +201,67 @@ function ChatHistoryDropdown({
     onNavigate?.()
   }
 
+  async function confirmDelete() {
+    if (!user?.id || !deleteTarget) return
+    const sessionId = deleteTarget.id
+    setDeleting(true)
+    setDeleteError(null)
+    const detail: ChatDeleteEventDetail = {
+      projectId,
+      sessionId,
+      handled: false,
+    }
+    window.dispatchEvent(new CustomEvent(CHAT_DELETE_EVENT, { detail }))
+
+    let previous = detail.previous
+    let next = detail.next
+    try {
+      if (!detail.handled || !next) {
+        const welcome: StoredChatMessage = {
+          id: 'deleted-empty',
+          role: 'assistant',
+          content: '',
+        }
+        previous = loadChatStore(user.id, projectId, welcome)
+        next = deleteChatSession(previous, sessionId, welcome)
+        saveChatStore(user.id, projectId, next)
+      }
+      await upsertRemoteChatStore(user.id, projectId, next)
+      setSessions(listChatSessions(next))
+      setDeleteTarget(null)
+      window.dispatchEvent(
+        new CustomEvent('contos-chat-store-updated', { detail: { projectId } }),
+      )
+    } catch (error) {
+      if (detail.handled && previous) {
+        window.dispatchEvent(
+          new CustomEvent(CHAT_DELETE_REVERT_EVENT, {
+            detail: { projectId, store: previous },
+          }),
+        )
+      } else if (previous) {
+        saveChatStore(user.id, projectId, previous)
+      }
+      setSessions(peekLocalChatSessions(user.id, projectId))
+      setDeleteError(
+        error instanceof Error
+          ? error.message
+          : t('agents.syncToFailed'),
+      )
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   const triggerClass = collapsed
     ? `flex h-10 w-10 items-center justify-center rounded-xl transition ${
         open
-          ? 'bg-accent-primary text-btn-primary-fg shadow-[0_1px_4px_color-mix(in_srgb,var(--color-accent-primary)_35%,transparent)]'
+          ? 'bg-[#e8e0fe] text-ink dark:bg-accent-primary dark:text-btn-primary-fg'
           : 'text-ink-muted hover:bg-canvas hover:text-ink'
       }`
     : `flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition ${
         open
-          ? 'bg-accent-primary text-btn-primary-fg shadow-[0_1px_4px_color-mix(in_srgb,var(--color-accent-primary)_35%,transparent)]'
+          ? 'bg-[#e8e0fe] text-ink dark:bg-accent-primary dark:text-btn-primary-fg'
           : 'text-ink-muted hover:bg-accent-primary-soft/60 hover:text-ink'
       }`
 
@@ -202,17 +270,17 @@ function ChatHistoryDropdown({
       className={
         collapsed
           ? 'absolute left-full top-0 z-50 ml-2 w-64 rounded-2xl border border-border-hairline bg-canvas-raised p-2 shadow-[0_18px_40px_rgba(28,27,41,0.12)]'
-          : 'mt-1 space-y-0.5 rounded-xl bg-canvas p-1.5'
+          : 'mt-1 space-y-0.5 rounded-xl bg-white p-1.5 dark:bg-canvas'
       }
     >
       {sessions.length > 0 ? (
         <ul className="max-h-56 space-y-0.5 overflow-y-auto">
           {sessions.map((session) => (
-            <li key={session.id}>
+            <li key={session.id} className="flex items-start gap-1">
               <button
                 type="button"
                 onClick={() => selectSession(session.id)}
-                className="w-full rounded-lg px-2.5 py-2 text-left transition hover:bg-canvas-raised hover:shadow-sm"
+                className="min-w-0 flex-1 rounded-lg px-2.5 py-2 text-left transition hover:bg-[#f4effc] dark:hover:bg-canvas-raised"
               >
                 <span className="block truncate text-sm font-medium text-ink">
                   {session.title}
@@ -221,12 +289,36 @@ function ChatHistoryDropdown({
                   {formatSessionTime(session.updatedAt)}
                 </span>
               </button>
+              <button
+                type="button"
+                aria-label={t('agents.history.deleteAria', { title: session.title })}
+                title={t('agents.history.delete')}
+                onClick={() => {
+                  setDeleteError(null)
+                  setDeleteTarget(session)
+                }}
+                className="mt-1.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-ink-muted transition hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/40 dark:hover:text-red-400"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.75"
+                  className="h-3.5 w-3.5"
+                  aria-hidden
+                >
+                  <path d="M4 7h16M9 7V5h6v2M8 7l1 12h6l1-12" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
             </li>
           ))}
         </ul>
       ) : (
         <p className="px-2.5 py-2 text-xs text-ink-muted">{t('agents.history.empty')}</p>
       )}
+      {deleteError ? (
+        <p className="px-2.5 py-2 text-xs text-red-600 dark:text-red-400">{deleteError}</p>
+      ) : null}
     </div>
   )
 
@@ -264,6 +356,21 @@ function ChatHistoryDropdown({
         ) : null}
       </button>
       {open ? list : null}
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        title={t('agents.history.deleteTitle')}
+        description={t('agents.history.deleteDescription', {
+          title: deleteTarget?.title ?? '',
+        })}
+        confirmLabel={t('agents.history.delete')}
+        confirming={deleting}
+        onConfirm={() => {
+          void confirmDelete()
+        }}
+        onCancel={() => {
+          if (!deleting) setDeleteTarget(null)
+        }}
+      />
     </div>
   )
 }
@@ -387,7 +494,7 @@ export function DashboardSidebarNav({
           aria-label={item.label}
           className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition ${
             isActive
-              ? 'bg-accent-primary text-btn-primary-fg shadow-[0_1px_4px_color-mix(in_srgb,var(--color-accent-primary)_35%,transparent)]'
+              ? 'bg-[#e8e0fe] text-ink dark:bg-accent-primary dark:text-btn-primary-fg'
               : 'text-ink-muted hover:bg-canvas hover:text-ink'
           }`}
         >
@@ -403,7 +510,7 @@ export function DashboardSidebarNav({
         onClick={() => handleNavClick(item)}
         className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition ${
           isActive
-            ? 'bg-accent-primary text-btn-primary-fg shadow-[0_1px_4px_color-mix(in_srgb,var(--color-accent-primary)_35%,transparent)]'
+            ? 'bg-[#e8e0fe] text-ink dark:bg-accent-primary dark:text-btn-primary-fg'
             : 'text-ink-muted hover:bg-accent-primary-soft/60 hover:text-ink'
         }`}
       >
@@ -415,14 +522,14 @@ export function DashboardSidebarNav({
 
   return (
     <nav
-      className={`flex min-h-0 flex-1 flex-col font-sans ${
+      className={`flex min-h-0 flex-1 flex-col overflow-hidden font-sans ${
         collapsed ? 'items-center px-0 py-1' : 'px-3 py-3'
       }`}
     >
       <div
-        className={`min-h-0 w-full flex-1 overflow-y-auto pb-2 ${
+        className={`min-h-0 w-full flex-1 overflow-y-auto overscroll-y-contain pb-2 ${
           collapsed
-            ? 'flex flex-col items-center gap-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden'
+            ? 'scrollbar-none flex flex-col items-center gap-1'
             : 'space-y-5'
         }`}
       >
@@ -469,10 +576,25 @@ export function DashboardSidebarNav({
           )}
           <div
             className={
-              collapsed ? 'flex w-full flex-col items-center gap-1' : 'space-y-0.5'
+              collapsed
+                ? 'flex w-full flex-col items-center gap-1'
+                : 'flex items-center gap-1 px-1'
             }
           >
-            {contentAgentItems.map(renderLink)}
+            {collapsed
+              ? contentAgentItems.map(renderLink)
+              : contentAgentItems.map((item) => (
+                  <Link
+                    key={item.id}
+                    to={item.href}
+                    title={item.label}
+                    aria-label={item.label}
+                    onClick={() => handleNavClick(item)}
+                    className="flex h-10 w-10 items-center justify-center rounded-xl text-ink-muted transition hover:bg-accent-primary-soft/60 hover:text-ink"
+                  >
+                    <NavIcon name={item.icon} className="h-[18px] w-[18px] shrink-0" />
+                  </Link>
+                ))}
           </div>
         </div>
       </div>

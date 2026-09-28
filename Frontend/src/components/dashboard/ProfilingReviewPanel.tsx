@@ -1,11 +1,12 @@
+import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { AuthAlert } from '../auth/AuthButtons'
 import type { ProfilingQuestionDef } from '../../config/onboardingProfilingQuestions'
 import { avatarTypeLabel } from '../../lib/avatars'
 import { ProfilingQuestionField } from '../project-setup/ProfilingQuestionField'
-import { OverviewWorkspaceHeader } from './OverviewWorkspaceHeader'
 
 export type ProfilingReviewPanelProps = {
+  avatarId: string
   workspaceLabel: string
   sections: Array<[string, ProfilingQuestionDef[]]>
   draftAnswers: Record<string, string>
@@ -22,6 +23,7 @@ export type ProfilingReviewPanelProps = {
 }
 
 export function ProfilingReviewPanel({
+  avatarId,
   workspaceLabel,
   sections,
   draftAnswers,
@@ -37,13 +39,32 @@ export function ProfilingReviewPanel({
 }: ProfilingReviewPanelProps) {
   const { t } = useTranslation()
   const disabled = isSaving || isSummarizing
+  const cards = sections.flatMap(([sectionLabel, sectionQuestions]) =>
+    sectionQuestions.map((question) => ({ sectionLabel, question })),
+  )
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <OverviewWorkspaceHeader
-        title={t('profiling.review.title')}
-        subtitle={t('profiling.review.subtitle')}
-      />
+      <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="font-serif text-2xl leading-none text-ink sm:text-3xl">
+            {t('profiling.review.title')}
+          </h1>
+          <p className="mt-1.5 max-w-2xl text-xs text-ink-muted sm:text-sm">
+            {t('profiling.review.subtitle')}
+          </p>
+        </div>
+        <Link
+          to={`/dashboard/${avatarId}/agents`}
+          className="inline-flex items-center gap-1.5 rounded-full border border-[#c4b5fd] bg-white px-4 py-2 text-sm font-medium text-[#5b3d8a] transition hover:bg-[#f6f1ff] dark:border-accent-primary/40 dark:bg-canvas dark:text-accent-primary-deep dark:hover:bg-canvas-raised"
+        >
+          <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" className="h-4 w-4">
+            <path d="M5 12h14" />
+            <path d="m13 6 6 6-6 6" />
+          </svg>
+          {t('profiling.review.viewInChatbot')}
+        </Link>
+      </header>
 
       <p className="mb-6 text-sm text-ink-muted">
         {t('profiling.workspaceLabel', { label: avatarTypeLabel(workspaceLabel) })}
@@ -68,56 +89,55 @@ export function ProfilingReviewPanel({
         </div>
       ) : null}
 
-      <div className="min-h-0 flex-1 space-y-8 overflow-y-auto pb-6">
-        {sections.map(([sectionLabel, sectionQuestions]) => (
-          <section
-            key={sectionLabel}
-            className="rounded-[2rem] border border-border-hairline bg-canvas-raised p-6 shadow-[0_18px_40px_rgba(28,27,41,0.05)] sm:p-8"
-          >
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-ink-muted">
-              {sectionLabel}
-            </p>
+      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pb-6">
+        {cards.map(({ sectionLabel, question }, index) => {
+          const value = draftAnswers[question.key] ?? ''
+          const fieldError = fieldErrors[question.key]
+          const number = String(index + 1).padStart(2, '0')
 
-            <div className="mt-6 space-y-8">
-              {sectionQuestions.map((question) => {
-                const value = draftAnswers[question.key] ?? ''
-                const fieldError = fieldErrors[question.key]
-
-                return (
-                  <div key={question.key} className="border-b border-border-hairline pb-8 last:border-b-0 last:pb-0">
-                    <div className="flex flex-wrap items-baseline gap-3">
-                      <h2 className="font-serif text-xl leading-snug text-ink sm:text-2xl">
-                        {question.question}
-                      </h2>
-                      {!question.required ? (
-                        <span className="rounded-full bg-canvas px-3 py-1 text-xs font-medium uppercase tracking-wide text-ink-muted">
-                          {t('profiling.optional')}
-                        </span>
-                      ) : null}
-                    </div>
-
-                    <div className="mt-4">
-                      <ProfilingQuestionField
-                        question={question}
-                        value={value}
-                        onChange={(next) => onDraftChange(question.key, next)}
-                        disabled={disabled}
-                        autoAdvanceOnSelect={false}
-                      />
-                    </div>
-
-                    {fieldError ? (
-                      <p className="mt-3 text-sm text-red-600">{fieldError}</p>
+          return (
+            <article
+              key={question.key}
+              className="rounded-2xl border border-border-hairline bg-white p-4 shadow-[0_8px_24px_rgba(28,27,41,0.04)] sm:p-5 dark:bg-canvas-raised"
+            >
+              <div className="flex gap-4">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#ece4fb] text-xs font-semibold text-[#5b3d8a] dark:bg-accent-primary-soft dark:text-accent-primary-deep">
+                  {number}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-muted">
+                    {sectionLabel}
+                  </p>
+                  <div className="mt-1 flex flex-wrap items-center gap-2">
+                    <h2 className="font-serif text-lg leading-snug text-ink sm:text-xl">
+                      {question.question}
+                    </h2>
+                    {!question.required ? (
+                      <span className="rounded-full bg-[#f3f0fa] px-2 py-0.5 text-[11px] font-medium text-ink-muted dark:bg-canvas">
+                        {t('profiling.optional')}
+                      </span>
                     ) : null}
                   </div>
-                )
-              })}
-            </div>
-          </section>
-        ))}
+                  <div className="mt-4">
+                    <ProfilingQuestionField
+                      question={question}
+                      value={value}
+                      onChange={(next) => onDraftChange(question.key, next)}
+                      disabled={disabled}
+                      autoAdvanceOnSelect={false}
+                    />
+                  </div>
+                  {fieldError ? (
+                    <p className="mt-3 text-sm text-red-600">{fieldError}</p>
+                  ) : null}
+                </div>
+              </div>
+            </article>
+          )
+        })}
       </div>
 
-      <div className="sticky bottom-0 border-t border-border-hairline bg-canvas/95 py-4 backdrop-blur-sm">
+      <div className="sticky bottom-0 border-t border-border-hairline bg-white/95 py-4 backdrop-blur-sm dark:bg-canvas/95">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-ink-muted">
             {isSummarizing

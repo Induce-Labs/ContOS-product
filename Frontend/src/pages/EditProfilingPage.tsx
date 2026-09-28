@@ -197,7 +197,7 @@ function EditProfilingReview({ avatarId }: { avatarId: string }) {
       sidebarOpen={sidebarOpen}
       onSidebarOpenChange={setSidebarOpen}
       isLoading={projectsLoading || isLoading}
-      mainClassName="flex min-h-0 flex-1 flex-col overflow-hidden px-4 pb-4 pt-6 sm:px-8 sm:pt-8"
+      mainClassName="flex min-h-0 flex-1 flex-col overflow-hidden bg-white px-4 pb-4 pt-6 sm:px-8 sm:pt-8 dark:bg-canvas"
     >
       {projectsError ? (
         <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -211,6 +211,7 @@ function EditProfilingReview({ avatarId }: { avatarId: string }) {
         />
       ) : (
         <ProfilingReviewPanel
+          avatarId={avatarId}
           workspaceLabel={avatar.type}
           sections={sections}
           draftAnswers={draftAnswers}

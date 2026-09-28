@@ -214,7 +214,7 @@ Apply all Postiz SQL migrations to ContOS Supabase before testing. Postiz must e
 
 ### Calendar UI
 
-Visual-only redesign of the Calendar presentation layer (`CalendarPage.tsx`). Layout: connected-account strip, left rail (Create post + upcoming list from the loaded month’s posts), large month grid with pastel event chips and today highlight. Uses the shared dashboard content background (same as other tabs). Uses existing Postiz client calls, handlers, and i18n; no API, schema, or scheduling-logic changes.
+`CalendarPage.tsx` lays the page out as a header (title, subtitle, Create post), a left card (LinkedIn and X rows with the account name under the title and the Connected badge, Connect another account only while exactly one of those two is connected, Create post, upcoming posts for the visible month), and a right card (Today, Month / Week / Day, platform filter, Sunday-first grid). Event chips are LinkedIn or X. Week and Day use the same chips for the visible range. Posts load only when at least one channel is connected. Connect, disconnect, create, edit, and delete still use the existing Postiz handlers. The create dialog is a shared composer for LinkedIn and X (platform cards, text toolbar, media drop zone). Publish now, schedule, and draft call the same handlers. No API or schema changes. Instagram is not a publishing channel.
 
 ## Security
 

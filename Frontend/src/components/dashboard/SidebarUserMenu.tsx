@@ -75,6 +75,9 @@ export function SidebarUserMenu({
     setTheme(isDark ? 'light' : 'dark')
   }
 
+  const sectionLabelClass =
+    'mb-1 px-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-ink-muted'
+
   return (
     <div ref={containerRef} className={collapsed ? 'relative' : 'relative px-3 pb-4 pt-2'}>
       {open ? (
@@ -82,33 +85,32 @@ export function SidebarUserMenu({
           role="menu"
           className={
             collapsed
-              ? 'absolute bottom-0 left-full z-[60] ml-2 w-56 rounded-2xl border border-border-hairline bg-canvas-raised p-2.5 shadow-[0_18px_40px_rgba(28,27,41,0.14)]'
-              : 'absolute bottom-full left-3 right-3 z-[60] mb-2 rounded-2xl border border-border-hairline bg-canvas-raised p-2.5 shadow-[0_18px_40px_rgba(28,27,41,0.14)]'
+              ? 'absolute bottom-0 left-full z-[60] ml-2 w-64 rounded-2xl border border-[#f0ecf6] bg-white p-3 shadow-[0_12px_28px_rgba(90,70,130,0.10)] dark:border-border-hairline dark:bg-canvas-raised'
+              : 'absolute bottom-full left-3 right-3 z-[60] mb-2 rounded-2xl border border-[#f0ecf6] bg-white p-3 shadow-[0_12px_28px_rgba(90,70,130,0.10)] dark:border-border-hairline dark:bg-canvas-raised'
           }
         >
           <section>
-            <p className="mb-1.5 px-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-ink-muted">
-              {t('layout.userMenu.account')}
-            </p>
-            <div className="flex items-center gap-2 rounded-xl bg-accent-primary-soft/70 px-2.5 py-2">
+            <p className={sectionLabelClass}>{t('layout.userMenu.account')}</p>
+            <div className="flex items-center gap-2 rounded-xl bg-[#f4effc] px-2 py-1.5 dark:bg-accent-primary-soft/40">
+              <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#e4d8fb] text-xs font-semibold text-[#5c4580] dark:bg-accent-primary dark:text-btn-primary-fg">
+                {initial}
+              </span>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-semibold text-ink">{displayName}</p>
                 <p className="truncate text-xs text-ink-muted">{handle}</p>
               </div>
-              <span className="inline-flex shrink-0 items-center rounded-full bg-accent-primary px-2 py-0.5 text-[10px] font-semibold text-btn-primary-fg">
+              <span className="inline-flex shrink-0 items-center rounded-full bg-[#ebe4fe] px-2 py-0.5 text-[10px] font-semibold text-[#6b4f92] dark:bg-accent-primary dark:text-btn-primary-fg">
                 {t('layout.userMenu.productBadge')}
               </span>
             </div>
           </section>
 
-          <div className="my-2 border-t border-border-hairline" />
+          <div className="my-2 border-t border-[#efeaf4] dark:border-border-hairline" />
 
           <section>
-            <p className="mb-1.5 px-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-ink-muted">
-              {t('layout.userMenu.appearance')}
-            </p>
-            <div className="flex items-center gap-2 rounded-xl border border-border-hairline bg-canvas-raised px-2 py-1.5">
-              <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-accent-primary-soft text-accent-primary-deep">
+            <p className={sectionLabelClass}>{t('layout.userMenu.appearance')}</p>
+            <div className="flex items-center gap-2 px-0.5 py-0.5">
+              <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#f3eefe] text-[#6b4f92] dark:bg-accent-primary-soft dark:text-accent-primary-deep">
                 <MoonIcon className="h-3.5 w-3.5 shrink-0" />
               </span>
               <p className="min-w-0 flex-1 truncate text-sm font-semibold text-ink">
@@ -121,11 +123,11 @@ export function SidebarUserMenu({
                 aria-label={t('layout.userMenu.darkMode')}
                 onClick={toggleDarkMode}
                 className={`relative h-5 w-9 shrink-0 rounded-full transition-colors duration-150 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-primary-hover ${
-                  isDark ? 'bg-accent-primary' : 'bg-border-hairline'
+                  isDark ? 'bg-accent-primary' : 'bg-[#d9d5e0]'
                 }`}
               >
                 <span
-                  className={`absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-canvas-raised shadow-sm transition-transform duration-150 ${
+                  className={`absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform duration-150 ${
                     isDark ? 'translate-x-4' : 'translate-x-0'
                   }`}
                 />
@@ -133,21 +135,19 @@ export function SidebarUserMenu({
             </div>
           </section>
 
-          <div className="my-2 border-t border-border-hairline" />
+          <div className="my-2 border-t border-[#efeaf4] dark:border-border-hairline" />
 
           <section>
-            <p className="mb-1.5 px-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-ink-muted">
-              {t('layout.userMenu.language')}
-            </p>
+            <p className={sectionLabelClass}>{t('layout.userMenu.language')}</p>
             <LanguageSelector
               id="sidebar-user-language-select"
               menuPlacement="up"
               variant="settings"
-              className="w-full rounded-xl border border-border-hairline bg-canvas-raised px-2 py-1.5 text-sm text-ink transition hover:border-accent-primary/30 hover:bg-accent-primary-soft/40"
+              className="w-full rounded-xl border border-[#ece8f4] bg-white px-2 py-1.5 text-sm text-ink transition hover:border-accent-primary/30 hover:bg-accent-primary-soft/40 dark:border-border-hairline dark:bg-canvas-raised"
             />
           </section>
 
-          <div className="my-2 border-t border-border-hairline" />
+          <div className="my-2 border-t border-[#efeaf4] dark:border-border-hairline" />
 
           <button
             type="button"
@@ -157,9 +157,9 @@ export function SidebarUserMenu({
               onSignOut()
             }}
             disabled={isSigningOut}
-            className="flex w-full items-center gap-2 rounded-xl border border-border-hairline bg-canvas-raised px-2 py-1.5 text-left transition hover:border-red-200 hover:bg-red-50 disabled:opacity-60 dark:hover:border-red-900/50 dark:hover:bg-red-950/40"
+            className="flex w-full items-center gap-2 rounded-xl bg-[#fdecee] px-2 py-1.5 text-left transition hover:bg-[#fbdfe3] disabled:opacity-60 dark:bg-red-950/40 dark:hover:bg-red-950/60"
           >
-            <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-red-50 text-red-600 dark:bg-red-950/50 dark:text-red-400">
+            <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#f8d5da] text-red-600 dark:bg-red-950/70 dark:text-red-400">
               <SignOutIcon className="h-3.5 w-3.5 shrink-0" />
             </span>
             <span className="min-w-0 flex-1">
@@ -180,27 +180,32 @@ export function SidebarUserMenu({
         aria-expanded={open}
         aria-haspopup="menu"
         aria-label={t('layout.userMenu.openAria')}
-        className={`flex items-center rounded-xl border border-transparent transition hover:bg-canvas ${
-          collapsed ? 'h-10 w-10 justify-center p-0' : 'w-full gap-3 px-2 py-2'
+        className={`flex items-center transition ${
+          collapsed
+            ? 'h-10 w-10 justify-center rounded-full p-0'
+            : 'w-full gap-2.5 rounded-2xl border border-white/70 bg-white/40 px-2.5 py-2 text-left backdrop-blur-sm hover:bg-white/55 dark:border-white/10 dark:bg-white/10 dark:hover:bg-white/15'
         }`}
       >
-        <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent-primary text-sm font-semibold text-btn-primary-fg">
+        <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#e4d8fb] text-xs font-semibold text-[#5c4580] dark:bg-accent-primary dark:text-btn-primary-fg">
           {initial}
         </span>
         {!collapsed ? (
           <>
-            <span className="min-w-0 flex-1 truncate text-left text-sm font-medium text-ink">
-              {displayName}
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-semibold text-ink">{displayName}</span>
+              {userEmail ? (
+                <span className="mt-0.5 block truncate text-xs text-ink-muted">{userEmail}</span>
+              ) : null}
             </span>
             <svg
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
               strokeWidth="1.75"
-              className={`h-4 w-4 shrink-0 text-ink-muted transition ${open ? 'rotate-180' : ''}`}
+              className="h-4 w-4 shrink-0 text-ink-muted"
               aria-hidden
             >
-              <path d="M6 15l6-6 6 6" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M9 6l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </>
         ) : null}

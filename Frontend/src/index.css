@@ -40,9 +40,15 @@
   --color-border-hairline: #2d2d30;
 }
 
+html,
+body,
+#root {
+  height: 100%;
+}
+
 body {
   margin: 0;
-  min-height: 100vh;
+  min-height: 100dvh;
   background-color: var(--color-canvas);
   color: var(--color-ink);
   font-family: var(--font-sans);
@@ -50,7 +56,7 @@ body {
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: #d1d1d1 transparent;
+  scrollbar-color: #efeaf8 transparent;
 }
 
 .dark * {
@@ -82,7 +88,7 @@ body {
 .dark *::-webkit-scrollbar-thumb:hover {
   background-color: #52525b;
 }
-
+  background-color: #e4dcf4;
 *::-webkit-scrollbar-corner {
   background: transparent;
 }
@@ -199,23 +205,34 @@ body {
 
 .contos-btn--primary {
   background-color: var(--color-accent-primary);
-  border-color: color-mix(in srgb, var(--color-accent-primary-deep) 12%, var(--color-accent-primary));
+  border-color: color-mix(
+    in srgb,
+    var(--color-accent-primary-deep) 12%,
+    var(--color-accent-primary)
+  );
   color: var(--color-btn-primary-fg);
-  box-shadow: 0 1px 2px color-mix(in srgb, var(--color-accent-primary-deep) 8%, transparent);
+  box-shadow: 0 1px 2px
+    color-mix(in srgb, var(--color-accent-primary-deep) 8%, transparent);
 }
 
 .contos-btn--primary:hover:not(:disabled):not([aria-disabled="true"]) {
   background-color: var(--color-accent-primary-hover);
-  border-color: color-mix(in srgb, var(--color-accent-primary-deep) 18%, var(--color-accent-primary-hover));
+  border-color: color-mix(
+    in srgb,
+    var(--color-accent-primary-deep) 18%,
+    var(--color-accent-primary-hover)
+  );
   box-shadow:
     0 2px 8px color-mix(in srgb, var(--color-accent-primary) 45%, transparent),
-    0 0 0 1px color-mix(in srgb, var(--color-accent-primary-hover) 30%, transparent);
+    0 0 0 1px
+      color-mix(in srgb, var(--color-accent-primary-hover) 30%, transparent);
   transform: translateY(-1px);
 }
 
 .contos-btn--primary:active:not(:disabled):not([aria-disabled="true"]) {
   background-color: var(--color-accent-primary-hover);
-  box-shadow: 0 1px 3px color-mix(in srgb, var(--color-accent-primary-deep) 12%, transparent);
+  box-shadow: 0 1px 3px
+    color-mix(in srgb, var(--color-accent-primary-deep) 12%, transparent);
   transform: translateY(0);
 }
 
@@ -228,9 +245,14 @@ body {
 
 .contos-btn--secondary:hover:not(:disabled):not([aria-disabled="true"]) {
   background-color: var(--color-btn-secondary-hover);
-  border-color: color-mix(in srgb, var(--color-accent-primary) 40%, var(--color-btn-secondary-border));
+  border-color: color-mix(
+    in srgb,
+    var(--color-accent-primary) 40%,
+    var(--color-btn-secondary-border)
+  );
   transform: translateY(-1px);
-  box-shadow: 0 1px 4px color-mix(in srgb, var(--color-accent-primary-deep) 6%, transparent);
+  box-shadow: 0 1px 4px
+    color-mix(in srgb, var(--color-accent-primary-deep) 6%, transparent);
 }
 
 .contos-btn--secondary:active:not(:disabled):not([aria-disabled="true"]) {
@@ -240,9 +262,14 @@ body {
 
 .contos-btn--selected {
   background-color: var(--color-accent-primary);
-  border-color: color-mix(in srgb, var(--color-accent-primary-deep) 14%, var(--color-accent-primary));
+  border-color: color-mix(
+    in srgb,
+    var(--color-accent-primary-deep) 14%,
+    var(--color-accent-primary)
+  );
   color: var(--color-btn-primary-fg);
-  box-shadow: 0 1px 4px color-mix(in srgb, var(--color-accent-primary) 35%, transparent);
+  box-shadow: 0 1px 4px
+    color-mix(in srgb, var(--color-accent-primary) 35%, transparent);
 }
 
 .contos-btn--selected:hover:not(:disabled):not([aria-disabled="true"]) {
@@ -252,7 +279,8 @@ body {
 
 .contos-btn--selected:active:not(:disabled):not([aria-disabled="true"]) {
   transform: translateY(0);
-  box-shadow: 0 1px 2px color-mix(in srgb, var(--color-accent-primary) 25%, transparent);
+  box-shadow: 0 1px 2px
+    color-mix(in srgb, var(--color-accent-primary) 25%, transparent);
 }
 
 .contos-btn--ghost {
@@ -263,8 +291,16 @@ body {
 }
 
 .contos-btn--ghost:hover:not(:disabled):not([aria-disabled="true"]) {
-  background-color: color-mix(in srgb, var(--color-accent-primary-soft) 70%, var(--color-canvas-raised));
-  border-color: color-mix(in srgb, var(--color-accent-primary) 35%, var(--color-border-hairline));
+  background-color: color-mix(
+    in srgb,
+    var(--color-accent-primary-soft) 70%,
+    var(--color-canvas-raised)
+  );
+  border-color: color-mix(
+    in srgb,
+    var(--color-accent-primary) 35%,
+    var(--color-border-hairline)
+  );
   color: var(--color-ink);
   transform: translateY(-1px);
 }
@@ -277,21 +313,31 @@ body {
   color: var(--color-accent-primary-deep);
 }
 
-.contos-btn--ghost.contos-btn--accent-label:hover:not(:disabled):not([aria-disabled="true"]) {
+.contos-btn--ghost.contos-btn--accent-label:hover:not(:disabled):not(
+    [aria-disabled="true"]
+  ) {
   color: var(--color-accent-primary-deep);
 }
 
 .contos-btn--icon.contos-btn--primary,
 .contos-btn--icon.contos-btn--soft {
   background-color: var(--color-accent-primary);
-  border-color: color-mix(in srgb, var(--color-accent-primary-deep) 10%, var(--color-accent-primary));
+  border-color: color-mix(
+    in srgb,
+    var(--color-accent-primary-deep) 10%,
+    var(--color-accent-primary)
+  );
   color: var(--color-btn-primary-fg);
   box-shadow: none;
 }
 
 .contos-btn--icon.contos-btn--soft {
   background-color: var(--color-accent-primary-soft);
-  border-color: color-mix(in srgb, var(--color-accent-primary) 40%, transparent);
+  border-color: color-mix(
+    in srgb,
+    var(--color-accent-primary) 40%,
+    transparent
+  );
   color: var(--color-btn-primary-fg);
 }
 
@@ -301,17 +347,21 @@ body {
 
 .contos-btn--icon:hover:not(:disabled):not([aria-disabled="true"]) {
   background-color: var(--color-accent-primary-hover);
-  box-shadow: 0 0 12px color-mix(in srgb, var(--color-accent-primary) 50%, transparent);
+  box-shadow: 0 0 12px
+    color-mix(in srgb, var(--color-accent-primary) 50%, transparent);
   transform: scale(1.03);
 }
 
-.contos-btn--icon.contos-btn--soft:hover:not(:disabled):not([aria-disabled="true"]) {
+.contos-btn--icon.contos-btn--soft:hover:not(:disabled):not(
+    [aria-disabled="true"]
+  ) {
   background-color: var(--color-accent-primary);
 }
 
 .contos-btn--icon:active:not(:disabled):not([aria-disabled="true"]) {
   transform: scale(1);
-  box-shadow: 0 0 4px color-mix(in srgb, var(--color-accent-primary) 30%, transparent);
+  box-shadow: 0 0 4px
+    color-mix(in srgb, var(--color-accent-primary) 30%, transparent);
 }
 
 .contos-btn--icon.contos-btn--ghost {
@@ -320,7 +370,9 @@ body {
   color: var(--color-ink-muted);
 }
 
-.contos-btn--icon.contos-btn--ghost:hover:not(:disabled):not([aria-disabled="true"]) {
+.contos-btn--icon.contos-btn--ghost:hover:not(:disabled):not(
+    [aria-disabled="true"]
+  ) {
   background-color: var(--color-accent-primary-soft);
   border-color: transparent;
   color: var(--color-accent-primary-deep);
@@ -351,7 +403,9 @@ body {
 
 .contos-btn svg {
   flex-shrink: 0;
-  transition: transform 170ms ease, opacity 170ms ease;
+  transition:
+    transform 170ms ease,
+    opacity 170ms ease;
 }
 
 @media (prefers-reduced-motion: reduce) {

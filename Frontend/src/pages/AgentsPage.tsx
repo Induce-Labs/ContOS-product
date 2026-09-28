@@ -38,6 +38,7 @@ import {
   type PlatformAgent,
 } from '../lib/agentPlatformRedirect'
 import contosMark from '../assets/contos-mark.png'
+import contosMarkDark from '../assets/image.png'
 import { ChatMessageBubble } from '../components/agents/ChatMessageBubble'
 import { buildChatHistoryForInvoke } from '../lib/agentChatMemory'
 import { resolveInvokeTaggedAvatarIds } from '../lib/agentMentions'
@@ -48,6 +49,7 @@ import {
 } from '../lib/agentChatRemote'
 import {
   createEmptyStore,
+  deleteChatSession,
   getActiveSession,
   loadChatStore,
   saveChatStore,
@@ -57,6 +59,9 @@ import {
   storeUpdatedAtMs,
   switchChatSession,
   updateActiveSessionMessages,
+  CHAT_DELETE_EVENT,
+  CHAT_DELETE_REVERT_EVENT,
+  type ChatDeleteEventDetail,
   type ChatStore,
   type StoredChatMessage,
 } from '../lib/agentChatStorage'
@@ -252,6 +257,60 @@ export function AgentsPage() {
         })
     }, 600)
   }
+
+  function applyChatStore(next: ChatStore) {
+    if (remoteSaveTimerRef.current) {
+      clearTimeout(remoteSaveTimerRef.current)
+      remoteSaveTimerRef.current = null
+    }
+    skipPersistRef.current = true
+    chatStoreRef.current = next
+    setChatStore(next)
+    setMessages(getActiveSession(next).messages as ChatMessage[])
+    setSendError(null)
+    if (user?.id && projectId) {
+      saveChatStore(user.id, projectId, next)
+    }
+  }
+
+  useEffect(() => {
+    function onDelete(event: Event) {
+      const detail = (event as CustomEvent<ChatDeleteEventDetail>).detail
+      if (!detail || detail.projectId !== projectId || !detail.sessionId) return
+      const current = chatStoreRef.current
+      if (!current || !user?.id) return
+      const welcome = makeWelcomeMessage(
+        getUserFirstName(user),
+        tRef.current,
+      ) as StoredChatMessage
+      const next = deleteChatSession(current, detail.sessionId, welcome)
+      const live = getActiveAgentStream()
+      if (
+        live?.projectId === projectId &&
+        current.activeSessionId === detail.sessionId
+      ) {
+        abortActiveAgentStream()
+        setStreaming(false)
+      }
+      detail.previous = current
+      detail.next = next
+      detail.handled = true
+      applyChatStore(next)
+    }
+
+    function onRevert(event: Event) {
+      const detail = (event as CustomEvent<{ projectId?: string; store?: ChatStore }>).detail
+      if (!detail || detail.projectId !== projectId || !detail.store) return
+      applyChatStore(detail.store)
+    }
+
+    window.addEventListener(CHAT_DELETE_EVENT, onDelete)
+    window.addEventListener(CHAT_DELETE_REVERT_EVENT, onRevert)
+    return () => {
+      window.removeEventListener(CHAT_DELETE_EVENT, onDelete)
+      window.removeEventListener(CHAT_DELETE_REVERT_EVENT, onRevert)
+    }
+  }, [projectId, user])
 
   useEffect(() => {
     void refreshProjects()
@@ -1035,11 +1094,16 @@ export function AgentsPage() {
     )
   }
 
+  function fillQuickPrompt(promptKey: string) {
+    handleInputChange(t(promptKey))
+    inputRef.current?.focus()
+  }
+
   const suggestionPills = (
     <div className="flex flex-wrap items-center justify-center gap-2">
       <button
         type="button"
-        onClick={() => navigate(`/dashboard/${project.id}`)}
+        onClick={() => fillQuickPrompt('agents.quickActions.researchPrompt')}
         className="contos-btn contos-btn--pill contos-btn--ghost contos-btn--accent-label"
       >
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" className="h-4 w-4 shrink-0" aria-hidden>
@@ -1049,10 +1113,7 @@ export function AgentsPage() {
       </button>
       <button
         type="button"
-        onClick={() => {
-          handleInputChange(t('agents.quickActions.contentPrompt'))
-          inputRef.current?.focus()
-        }}
+        onClick={() => fillQuickPrompt('agents.quickActions.contentPrompt')}
         className="contos-btn contos-btn--pill contos-btn--ghost contos-btn--accent-label"
       >
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" className="h-4 w-4 shrink-0" aria-hidden>
@@ -1063,7 +1124,7 @@ export function AgentsPage() {
       </button>
       <button
         type="button"
-        onClick={() => navigate(`/dashboard/${project.id}/calendar`)}
+        onClick={() => fillQuickPrompt('agents.quickActions.calendarPrompt')}
         className="contos-btn contos-btn--pill contos-btn--ghost contos-btn--accent-label"
       >
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" className="h-4 w-4 shrink-0" aria-hidden>
@@ -1094,32 +1155,20 @@ export function AgentsPage() {
         />
       </div>
 
-      {!showClaudeStyleGreeting ? (
-        <div className="mb-3 shrink-0 px-4 sm:px-8">
-          <div className="flex items-center justify-between gap-4">
-            <h1 className="min-w-0 truncate font-serif text-2xl leading-none text-ink sm:text-3xl">
-              {project.name}
-            </h1>
-            {headerActions}
-          </div>
-          <p className="mt-1.5 truncate text-xs text-ink-muted sm:text-sm">
-            {t('agents.pageSubtitle')}
-          </p>
-          <div className="mt-3">
-            <AgentTypePills
-              agentType={agentType}
-              streaming={showResponding}
-              options={agentOptions}
-              onChange={(next) => {
-                setPendingPlatformRedirect(null)
-                setAgentType(next)
-              }}
-            />
-          </div>
+      <div className="mb-3 shrink-0 px-4 sm:px-8">
+        <div className="flex items-center justify-between gap-4">
+          <AgentTypePills
+            agentType={agentType}
+            streaming={showResponding}
+            options={agentOptions}
+            onChange={(next) => {
+              setPendingPlatformRedirect(null)
+              setAgentType(next)
+            }}
+          />
+          {headerActions}
         </div>
-      ) : (
-        <div className="mb-2 flex shrink-0 justify-end px-4 sm:px-8">{headerActions}</div>
-      )}
+      </div>
 
       {showResearchInProgressBanner ? (
         <div className="mb-2 shrink-0 px-4 sm:px-8">
@@ -1139,7 +1188,13 @@ export function AgentsPage() {
               src={contosMark}
               alt=""
               aria-hidden="true"
-              className="mb-5 h-12 w-12 object-contain sm:mb-6 sm:h-14 sm:w-14"
+              className="mb-5 h-12 w-12 object-contain dark:hidden sm:mb-6 sm:h-14 sm:w-14"
+            />
+            <img
+              src={contosMarkDark}
+              alt=""
+              aria-hidden="true"
+              className="mb-5 hidden h-12 w-12 object-contain dark:block sm:mb-6 sm:h-14 sm:w-14"
             />
             <h2 className="font-serif text-3xl tracking-tight text-ink sm:text-4xl md:text-5xl">
               {welcomeGreeting}
@@ -1147,18 +1202,6 @@ export function AgentsPage() {
             <p className="mt-3 max-w-xl text-sm text-ink-muted sm:text-base">
               {t('agents.welcome.subtitle')}
             </p>
-
-            <div className="mt-6 sm:mt-8">
-              <AgentTypePills
-                agentType={agentType}
-                streaming={showResponding}
-                options={agentOptions}
-                onChange={(next) => {
-                  setPendingPlatformRedirect(null)
-                  setAgentType(next)
-                }}
-              />
-            </div>
 
             {sendError ? (
               <p className="mt-4 w-full rounded-xl border border-red-100 bg-red-50 px-4 py-2 text-left text-sm text-red-700">
@@ -1206,7 +1249,13 @@ export function AgentsPage() {
                     src={contosMark}
                     alt=""
                     aria-hidden="true"
-                    className="contos-mark-loading h-5 w-5 object-contain"
+                    className="contos-mark-loading h-5 w-5 object-contain dark:hidden"
+                  />
+                  <img
+                    src={contosMarkDark}
+                    alt=""
+                    aria-hidden="true"
+                    className="contos-mark-loading hidden h-5 w-5 object-contain dark:block"
                   />
                 </span>
               </div>

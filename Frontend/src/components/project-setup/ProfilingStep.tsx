@@ -59,7 +59,7 @@ export function ProfilingStepLoading() {
 export function ProfilingStepUnavailable({ message }: { message: string }) {
   return (
     <div className="flex min-h-dvh items-center justify-center bg-canvas px-4">
-      <div className="max-w-md rounded-[2rem] border border-red-200 bg-red-50 p-6 text-center text-sm text-red-700">
+      <div className="max-w-md rounded-[2rem] border border-red-200 bg-red-50 p-6 text-center text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200">
         {message}
       </div>
     </div>

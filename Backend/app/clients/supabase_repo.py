@@ -356,7 +356,7 @@ class SupabaseRepository:
             )
             .execute()
         )
-        if response.data is None:
+        if insert_response.data is None:
             raise RepositoryError(
                 f"Failed to insert LinkedIn content summary for competitor {competitor_id}.",
             )

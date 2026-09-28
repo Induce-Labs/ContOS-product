@@ -23,7 +23,7 @@ export function CompetitorWorkspacePanel({
   const atCompetitorCap = competitors.length >= MAX_COMPETITORS_PER_AVATAR
 
   return (
-    <section className="rounded-[1.75rem] border border-border-hairline bg-canvas-raised p-4 shadow-[0_16px_40px_rgba(28,27,41,0.05)] sm:p-5">
+    <section className="min-w-0 rounded-[1.75rem] border border-border-hairline bg-canvas-raised p-4 shadow-[0_16px_40px_rgba(28,27,41,0.05)] sm:p-5">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-ink-muted">
@@ -55,7 +55,7 @@ export function CompetitorWorkspacePanel({
       {competitors.length === 0 ? (
         <p className="text-sm text-ink-muted">{t('dashboard.noCompetitors')}</p>
       ) : (
-        <div className="flex gap-2 overflow-x-auto pb-1">
+        <div className="flex min-w-0 flex-wrap gap-2">
           {competitors.map((competitor) => {
             const isSelected = selectedCompetitorId === competitor.id
             const platformLabel =
@@ -70,25 +70,37 @@ export function CompetitorWorkspacePanel({
                 : competitor.pipeline_step === 'failed'
                   ? t('pipeline.status.failed')
                   : t('pipeline.status.inProgress')
+            const statusDot =
+              competitor.pipeline_step === 'done'
+                ? 'bg-signal-positive'
+                : competitor.pipeline_step === 'failed'
+                  ? 'bg-red-500'
+                  : 'bg-accent-primary-deep'
 
             return (
               <button
                 key={competitor.id}
                 type="button"
                 onClick={() => onSelectCompetitor(competitor.id)}
-                className={`contos-btn contos-btn--pill shrink-0 text-left ${
-                  isSelected ? 'contos-btn--selected' : 'contos-btn--ghost'
+                className={`inline-flex max-w-full min-w-0 items-center gap-2 rounded-full border px-3 py-1.5 text-left text-sm transition ${
+                  isSelected
+                    ? 'border-accent-primary bg-accent-primary font-semibold text-btn-primary-fg'
+                    : 'border-border-hairline bg-canvas font-medium text-ink hover:border-accent-primary/50'
                 }`}
               >
-                <span className="block truncate font-medium">
+                <span className="min-w-0 truncate">
                   {displayCompetitorHandle(competitor.handle_or_url, competitor.platform)}
                 </span>
+                <span className={`shrink-0 text-xs ${isSelected ? 'opacity-75' : 'text-ink-muted'}`}>
+                  {platformLabel}
+                </span>
                 <span
-                  className={`mt-0.5 block text-xs capitalize ${
-                    isSelected ? 'text-white/80' : 'text-ink-muted'
+                  className={`inline-flex shrink-0 items-center gap-1 text-xs ${
+                    isSelected ? 'opacity-75' : 'text-ink-muted'
                   }`}
                 >
-                  {platformLabel} · {statusLabel}
+                  <span className={`h-1.5 w-1.5 rounded-full ${statusDot}`} aria-hidden="true" />
+                  {statusLabel}
                 </span>
               </button>
             )

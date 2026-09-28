@@ -53,9 +53,18 @@ export function applyThemeClass(theme: ThemeMode): void {
   }
 }
 
-/** Dark preference is only honored on dashboard shell routes. */
+function isNewProjectPath(pathname: string): boolean {
+  return (
+    pathname === '/projects/new' ||
+    pathname.startsWith('/projects/new/') ||
+    pathname === '/avatars/new' ||
+    pathname.startsWith('/avatars/new/')
+  )
+}
+
+/** Dark preference on the dashboard and the signed-in new-project wizard. First-time /onboarding stays light. */
 export function pathAllowsDarkTheme(pathname: string): boolean {
-  return pathname.startsWith('/dashboard')
+  return pathname.startsWith('/dashboard') || isNewProjectPath(pathname)
 }
 
 export function applyEffectiveTheme(pathname: string, stored: ThemeMode): void {

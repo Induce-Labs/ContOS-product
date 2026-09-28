@@ -5,8 +5,8 @@ import { DashboardSidebarNav } from './DashboardSidebarNav'
 import { DashboardTopBar } from './DashboardTopBar'
 import { ProjectSwitcher } from './ProjectSwitcher'
 import { SidebarUserMenu } from './SidebarUserMenu'
-import bgRightContent from '../../assets/bg-right-content.png'
 import contosMark from '../../assets/contos-mark.png'
+import contosMarkDark from '../../assets/image.png'
 import type { Project } from '../../lib/projects'
 import type { ReactNode } from 'react'
 
@@ -94,6 +94,19 @@ export function DashboardLayout({
     }
   }, [sidebarCollapsed])
 
+  useEffect(() => {
+    const html = document.documentElement
+    const body = document.body
+    const previousHtmlOverflow = html.style.overflow
+    const previousBodyOverflow = body.style.overflow
+    html.style.overflow = 'hidden'
+    body.style.overflow = 'hidden'
+    return () => {
+      html.style.overflow = previousHtmlOverflow
+      body.style.overflow = previousBodyOverflow
+    }
+  }, [])
+
   if (isLoading) {
     return (
       <div className="flex min-h-dvh items-center justify-center bg-canvas font-sans text-ink-muted">
@@ -103,7 +116,7 @@ export function DashboardLayout({
   }
 
   return (
-    <div className="flex h-dvh overflow-hidden bg-canvas font-sans">
+    <div className="fixed inset-0 flex h-dvh max-h-dvh w-full overflow-hidden overscroll-none bg-canvas font-sans">
       {sidebarOpen ? (
         <button
           type="button"
@@ -114,7 +127,7 @@ export function DashboardLayout({
       ) : null}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-40 flex flex-col border-r border-border-hairline bg-canvas-raised transition-[width,transform] duration-200 lg:static lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-40 flex h-full max-h-full min-h-0 flex-col border-r border-border-hairline bg-[linear-gradient(180deg,#fafafc_0%,#f5f2fd_45%,#f8f1fd_72%,#fcf3fb_100%)] transition-[width,transform] duration-200 dark:bg-canvas-raised dark:bg-none lg:static lg:translate-x-0 ${
           railCollapsed ? 'w-[72px]' : 'w-[260px]'
         } ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}
       >
@@ -134,7 +147,13 @@ export function DashboardLayout({
               src={contosMark}
               alt=""
               aria-hidden="true"
-              className="h-8 w-8 shrink-0 object-contain"
+              className="h-8 w-8 shrink-0 object-contain dark:hidden"
+            />
+            <img
+              src={contosMarkDark}
+              alt=""
+              aria-hidden="true"
+              className="hidden h-8 w-8 shrink-0 object-contain dark:block"
             />
             {!railCollapsed ? (
               <div className="min-w-0">
@@ -213,9 +232,7 @@ export function DashboardLayout({
         />
 
         <div
-          className={`mt-auto border-t border-border-hairline ${
-            railCollapsed ? 'flex w-full justify-center py-3' : ''
-          }`}
+          className={`mt-auto ${railCollapsed ? 'flex w-full justify-center py-3' : ''}`}
         >
           <SidebarUserMenu
             userEmail={userEmail}
@@ -226,17 +243,9 @@ export function DashboardLayout({
         </div>
       </aside>
 
-      <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden bg-[#FFFFFF] dark:bg-canvas">
-        <img
-          src={bgRightContent}
-          alt=""
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 z-0 h-full w-full object-cover dark:hidden"
-        />
-        <div className="relative z-10 flex min-h-0 min-w-0 flex-1 flex-col">
-          <DashboardTopBar onOpenSidebar={() => onSidebarOpenChange(true)} />
-          <main className={`min-h-0 min-w-0 flex-1 ${mainClassName}`}>{children}</main>
-        </div>
+      <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-white dark:bg-canvas">
+        <DashboardTopBar onOpenSidebar={() => onSidebarOpenChange(true)} />
+        <main className={`min-h-0 min-w-0 flex-1 ${mainClassName}`}>{children}</main>
       </div>
     </div>
   )

@@ -1,4 +1,5 @@
 import contosMark from '../../assets/contos-mark.png'
+import contosMarkDark from '../../assets/image.png'
 import { AgentOutputRenderer } from './AgentOutputRenderer'
 import type { AgentType } from '../../lib/agentsApi'
 
@@ -54,7 +55,8 @@ export function ChatMessageBubble({
   return (
     <div className="flex items-end justify-start gap-2.5">
       <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-canvas-raised shadow-[0_2px_8px_rgba(28,27,41,0.06)] ring-1 ring-border-hairline">
-        <img src={contosMark} alt="" aria-hidden className="h-5 w-5 object-contain" />
+        <img src={contosMark} alt="" aria-hidden className="h-5 w-5 object-contain dark:hidden" />
+        <img src={contosMarkDark} alt="" aria-hidden className="hidden h-5 w-5 object-contain dark:block" />
       </span>
       {bubble}
     </div>

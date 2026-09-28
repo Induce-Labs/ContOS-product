@@ -61,6 +61,7 @@ export function buildPostizCreateBody(input: {
   postId?: string
   images?: Array<{ id: string; path: string; alt?: string | null; thumbnail?: string | null }>
   platform?: PostizPlatform
+  posts?: Array<{ content: string }>
 }): Record<string, unknown> {
   const platform = input.platform ?? 'linkedin'
   return {
@@ -76,6 +77,9 @@ export function buildPostizCreateBody(input: {
       ...(image.thumbnail ? { thumbnail: image.thumbnail } : {}),
     })),
     ...(platform === 'x' ? { platform: 'x' as const } : {}),
+    ...(platform === 'x' && input.posts
+      ? { posts: input.posts.map((entry) => ({ content: entry.content })) }
+      : {}),
   }
 }
 
@@ -489,6 +493,7 @@ export async function createPostizPost(input: {
   postId?: string
   images?: Array<{ id: string; path: string; alt?: string | null; thumbnail?: string | null }>
   platform?: PostizPlatform
+  posts?: Array<{ content: string }>
 }): Promise<unknown> {
   const accessToken = await requireAccessToken()
   const id = requireAvatarId(input.avatarId)

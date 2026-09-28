@@ -2186,6 +2186,156 @@ class TestPostizX:
             assert settings["__type"] == "x"
             assert settings["who_can_reply_post"] == "everyone"
 
+    def test_x_single_post_without_thread_keeps_one_value(self) -> None:
+        service, client, _repository, _settings_obj = self._ready()
+        service.create_x_post(
+            contos_user_id=USER_A,
+            avatar_id=AVATAR_A,
+            post_type="now",
+            content="Hello X",
+            publish_date="2026-09-23T15:30:00Z",
+        )
+        post = client.create_post.call_args.args[1]["posts"][0]
+        assert post["value"] == [{"content": "Hello X", "image": []}]
+        assert post["settings"] == {
+            "__type": "x",
+            "who_can_reply_post": "everyone",
+        }
+
+    def test_x_thread_preserves_order_for_every_write_type(self) -> None:
+        service, client, _repository, _settings_obj = self._ready()
+        two = ("First", "Second")
+        three = ("One", "Two", "Three")
+        for post_type in ("now", "schedule", "draft"):
+            client.create_post.reset_mock()
+            service.create_x_post(
+                contos_user_id=USER_A,
+                avatar_id=AVATAR_A,
+                post_type=post_type,
+                content=two[0],
+                publish_date="2026-09-23T15:30:00Z",
+                thread=two,
+            )
+            value = client.create_post.call_args.args[1]["posts"][0]["value"]
+            assert [item["content"] for item in value] == ["First", "Second"]
+            assert value[1]["image"] == []
+
+            client.create_post.reset_mock()
+            service.create_x_post(
+                contos_user_id=USER_A,
+                avatar_id=AVATAR_A,
+                post_type=post_type,
+                content=three[0],
+                publish_date="2026-09-23T15:30:00Z",
+                thread=three,
+            )
+            value = client.create_post.call_args.args[1]["posts"][0]["value"]
+            assert value[0]["content"] == "One"
+            assert value[1]["content"] == "Two"
+            assert value[2]["content"] == "Three"
+            assert value[1]["image"] == []
+            assert value[2]["image"] == []
+
+    def test_x_thread_sends_original_content_and_limits_trimmed_text(self) -> None:
+        from app.services.postiz_posts import MediaRef
+
+        service, client, _repository, _settings_obj = self._ready(max_length=280)
+        padded = "  Hello X  "
+        service.create_x_post(
+            contos_user_id=USER_A,
+            avatar_id=AVATAR_A,
+            post_type="draft",
+            content=padded,
+            publish_date="2026-09-23T15:30:00Z",
+            thread=(padded, "  Next  "),
+            images=[MediaRef(id="img-1", path="https://cdn.example.com/img-1.jpg")],
+        )
+        value = client.create_post.call_args.args[1]["posts"][0]["value"]
+        assert value[0]["content"] == padded
+        assert value[0]["image"] == [
+            {"id": "img-1", "path": "https://cdn.example.com/img-1.jpg"},
+        ]
+        assert value[1]["content"] == "  Next  "
+        assert value[1]["image"] == []
+
+        with pytest.raises(PostizBadRequestError, match="must not be empty"):
+            service.create_x_post(
+                contos_user_id=USER_A,
+                avatar_id=AVATAR_A,
+                post_type="now",
+                content="First",
+                publish_date="2026-09-23T15:30:00Z",
+                thread=("First", "   "),
+            )
+
+        with pytest.raises(PostizBadRequestError, match="entry 2 must be 1–280"):
+            service.create_x_post(
+                contos_user_id=USER_A,
+                avatar_id=AVATAR_A,
+                post_type="now",
+                content="ok",
+                publish_date="2026-09-23T15:30:00Z",
+                thread=("ok", f" {'a' * 281} "),
+            )
+
+        service.create_x_post(
+            contos_user_id=USER_A,
+            avatar_id=AVATAR_A,
+            post_type="now",
+            content="ok",
+            publish_date="2026-09-23T15:30:00Z",
+            thread=("ok", f" {'a' * 280} "),
+        )
+        sent = client.create_post.call_args.args[1]["posts"][0]["value"][1]["content"]
+        assert sent == f" {'a' * 280} "
+
+    def test_x_thread_request_keeps_original_content_and_rejects_linkedin(self) -> None:
+        from pydantic import ValidationError
+
+        from app.api.routes.postiz import CreatePostRequest, XThreadEntryRequest
+
+        with pytest.raises(ValidationError):
+            XThreadEntryRequest.model_validate(
+                {"content": "reply", "images": [{"id": "x", "path": "https://cdn.example.com/a.jpg"}]},
+            )
+
+        body = CreatePostRequest.model_validate(
+            {
+                "avatar_id": str(AVATAR_A),
+                "type": "now",
+                "content": "  First  ",
+                "publish_date": "2026-09-23T15:30:00Z",
+                "platform": "x",
+                "posts": [{"content": "  First  "}, {"content": "Second"}],
+            },
+        )
+        assert body.content == "  First  "
+        assert body.posts is not None
+        assert body.posts[0].content == "  First  "
+
+        with pytest.raises(ValidationError, match="first X thread entry"):
+            CreatePostRequest.model_validate(
+                {
+                    "avatar_id": str(AVATAR_A),
+                    "type": "now",
+                    "content": "First",
+                    "publish_date": "2026-09-23T15:30:00Z",
+                    "platform": "x",
+                    "posts": [{"content": "  First  "}],
+                },
+            )
+
+        with pytest.raises(ValidationError, match="only supported for X"):
+            CreatePostRequest.model_validate(
+                {
+                    "avatar_id": str(AVATAR_A),
+                    "type": "now",
+                    "content": "Hello",
+                    "publish_date": "2026-09-23T15:30:00Z",
+                    "posts": [{"content": "Hello"}],
+                },
+            )
+
     def test_x_posts_are_isolated_by_avatar_token_and_id(self) -> None:
         settings = _settings()
         client = MagicMock()
@@ -2382,9 +2532,48 @@ class TestPostizX:
                 publish_date="2026-09-23T15:30:00Z",
             )
 
-    def test_x_update_does_not_fetch_settings(self) -> None:
+    def test_x_update_edits_draft_and_scheduled_only(self) -> None:
         service, client, _repository, _settings_obj = self._ready()
-        with pytest.raises(PostizBadRequestError, match="not supported"):
+
+        def listed(state: str) -> list[dict[str, Any]]:
+            return [
+                _raw_post(
+                    post_id="px",
+                    content="Old",
+                    integration_id="x-a",
+                    state=state,
+                ),
+            ]
+
+        for state in ("DRAFT", "QUEUE"):
+            client.create_post.reset_mock()
+            client.get_integration_settings.reset_mock()
+            client.list_posts.return_value = listed(state)
+            service.create_x_post(
+                contos_user_id=USER_A,
+                avatar_id=AVATAR_A,
+                post_type="update",
+                content="  Edited  ",
+                publish_date="2026-09-23T15:30:00Z",
+                post_id="px",
+            )
+            client.get_integration_settings.assert_called_once_with("pos_token_a", "x-a")
+            payload = client.create_post.call_args.args[1]
+            assert payload["type"] == "update"
+            value = payload["posts"][0]["value"]
+            assert value == [
+                {"content": "  Edited  ", "image": [], "id": "px"},
+            ]
+            assert payload["posts"][0]["settings"] == {
+                "__type": "x",
+                "who_can_reply_post": "everyone",
+            }
+            assert payload["posts"][0]["integration"]["id"] == "x-a"
+
+        client.create_post.reset_mock()
+        client.get_integration_settings.reset_mock()
+        client.list_posts.return_value = listed("PUBLISHED")
+        with pytest.raises(PostizBadRequestError, match="Only draft and scheduled"):
             service.create_x_post(
                 contos_user_id=USER_A,
                 avatar_id=AVATAR_A,
@@ -2395,6 +2584,25 @@ class TestPostizX:
             )
         client.get_integration_settings.assert_not_called()
         client.create_post.assert_not_called()
+
+        with pytest.raises(PostizBadRequestError, match="post_id is required"):
+            service.create_x_post(
+                contos_user_id=USER_A,
+                avatar_id=AVATAR_A,
+                post_type="update",
+                content="Edit",
+                publish_date="2026-09-23T15:30:00Z",
+            )
+        with pytest.raises(PostizBadRequestError, match="first post only"):
+            service.create_x_post(
+                contos_user_id=USER_A,
+                avatar_id=AVATAR_A,
+                post_type="update",
+                content="Edit",
+                publish_date="2026-09-23T15:30:00Z",
+                post_id="px",
+                thread=("Edit", "Reply"),
+            )
 
     def test_list_returns_linkedin_and_x_posts_for_same_avatar(self) -> None:
         settings = _settings()

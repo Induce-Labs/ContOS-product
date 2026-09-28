@@ -197,7 +197,7 @@ export function NewProjectPage() {
         backControl={
           <Link
             to="/dashboard"
-            className="inline-flex items-center gap-1.5 text-sm font-medium text-neutral-500 transition-colors hover:text-neutral-900"
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-ink-muted transition-colors hover:text-ink"
           >
             ← Cancel
           </Link>

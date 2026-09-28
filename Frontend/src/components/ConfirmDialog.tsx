@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 
 type ConfirmDialogProps = {
@@ -58,7 +59,7 @@ export function ConfirmDialog({
   const resolvedConfirm = confirmLabel ?? t('common.confirm')
   const resolvedCancel = cancelLabel ?? t('common.cancel')
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-end justify-center p-4 sm:items-center">
       <button
         type="button"
@@ -129,6 +130,7 @@ export function ConfirmDialog({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

@@ -99,6 +99,21 @@ class CalendarPostsResponse(BaseModel):
     posts: list[CalendarPostResponse]
 
 
+class XThreadEntryRequest(BaseModel):
+    """One X thread entry. Content is kept as typed; later entries cannot carry media."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    content: str = Field(min_length=1, max_length=4000)
+
+    @field_validator("content")
+    @classmethod
+    def content_must_not_be_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("content must not be blank")
+        return value
+
+
 class CreatePostRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -109,19 +124,23 @@ class CreatePostRequest(BaseModel):
     post_id: str | None = None
     images: list[MediaItemRequest] = Field(default_factory=list, max_length=MAX_POST_IMAGES)
     platform: Literal["linkedin", "x"] = "linkedin"
+    posts: list[XThreadEntryRequest] | None = Field(default=None, min_length=1)
 
     @field_validator("content")
     @classmethod
     def content_must_not_be_blank(cls, value: str) -> str:
-        cleaned = value.strip()
-        if not cleaned:
+        if not value.strip():
             raise ValueError("content must not be blank")
-        return cleaned
+        return value
 
     @model_validator(mode="after")
     def linkedin_content_stays_at_3000(self) -> "CreatePostRequest":
-        if self.platform == "linkedin" and len(self.content) > 3000:
+        if self.platform == "linkedin" and len(self.content.strip()) > 3000:
             raise ValueError("content must be at most 3000 characters")
+        if self.platform == "linkedin" and self.posts is not None:
+            raise ValueError("posts is only supported for X")
+        if self.posts is not None and self.content != self.posts[0].content:
+            raise ValueError("content must equal the first X thread entry")
         return self
 
 
@@ -506,6 +525,7 @@ def create_postiz_post(
                 publish_date=body.publish_date,
                 post_id=body.post_id,
                 images=images,
+                thread=[entry.content for entry in body.posts] if body.posts is not None else None,
             )
         else:
             result = posts.create_or_update_post(
