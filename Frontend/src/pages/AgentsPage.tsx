@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { avatarTypeLabel, MAX_AVATARS } from '../lib/avatars'
 import { fetchCompetitorsForProject, type Competitor } from '../lib/competitors'
 import type { Project } from '../lib/projects'
@@ -143,7 +143,6 @@ function resolveAssistantOutput(message: ChatMessage): unknown | null {
 export function AgentsPage() {
   const { t, i18n } = useTranslation()
   const { projectId } = useParams()
-  const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const {
     user,
