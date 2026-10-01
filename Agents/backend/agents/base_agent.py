@@ -235,6 +235,9 @@ def _repair_truncated_json(text: str) -> dict[str, Any] | None:
         return None
 
 
+STRATEGIST_AGENTS = frozenset({"linkedin", "instagram", "twitter"})
+
+
 class BaseAgent:
     """Shared pipeline for ContOS specialized agents."""
 
@@ -320,21 +323,20 @@ class BaseAgent:
             f"USER REQUEST:\n{user_input}"
             f"{_memory_block()}"
         )
-        if self.structured_output:
+        if self.structured_output and self.agent_type in STRATEGIST_AGENTS:
+            user_content += (
+                "\n\nRespond with valid JSON only, using the envelope and platform fields "
+                "from your instructions. Choose exactly one mode. ANSWER THE USER REQUEST "
+                "DIRECTLY in reply. Greetings get mode chat with a short reply and no content. "
+                "Do not write a full draft until the thesis is agreed unless the user "
+                "explicitly asks you to just write it. Ask at most one next_question. "
+                "Never use asterisk (*) characters."
+            )
+        elif self.structured_output:
             user_content += (
                 "\n\nRespond with valid JSON only matching the required schema. "
-                "ANSWER THE USER REQUEST DIRECTLY. "
-                "If they only said hi/hello/thanks with no content ask, use response_type "
-                "analysis with a short friendly reply — do NOT invent a content calendar. "
-                "If they asked to compare/analyze competitors, use response_type "
-                "competitor_comparison or analysis — do NOT invent a content calendar. "
-                "Only generate a content calendar when they ask for posts/Reels/calendar. "
-                "Include reasoning for every creative recommendation. Be concise. "
-                "Never use asterisk (*) characters. "
-                "Follow RESPONSE LANGUAGE for EVERY prose field "
-                "(hook, caption, cta, hashtags, transcript, reasoning, analysis, "
-                "top_hooks, caption_formulas) — fully in that language with ZERO "
-                "code-mixing / Hinglish; not reasoning alone."
+                "ANSWER THE USER REQUEST DIRECTLY. Include reasoning for every "
+                "recommendation. Be concise. Never use asterisk (*) characters."
             )
         return _with_history(user_content)
 
@@ -455,14 +457,17 @@ class BaseAgent:
         return "".join(full_parts), usage
 
     def complete_llm(
-        self, messages: list[dict[str, Any]], tools: list[dict[str, Any]] | None = None
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]] | None = None,
+        temperature: float = 0.2,
     ) -> tuple[Any, str, dict[str, int]]:
         """Non-streaming completion — preferred for structured JSON agents."""
         client = get_llm_client()
         kwargs: dict[str, Any] = {
             "model": MODEL,
             "messages": messages,
-            "temperature": 0.2,
+            "temperature": temperature,
             "max_tokens": _max_tokens_for(self.agent_type, self.structured_output),
             "extra_body": _kimi_no_thinking_body(),
         }
@@ -562,6 +567,73 @@ class BaseAgent:
             yield content[i : i + step]
         return content, usage
 
+    def generate_judged(
+        self,
+        messages: list[dict[str, Any]],
+        *,
+        user_input: str,
+        chat_history: list[dict[str, str]] | None,
+        avatar_memory: list[dict[str, Any]] | None,
+        profile: dict[str, Any] | None,
+    ) -> Generator[dict[str, Any], None, None]:
+        """Generate, judge draft/plan output, retry once with the rejection reason, then stream."""
+        from services import draft_judge
+
+        _, raw, usage = self.complete_llm(messages, tools=None)
+        review: dict[str, Any] = {"outcome": "not_judged", "attempts": 1, "verdicts": []}
+
+        def _parse(text: str) -> dict[str, Any] | None:
+            try:
+                parsed = self.parse_output(text)
+            except Exception:
+                return None
+            return strip_asterisks(parsed) if isinstance(parsed, dict) else None
+
+        parsed = _parse(raw)
+        missing_draft = parsed is not None and draft_judge.expects_draft(
+            user_input, self.agent_type, parsed
+        )
+        if parsed is not None and (missing_draft or draft_judge.is_judged(parsed)):
+            client = get_llm_client()
+            facts = draft_judge.build_facts(user_input, chat_history, avatar_memory, profile)
+            if missing_draft:
+                verdict = dict(draft_judge.MISSING_DRAFT_VERDICT)
+            else:
+                verdict = draft_judge.judge_output(client, user_input, parsed, facts)
+            review["verdicts"].append(verdict)
+            review["outcome"] = "passed"
+            if not verdict["pass"]:
+                logger.info("draft rejected agent=%s reason=%s", self.agent_type, verdict.get("reason"))
+                yield {"event": "status", "data": {"stage": "revising", "agent": self.agent_type}}
+                retry_messages = draft_judge.build_retry_messages(messages, raw, verdict)
+                _, raw2, usage2 = self.complete_llm(retry_messages, tools=None, temperature=0.7)
+                usage = {k: usage.get(k, 0) + usage2.get(k, 0) for k in usage}
+                review["attempts"] = 2
+                parsed2 = _parse(raw2)
+                if parsed2 is None:
+                    review["outcome"] = "fallback"
+                    review["fallback_verdict"] = verdict
+                else:
+                    raw = raw2
+                    if missing_draft and not draft_judge.is_judged(parsed2):
+                        review["outcome"] = "no_draft_after_retry"
+                    elif draft_judge.is_judged(parsed2):
+                        verdict2 = draft_judge.judge_output(client, user_input, parsed2, facts)
+                        review["verdicts"].append(verdict2)
+                        if verdict2["pass"]:
+                            review["outcome"] = "passed_after_retry"
+                        else:
+                            review["outcome"] = "fallback"
+                            review["fallback_verdict"] = verdict2
+                    else:
+                        review["outcome"] = "passed_after_retry"
+
+        for i in range(0, len(raw), 48):
+            yield {"event": "token", "data": {"token": strip_asterisks(raw[i : i + 48])}}
+        self._last_raw = raw
+        self._last_usage = usage
+        self._last_review = review
+
     def run_playbook_with_tools(
         self, user_input: str, messages: list[dict[str, Any]]
     ) -> tuple[str, dict[str, int], list[str]]:
@@ -656,6 +728,7 @@ class BaseAgent:
         tools_used: list[str] = []
         previous_performance: list[dict[str, Any]] = []
         tool_trace: list[dict[str, Any]] = []
+        review: dict[str, Any] | None = None
         TOOL_TRACE.set(tool_trace)
 
         # If user supplied ingested competitor intel, keep chatbot context on
@@ -770,6 +843,17 @@ class BaseAgent:
                 if tool_name not in tools_used:
                     tools_used.append(tool_name)
 
+            avatar_memory: list[dict[str, Any]] = []
+            memory_avatar_id = avatar_ids[0] if avatar_ids else avatar_id
+            if agent_type in STRATEGIST_AGENTS and memory_avatar_id:
+                from services.avatar_memory import load_avatar_memory
+
+                avatar_memory = load_avatar_memory(
+                    user_id=user_id, avatar_id=memory_avatar_id
+                )
+                if avatar_memory:
+                    tools_used.append("avatar_memory")
+
             if agent_type == "instagram":
                 from services.content_plan import load_recent_content_performance
 
@@ -809,6 +893,7 @@ class BaseAgent:
                 avatar_bundle=avatar_bundle,
                 transcript_lessons=gathered.get("transcript_lessons"),
                 previous_performance=previous_performance,
+                avatar_memory=avatar_memory,
             )
 
             system_prompt = get_system_prompt(
@@ -885,6 +970,20 @@ class BaseAgent:
                 tools_used.extend(playbook_tools)
                 for i in range(0, len(raw_response), 48):
                     yield {"event": "token", "data": {"token": raw_response[i : i + 48]}}
+            elif self.structured_output and agent_type in STRATEGIST_AGENTS:
+                self._last_usage = usage
+                self._last_raw = ""
+                self._last_review = None
+                yield from self.generate_judged(
+                    messages,
+                    user_input=user_input,
+                    chat_history=chat_history,
+                    avatar_memory=avatar_memory,
+                    profile=profile,
+                )
+                raw_response = getattr(self, "_last_raw", "") or ""
+                usage = getattr(self, "_last_usage", usage)
+                review = getattr(self, "_last_review", None)
             elif self.structured_output:
                 # Non-stream JSON generation — Kimi thinking mode empties streamed content
                 self._last_usage = usage
@@ -928,6 +1027,55 @@ class BaseAgent:
 
             parsed = strip_asterisks(parsed)
 
+            if review and isinstance(parsed, dict):
+                if review.get("outcome") == "passed_after_retry":
+                    tools_used.append("draft_judge_retry")
+                elif review.get("outcome") == "fallback":
+                    from services.draft_judge import apply_fallback
+
+                    review["fallback"] = apply_fallback(parsed, review.get("fallback_verdict") or {})
+                    tools_used.append("draft_judge_fallback")
+                elif review.get("outcome") == "passed":
+                    tools_used.append("draft_judge")
+
+            if agent_type in STRATEGIST_AGENTS and isinstance(parsed, dict):
+                from services.draft_judge import DRAFT_DISCLAIMER, has_draft
+
+                if has_draft(parsed):
+                    parsed["disclaimer"] = DRAFT_DISCLAIMER
+
+                try:
+                    from services.draft_grounding import (
+                        build_allowed_text,
+                        filter_memory_updates,
+                        strip_unsupported_quotes,
+                    )
+
+                    allowed_norm = build_allowed_text(
+                        user_input, chat_history, avatar_memory
+                    )
+                    if strip_unsupported_quotes(parsed, allowed_norm):
+                        tools_used.append("draft_grounding")
+                    parsed["memory_updates"] = filter_memory_updates(
+                        parsed.get("memory_updates"), allowed_norm
+                    )
+                except Exception as guard_error:
+                    logger.warning("Draft grounding guard failed: %s", guard_error)
+
+                try:
+                    from services.avatar_memory import save_memory_updates
+
+                    saved_memory = save_memory_updates(
+                        user_id=user_id,
+                        avatar_id=avatar_ids[0] if avatar_ids else avatar_id,
+                        platform=agent_type,
+                        updates=parsed.get("memory_updates"),
+                    )
+                    if saved_memory:
+                        tools_used.append("avatar_memory_write")
+                except Exception as memory_error:
+                    logger.warning("Avatar memory write failed: %s", memory_error)
+
             if agent_type == "instagram" and isinstance(parsed, dict):
                 try:
                     from services.content_plan import (
@@ -966,6 +1114,7 @@ class BaseAgent:
                     "usage": usage,
                     "tools_used": tools_used,
                     "status": status,
+                    "review": review,
                 },
             }
 

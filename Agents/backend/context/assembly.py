@@ -28,6 +28,18 @@ def compress_summaries(summaries: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return compressed
 
 
+def _group_memory(items: list[dict[str, Any]] | None) -> dict[str, list[str]]:
+    grouped: dict[str, list[str]] = {}
+    for item in items or []:
+        kind = str(item.get("kind") or "note")
+        content = str(item.get("content") or "").strip()
+        if not content:
+            continue
+        label = content if item.get("source") == "user" else f"{content} (inferred)"
+        grouped.setdefault(kind, []).append(label)
+    return grouped
+
+
 def assemble_context(
     profile: dict[str, Any] | None,
     summaries: list[dict[str, Any]] | None,
@@ -38,6 +50,7 @@ def assemble_context(
     avatar_bundle: dict[str, Any] | None = None,
     transcript_lessons: list[dict[str, Any]] | None = None,
     previous_performance: list[dict[str, Any]] | None = None,
+    avatar_memory: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     multi = bool(avatar_bundle and avatar_bundle.get("multi_avatar"))
     profiles = (avatar_bundle or {}).get("profiles") or (
@@ -61,6 +74,7 @@ def assemble_context(
         "relevant_playbooks": playbooks or [],
         "transcript_lessons": transcript_lessons or [],
         "previous_content_performance": previous_performance or [],
+        "avatar_memory": _group_memory(avatar_memory),
         "user_input": user_input,
     }
 

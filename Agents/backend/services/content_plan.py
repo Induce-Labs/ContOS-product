@@ -54,6 +54,7 @@ def persist_instagram_content_plan_items(
                     "content_type": _string(item.get("content_type")),
                     "hook": _string(item.get("hook")),
                     "caption": _string(item.get("caption")),
+                    "copy_paste_post": _string(item.get("copy_paste_post")),
                     "hashtags": [
                         _string(tag).lstrip("#")
                         for tag in (item.get("hashtags") or [])
@@ -67,6 +68,11 @@ def persist_instagram_content_plan_items(
                         item.get("strategy_reasoning") or item.get("reasoning")
                     ),
                     "performance_goal": _string(item.get("performance_goal")),
+                    "evidence_citations": [
+                        _string(citation)
+                        for citation in (item.get("evidence_citations") or [])
+                        if _string(citation)
+                    ],
                     "reasoning": _string(item.get("reasoning")),
                 }
             )

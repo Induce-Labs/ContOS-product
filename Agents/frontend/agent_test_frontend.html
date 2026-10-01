@@ -33,6 +33,8 @@
   .result li { margin:4px 0; }
   .result-card { border:1px solid var(--border); border-radius:8px; padding:9px; margin:8px 0; }
   .result-card strong { color:var(--text); }
+  .copy-editor { width:100%; min-height:150px; resize:vertical; margin-top:8px; }
+  .copy-button { min-height:30px; padding:4px 10px; margin-top:6px; }
   .muted { color:var(--muted); }
   .sys { align-self:center; color:var(--muted); font-size:12px; background:none; }
   .err { align-self:center; color:#e5534b; font-size:12px; background:none; }
@@ -92,6 +94,7 @@ const sendBtn = document.getElementById("send");
 const statusEl = document.getElementById("status");
 const debugEl = document.getElementById("debug");
 const logEl = document.getElementById("log");
+const conversationHistory = [];
 
 /* ── Health dot: /api/health returns 503 when Redis is down (status "degraded") ── */
 fetch(API_BASE + HEALTH_PATH).then(async r => {
@@ -167,7 +170,49 @@ function listHtml(items) {
     : "";
 }
 
+function copyReadyEditor(text) {
+  const id = "copy-" + Math.random().toString(36).slice(2);
+  setTimeout(() => {
+    const button = document.getElementById(id + "-button");
+    const editor = document.getElementById(id);
+    if (!button || !editor) return;
+    button.onclick = async () => {
+      await navigator.clipboard.writeText(editor.value);
+      button.textContent = "Copied";
+      setTimeout(() => { button.textContent = "Copy post"; }, 1200);
+    };
+  }, 0);
+  return "<textarea id='" + id + "' class='copy-editor' readonly>" + escapeHtml(text) +
+    "</textarea><br><button id='" + id + "-button' class='copy-button' type='button'>Copy post</button>";
+}
+
+function strategistHeader(output) {
+  const html = [];
+  if (output.reply) html.push("<p>" + escapeHtml(output.reply) + "</p>");
+  if (output.thesis) html.push("<h4>Thesis</h4><p>" + escapeHtml(output.thesis) + "</p>");
+  if ((output.ideas || []).length) {
+    html.push("<h4>Ideas</h4><ol>" + output.ideas.map(i =>
+      "<li><strong>" + escapeHtml(i.title) + "</strong><br><span class='muted'>" + escapeHtml(i.why) + "</span></li>").join("") + "</ol>");
+  }
+  if (output.next_question) html.push("<p><strong>" + escapeHtml(output.next_question) + "</strong></p>");
+  return html.join("");
+}
+
+function hasPlatformContent(output) {
+  return ["content_calendar", "post_ideas", "tweet_ideas", "thread_structures", "competitor_comparison"]
+    .some(k => Array.isArray(output[k]) && output[k].length);
+}
+
 function renderAgentOutput(output, agent) {
+  if (output && typeof output === "object" && ["instagram", "linkedin", "twitter"].includes(agent)) {
+    const head = strategistHeader(output);
+    if (head && !hasPlatformContent(output)) return head;
+    return head + renderAgentBody(output, agent);
+  }
+  return renderAgentBody(output, agent);
+}
+
+function renderAgentBody(output, agent) {
   if (!output || typeof output !== "object") return escapeHtml(output || "");
   const html = [];
   const addList = (title, values) => {
@@ -177,22 +222,22 @@ function renderAgentOutput(output, agent) {
   };
 
   if (agent === "instagram") {
-    if (output.analysis) html.push("<p>" + escapeHtml(output.analysis) + "</p>");
+    if (output.presentation_mode !== "detailed" && (output.content_calendar || []).length) {
+      const item = output.content_calendar[0];
+      const copy = item.copy_paste_post || item.caption || "No copy-ready post returned.";
+      return copyReadyEditor(copy);
+    }
     if (output.posting_frequency) html.push("<h4>Posting rhythm</h4><p>" + escapeHtml(output.posting_frequency) + "</p>");
-    addList("Top hooks", output.top_hooks);
-    addList("Caption formulas", output.caption_formulas);
     (output.content_calendar || []).forEach(item => {
       html.push("<div class='result-card'><strong>Day " + escapeHtml(item.day) + " · " + escapeHtml(item.content_type) + "</strong>" +
-        "<p><strong>Hook:</strong> " + escapeHtml(item.hook) + "</p>" +
-        "<p><strong>Caption:</strong> " + escapeHtml(item.caption) + "</p>" +
-        "<p><strong>CTA:</strong> " + escapeHtml(item.cta) + "</p>" +
-        "<p><strong>Hashtags:</strong> " + escapeHtml((item.hashtags || []).join(" ")) + "</p>" +
-        (item.transcript ? "<p><strong>Transcript:</strong> " + escapeHtml(item.transcript) + "</p>" : "") +
-        (item.video_prompt ? "<p><strong>Video prompt:</strong> " + escapeHtml(item.video_prompt) + "</p>" : "") +
+        (item.copy_paste_post ? "<p><strong>Copy-ready post:</strong>" + copyReadyEditor(item.copy_paste_post) + "</p>" : "") +
         (item.performance_goal ? "<p><strong>Performance goal:</strong> " + escapeHtml(item.performance_goal) + "</p>" : "") +
         (item.strategy_reasoning ? "<p><strong>Strategy:</strong> " + escapeHtml(item.strategy_reasoning) + "</p>" : "") +
+        ((item.evidence_citations || []).length ? "<p><strong>Evidence:</strong> " + escapeHtml(item.evidence_citations.join(" · ")) + "</p>" : "") +
         "<p class='muted'><strong>Why:</strong> " + escapeHtml(item.reasoning) + "</p></div>");
     });
+    if (output.recommended_option) html.push("<h4>Recommended option</h4><p>" + escapeHtml(output.recommended_option) + "</p>");
+    addList("Other options", output.alternative_options);
     return html.join("") || "<p>No Instagram recommendations returned.</p>";
   }
 
@@ -260,7 +305,7 @@ async function send() {
     competitor_url: null,
     competitor_summaries: null,
     tagged_avatar_ids: null,
-    chat_history: null,
+    chat_history: conversationHistory.slice(-12),
     response_language: "en",
   };
 
@@ -340,6 +385,11 @@ async function send() {
           } else if (!replyEl.textContent && data.output) {
             replyEl.textContent = typeof data.output === "string" ? data.output : JSON.stringify(data.output);
           }
+          conversationHistory.push({ role: "user", content: text });
+          conversationHistory.push({
+            role: "assistant",
+            content: typeof data.output === "string" ? data.output : JSON.stringify(data.output || {}),
+          });
         } else if (event === "error") {
           runSummary.status = "error";
           runSummary.error = data.error || "Agent stream failed";
