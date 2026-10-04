@@ -9,6 +9,7 @@ import {
 } from '../components/project-setup/CompetitorsStep'
 import { useCompetitorIntake } from '../hooks/useCompetitorIntake'
 import { fetchAvatar, type Avatar } from '../lib/avatars'
+import { logDevError, userFacingMessage } from '../lib/devLog'
 import { completeOnboarding, getOnboardingAvatarId } from '../lib/onboarding'
 
 function OnboardingCompetitorsContent() {
@@ -50,9 +51,10 @@ function OnboardingCompetitorsContent() {
         }
       } catch (error) {
         if (isMounted) {
-          setLoadError(
-            error instanceof Error ? error.message : 'Failed to load onboarding avatar.',
-          )
+          logDevError('onboarding competitors avatar', {
+            error: error instanceof Error ? error.message : String(error),
+          })
+          setLoadError(userFacingMessage(error, 'Failed to load onboarding avatar.'))
           setIsLoading(false)
         }
       }

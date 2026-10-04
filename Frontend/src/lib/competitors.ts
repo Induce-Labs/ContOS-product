@@ -1,3 +1,4 @@
+import { remoteStatusCode } from './devLog'
 import { supabase } from './supabase'
 import type { Tables, TablesInsert } from '../types/database'
 import type { CompetitorPlatform } from '../types/contos'
@@ -12,9 +13,12 @@ export const MIN_COMPETITORS_PER_AVATAR = 1
 export const RECOMMENDED_COMPETITORS_PER_AVATAR = 5
 
 export class CompetitorsServiceError extends Error {
-  constructor(message: string, cause?: unknown) {
+  readonly statusCode: number | null
+
+  constructor(message: string, cause?: unknown, statusCode?: number | null) {
     super(message)
     this.name = 'CompetitorsServiceError'
+    this.statusCode = remoteStatusCode(cause, statusCode)
     if (cause instanceof Error) {
       this.cause = cause
     }
@@ -118,7 +122,12 @@ export async function createCompetitors(
   const { data, error } = await supabase.from('competitors').insert(rows).select()
 
   if (error) {
-    throw new CompetitorsServiceError(mapCompetitorCapError(error.message), error)
+    const mapped = mapCompetitorCapError(error.message)
+    throw new CompetitorsServiceError(
+      mapped,
+      error,
+      mapped === error.message ? undefined : null,
+    )
   }
 
   return [...reused, ...data]

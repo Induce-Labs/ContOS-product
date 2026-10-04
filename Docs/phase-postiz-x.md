@@ -67,5 +67,5 @@ X posts on the shared calendar are the ones whose `integration_id` matches this 
 
 ## Limitations
 
-- X threads are one Postiz post: `value[0]` is the tweet and later `value` items are replies. ContOS does not schedule replies itself. Later entries cannot carry media. Draft and scheduled X posts can be edited as the root post only. Published X posts stay view-only. Quotes, analytics, and X delete are not supported
+- X threads are one Postiz post: `value[0]` is the tweet and later `value` items are replies. ContOS does not schedule replies itself. Later entries cannot carry media. Draft (`DRAFT`) and scheduled (`QUEUE`) X posts can be edited as the root post and deleted. Published X posts stay view-only and cannot be deleted. Quotes and analytics are not supported.
 - Live X publish is not covered by these tests

@@ -106,6 +106,8 @@ class Settings(BaseSettings):
         default="",
         validation_alias="CONTOS_PROVISION_SECRET",
     )
+    sentry_dsn: str = Field(default="", validation_alias="SENTRY_DSN")
+    sentry_environment: str = Field(default="", validation_alias="SENTRY_ENVIRONMENT")
 
     @field_validator("contos_provision_secret", mode="before")
     @classmethod

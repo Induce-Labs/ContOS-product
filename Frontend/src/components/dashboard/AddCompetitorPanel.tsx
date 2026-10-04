@@ -15,6 +15,7 @@ import { normalizeTwitterInputs, validateTwitterInput } from '../../lib/twitter'
 import { enqueueCompetitorScrapeJobsOrThrow } from '../../lib/api'
 import { updateProjectStatus } from '../../lib/projects'
 import type { CompetitorPlatform } from '../../types/contos'
+import { logDevError, userFacingMessage } from '../../lib/devLog'
 import { PlatformSelect } from './PlatformSelect'
 
 type CompetitorDraft = {
@@ -161,11 +162,10 @@ export function AddCompetitorPanel({
       onSuccess()
       onClose()
     } catch (error) {
-      setErrorMessage(
-        error instanceof Error
-          ? error.message
-          : t('competitors.addPanel.failedUnexpected'),
-      )
+      logDevError('add competitor', {
+        error: error instanceof Error ? error.message : String(error),
+      })
+      setErrorMessage(userFacingMessage(error, t('competitors.addPanel.failedUnexpected')))
       setIsSubmitting(false)
     }
   }

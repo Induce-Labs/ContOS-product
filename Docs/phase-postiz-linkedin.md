@@ -28,9 +28,10 @@ Org-consent OAuth (`POST /api/postiz/oauth/callback`) is **deprecated** (HTTP 41
 - ContOS identity is Supabase only (`get_current_user_id`). `/auth/callback` is unchanged.
 - **One avatar → one Postiz connection** (partial unique index on `avatar_id`). One Postiz org → one avatar (unique on `postiz_organization_id`). One LinkedIn integration → one avatar (partial unique on `postiz_integration_id`).
 - Tokens never returned to the frontend. Provision secret stays backend-only.
-- Status returns `{ connected, integration, claim_candidates }` for **that avatar’s stored LinkedIn integration only**.
-- Cross-avatar claim is rejected. Claim candidates are only unbound LinkedIns in **this** avatar’s org during an active Redis snapshot.
-- If a stored integration ID is temporarily missing from Postiz, status is `connected: false` but the DB id is **kept**.
+- Status returns `{ connected, integration }` for **that avatar’s stored LinkedIn integration only**. `claim_candidates` is always empty for LinkedIn.
+- ContOS does not show a LinkedIn account picker. A project binds a channel only when its own OAuth adds exactly one new LinkedIn integration. Existing channels in the org are not listed and cannot be selected.
+- `POST` claim for LinkedIn is rejected. Cross-avatar claim remains rejected.
+- If a stored integration id is missing from Postiz, status is `connected: false` and the stored id is kept. Other projects' LinkedIn channels are not offered.
 - Do not use Postiz Groups as ContOS isolation.
 
 ## API endpoints
@@ -38,8 +39,8 @@ Org-consent OAuth (`POST /api/postiz/oauth/callback`) is **deprecated** (HTTP 41
 | Method | Path | Auth | Purpose |
 | --- | --- | --- | --- |
 | GET | `/api/postiz/connect?avatar_id=` | Bearer Supabase JWT | Provision/ensure avatar org, snapshot, return LinkedIn URL |
-| GET | `/api/postiz/status?avatar_id=` | Bearer Supabase JWT | `{ connected, integration, claim_candidates }` for this avatar |
-| POST | `/api/postiz/claim` | Bearer Supabase JWT | Body `{ avatar_id, integration_id }` — bind one unclaimed LinkedIn |
+| GET | `/api/postiz/status?avatar_id=` | Bearer Supabase JWT | `{ connected, integration }` for this avatar. LinkedIn `claim_candidates` is empty |
+| POST | `/api/postiz/claim` | Bearer Supabase JWT | LinkedIn list selection is rejected. X claim is unchanged |
 | GET | `/api/postiz/posts?avatar_id=&start_date=&end_date=` | Bearer | List calendar posts for this avatar’s LinkedIn only (includes `images`) |
 | POST | `/api/postiz/upload?avatar_id=` | Bearer | Multipart `file` — avatar-scoped proxy to Postiz `/upload` (images max 10 MB; `video/mp4` max 1 GB) |
 | POST | `/api/postiz/posts` | Bearer | Body `{ avatar_id, type, content, publish_date, post_id?, images? }` — `type`: `now` \| `schedule` \| `draft` \| `update`; `images` is the **complete final** MediaDto list (max 10) |
@@ -214,7 +215,7 @@ Apply all Postiz SQL migrations to ContOS Supabase before testing. Postiz must e
 
 ### Calendar UI
 
-`CalendarPage.tsx` lays the page out as a header (title, subtitle, Create post), a left card (LinkedIn and X rows with the account name under the title and the Connected badge, Connect another account only while exactly one of those two is connected, Create post, upcoming posts for the visible month), and a right card (Today, Month / Week / Day, platform filter, Sunday-first grid). Event chips are LinkedIn or X. Week and Day use the same chips for the visible range. Posts load only when at least one channel is connected. Connect, disconnect, create, edit, and delete still use the existing Postiz handlers. The create dialog is a shared composer for LinkedIn and X (platform cards, text toolbar, media drop zone). Publish now, schedule, and draft call the same handlers. No API or schema changes. Instagram is not a publishing channel.
+`CalendarPage.tsx` lays the page out as a header (title, subtitle, Create post), a left card (LinkedIn and X rows with the account name under the title and the Connected badge, Connect another account only while exactly one of those two is connected, Create post, upcoming posts for the visible month), and a right card (Today, Month / Week / Day, platform filter, Sunday-first grid). Event chips are LinkedIn or X and show Published, Scheduled, Not published, Draft, or Failed from the Postiz state. A queued post whose time has passed is Not published. Published posts stay on the day cell and are left out of Upcoming this month. Week and Day use the same chips for the visible range. Posts load only when at least one channel is connected. Connect, disconnect, create, edit, and delete still use the existing Postiz handlers. The create dialog is a shared composer for LinkedIn and X (platform cards, text toolbar, media drop zone). Publish now, schedule, and draft call the same handlers. No API or schema changes. Instagram is not a publishing channel.
 
 ## Security
 
@@ -247,6 +248,10 @@ pytest tests/test_postiz.py tests/test_phase6_hardening.py -q
 
 Final LinkedIn automated QA results (2026-09-24): [linkedin-final-qa.md](./linkedin-final-qa.md).
 
+## Monthly consistency
+
+`GET /api/postiz/consistency?avatar_id=&month=YYYY-MM&timezone=` derives one calendar month from the avatar's Postiz `GET /posts` window. A day counts when at least one `PUBLISHED` LinkedIn or X root falls on that local date. Drafts, queued posts, errors, other integrations, and `intervalInDays` rows are ignored. `current_streak` is live for the current month only (today stays pending until local midnight if yesterday was posted) and is `null` for earlier months. `longest_streak` stays inside that month. No consistency table and no Redis. The sidebar row under the project switcher shows only `posted / days-in-month` and an arrow to the consistency page. It is hidden when the rail is collapsed. `/dashboard/:projectId/consistency` shows the current month. The previous six months load in a table (posting days, longest streak, LinkedIn days, X days, published posts); choosing a row opens that month. Timezone is the browser IANA zone on each request and is not stored.
+
 ## Known limitations
 
 - Legacy user-scoped rows (`avatar_id IS NULL`) are not auto-migrated; reconnect per avatar.
@@ -255,6 +260,8 @@ Final LinkedIn automated QA results (2026-09-24): [linkedin-final-qa.md](./linke
 - Postiz personal LinkedIn OAuth must request only scopes approved on the ContOS LinkedIn app (`openid`, `profile`, `w_member_social`). Broader scopes cause LinkedIn `unauthorized_scope` / “Bummer” before callback — see [postiz-linkedin-oauth-scopes-fix.md](./postiz-linkedin-oauth-scopes-fix.md).
 - Personal LinkedIn authorize URL must **not** include `prompt=none` (silent session reuse on reconnect). ContOS `PostizClient` strips undocumented `prompt` from LinkedIn authorize URLs returned to the browser. Postiz source is also patched; deploy to the VPS when SSH is available. LinkedIn may still reuse an active browser session/grant; ContOS UX asks users to switch/sign out in the OAuth popup. Server-side LinkedIn token revoke is intentionally omitted (not in official 3-legged docs).
 - Calendar must derive Postiz `avatar_id` from the URL `projectId` (never a stale `activeProject` from another avatar). See shell + CalendarPage fix for same-user multi-avatar isolation.
+- Monthly consistency does not store a timezone or streak. The browser IANA zone is sent on each request. Streaks do not continue into the next month. A streak longer than the days already elapsed this month cannot be shown.
+- `POST /posts` uses a 120s read timeout. Postiz keeps that request open until LinkedIn or X finishes, and the 30s default was returning HTTP 502 before a publish completed. Create is not retried, so a timed-out publish is not sent twice.
 - Media uploads are not supported in ContOS v1 (text-only posts).
 - Ownership lookup for mutate/delete uses a wide Postiz date window because Postiz public API has no `GET /posts/:id`.
 

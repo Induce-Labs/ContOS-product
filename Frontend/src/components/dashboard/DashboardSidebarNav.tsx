@@ -6,6 +6,7 @@ import { useAuth } from '../../hooks/useAuth'
 import type { AgentType } from '../../lib/agentsApi'
 import { isUiAgentType } from '../../lib/agentsApi'
 import { upsertRemoteChatStore } from '../../lib/agentChatRemote'
+import { logDevError, userFacingMessage } from '../../lib/devLog'
 import {
   CHAT_DELETE_EVENT,
   CHAT_DELETE_REVERT_EVENT,
@@ -243,11 +244,10 @@ function ChatHistoryDropdown({
         saveChatStore(user.id, projectId, previous)
       }
       setSessions(peekLocalChatSessions(user.id, projectId))
-      setDeleteError(
-        error instanceof Error
-          ? error.message
-          : t('agents.syncToFailed'),
-      )
+      logDevError('agents delete chat sync', {
+        error: error instanceof Error ? error.message : String(error),
+      })
+      setDeleteError(userFacingMessage(error, t('agents.syncToFailed')))
     } finally {
       setDeleting(false)
     }
@@ -523,7 +523,7 @@ export function DashboardSidebarNav({
   return (
     <nav
       className={`flex min-h-0 flex-1 flex-col overflow-hidden font-sans ${
-        collapsed ? 'items-center px-0 py-1' : 'px-3 py-3'
+        collapsed ? 'items-center px-0 py-1' : 'px-3 pb-3 pt-1'
       }`}
     >
       <div

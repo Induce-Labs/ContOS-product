@@ -9,6 +9,7 @@ import {
   createCompetitors,
 } from '../lib/competitors'
 import { enqueueCompetitorScrapeJobsOrThrow } from '../lib/api'
+import { logDevError, userFacingMessage } from '../lib/devLog'
 import { setLastUsedProjectId, updateProjectStatus } from '../lib/projects'
 import type { CompetitorPlatform } from '../types/contos'
 
@@ -185,10 +186,11 @@ export function useCompetitorIntake(initialPlatform: CompetitorPlatform = 'insta
       setLastUsedProjectId(avatarId)
       return true
     } catch (error) {
+      logDevError('competitor intake submit', {
+        error: error instanceof Error ? error.message : String(error),
+      })
       setErrorMessage(
-        error instanceof Error
-          ? error.message
-          : t('competitors.validation.startResearchFailed'),
+        userFacingMessage(error, t('competitors.validation.startResearchFailed')),
       )
       return false
     } finally {

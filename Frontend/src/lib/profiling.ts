@@ -10,6 +10,7 @@ import {
   type QuestionInput,
 } from '../config/onboardingProfilingQuestions'
 import { fetchAvatar, type Avatar } from './avatars'
+import { remoteStatusCode } from './devLog'
 import { supabase } from './supabase'
 
 /** One question object inside `profiling_questionnaires.questions` JSONB. */
@@ -40,9 +41,12 @@ export function resolveProfilingTemplate(type: ProjectType): ProfilingQuestionna
 export type { ProfilingQuestionDef, QuestionInput }
 
 export class ProfilingServiceError extends Error {
-  constructor(message: string, cause?: unknown) {
+  readonly statusCode: number | null
+
+  constructor(message: string, cause?: unknown, statusCode?: number | null) {
     super(message)
     this.name = 'ProfilingServiceError'
+    this.statusCode = remoteStatusCode(cause, statusCode)
     if (cause instanceof Error) {
       this.cause = cause
     }

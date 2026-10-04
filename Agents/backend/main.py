@@ -48,6 +48,10 @@ logging.basicConfig(
 )
 logger = logging.getLogger("contos.api")
 
+from monitoring import capture_server_exception, init_glitchtip  # noqa: E402
+
+init_glitchtip()
+
 app = FastAPI(
     title="ContOS Agents API",
     description="Specialized marketing agents with MCP tool orchestration (user-scoped)",
@@ -62,6 +66,11 @@ cors_origins = [
     ).split(",")
     if o.strip()
 ]
+if any(origin == "*" for origin in cors_origins):
+    raise RuntimeError(
+        "CORS_ORIGINS must list explicit origins. Wildcard '*' is not allowed "
+        "because credentialed browser requests are enabled.",
+    )
 # Always allow local Vite on both localhost and 127.0.0.1 (browsers treat them as different origins).
 for _origin in (
     "http://localhost:5173",
@@ -73,7 +82,7 @@ for _origin in (
         cors_origins.append(_origin)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=cors_origins or ["*"],
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -466,6 +475,7 @@ def invoke_agent(
 
                     event_q.put(evt)
             except Exception as exc:
+                capture_server_exception(exc)
                 logger.exception(
                     "agent producer failed",
                     extra={"run_id": run_id, "agent": body.agent_type},
@@ -547,6 +557,7 @@ def invoke_agent(
             )
             raise
         except Exception as exc:
+            capture_server_exception(exc)
             logger.exception("SSE consumer failed")
             stop_producer.set()
             yield _sse("error", {"error": str(exc), "agent": body.agent_type, "run_id": run_id})

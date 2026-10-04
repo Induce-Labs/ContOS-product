@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { DashboardLayout } from '../components/dashboard/DashboardLayout'
 import { useDashboardShell } from '../hooks/useDashboardShell'
+import { userFacingMessage } from '../lib/devLog'
 import {
   changePostizPostStatus,
   claimPostizIntegration,
@@ -121,6 +122,16 @@ function stateLabelKey(state: string): string {
     default:
       return 'postiz.calendar.stateOther'
   }
+}
+
+function calendarStatusKey(state: string, publishDateIso: string, nowMs: number): string {
+  if (state.toUpperCase() === 'QUEUE') {
+    const when = new Date(publishDateIso).getTime()
+    if (!Number.isNaN(when) && when <= nowMs) {
+      return 'postiz.calendar.stateNotPublished'
+    }
+  }
+  return stateLabelKey(state)
 }
 
 function formatPostTime(iso: string, locale: string): string {
@@ -761,13 +772,7 @@ function XChannelPanel({
           return
         }
         setUiState('error')
-        setErrorMessage(
-          error instanceof PostizApiError
-            ? error.message
-            : error instanceof Error
-              ? error.message
-              : t('postiz.calendar.x.statusFailed'),
-        )
+        setErrorMessage(userFacingMessage(error, t('postiz.calendar.x.statusFailed')))
       }
     }
 
@@ -831,13 +836,7 @@ function XChannelPanel({
       applyConnected(result.integration)
     } catch (error) {
       setUiState('error')
-      setErrorMessage(
-        error instanceof PostizApiError
-          ? error.message
-          : error instanceof Error
-            ? error.message
-            : t('postiz.calendar.x.claimFailed'),
-      )
+      setErrorMessage(userFacingMessage(error, t('postiz.calendar.x.claimFailed')))
     } finally {
       setIsClaiming(false)
     }
@@ -867,13 +866,7 @@ function XChannelPanel({
             setErrorMessage(t('postiz.calendar.x.timeout'))
           } catch (error) {
             setUiState('error')
-            setErrorMessage(
-              error instanceof PostizApiError
-                ? error.message
-                : error instanceof Error
-                  ? error.message
-                  : t('postiz.calendar.x.timeout'),
-            )
+            setErrorMessage(userFacingMessage(error, t('postiz.calendar.x.timeout')))
           }
           return
         }
@@ -911,13 +904,7 @@ function XChannelPanel({
       popup.close()
       popupRef.current = null
       setUiState('error')
-      setErrorMessage(
-        error instanceof PostizApiError
-          ? error.message
-          : error instanceof Error
-            ? error.message
-            : t('postiz.calendar.x.connectFailed'),
-      )
+      setErrorMessage(userFacingMessage(error, t('postiz.calendar.x.connectFailed')))
     }
   }
 
@@ -930,13 +917,7 @@ function XChannelPanel({
       setIntegration(null)
       setUiState('disconnected')
     } catch (error) {
-      setErrorMessage(
-        error instanceof PostizApiError
-          ? error.message
-          : error instanceof Error
-            ? error.message
-            : t('postiz.calendar.x.disconnectFailed'),
-      )
+      setErrorMessage(userFacingMessage(error, t('postiz.calendar.x.disconnectFailed')))
     } finally {
       setIsDisconnecting(false)
     }
@@ -1066,8 +1047,6 @@ function CalendarPostizPanel({ avatarId }: { avatarId: string }) {
   const [uiState, setUiState] = useState<ConnectionUiState>('checking')
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [integration, setIntegration] = useState<PostizIntegration | null>(null)
-  const [claimCandidates, setClaimCandidates] = useState<PostizIntegration[]>([])
-  const [isClaiming, setIsClaiming] = useState(false)
   const [isDisconnecting, setIsDisconnecting] = useState(false)
   const [disconnectOpen, setDisconnectOpen] = useState(false)
   const [connectPrepOpen, setConnectPrepOpen] = useState(false)
@@ -1103,20 +1082,7 @@ function CalendarPostizPanel({ avatarId }: { avatarId: string }) {
     (nextIntegration: PostizIntegration | null) => {
       linkedinConnectingRef.current = false
       setIntegration(nextIntegration)
-      setClaimCandidates([])
       setUiState('connected')
-      setErrorMessage(null)
-      stopPolling()
-      closePopup()
-    },
-    [closePopup, stopPolling],
-  )
-
-  const applyClaimCandidates = useCallback(
-    (candidates: PostizIntegration[]) => {
-      linkedinConnectingRef.current = false
-      setClaimCandidates(candidates)
-      setUiState('choose_account')
       setErrorMessage(null)
       stopPolling()
       closePopup()
@@ -1135,33 +1101,18 @@ function CalendarPostizPanel({ avatarId }: { avatarId: string }) {
         }
         if (status.connected) {
           setIntegration(status.integration)
-          setClaimCandidates([])
           setUiState('connected')
           setErrorMessage(null)
           return
         }
-        if (status.claim_candidates.length > 0) {
-          setClaimCandidates(status.claim_candidates)
-          setIntegration(null)
-          setUiState('choose_account')
-          setErrorMessage(null)
-          return
-        }
         setIntegration(null)
-        setClaimCandidates([])
         setUiState('disconnected')
       } catch (error) {
         if (cancelled) {
           return
         }
         setUiState('error')
-        setErrorMessage(
-          error instanceof PostizApiError
-            ? error.message
-            : error instanceof Error
-              ? error.message
-              : t('postiz.calendar.statusFailed'),
-        )
+        setErrorMessage(userFacingMessage(error, t('postiz.calendar.statusFailed')))
       }
     }
 
@@ -1211,36 +1162,9 @@ function CalendarPostizPanel({ avatarId }: { avatarId: string }) {
       applyConnected(status.integration)
       return true
     }
-    if (status.claim_candidates.length > 0) {
-      applyClaimCandidates(status.claim_candidates)
-      return false
-    }
     setIntegration(null)
     return false
-  }, [applyClaimCandidates, applyConnected, avatarId])
-
-  async function handleClaimAccount(candidate: PostizIntegration) {
-    setIsClaiming(true)
-    setErrorMessage(null)
-    try {
-      const result = await claimPostizIntegration(avatarId, candidate.id)
-      if (!result.connected || result.integration === null) {
-        throw new PostizApiError(t('postiz.calendar.claimFailed'))
-      }
-      applyConnected(result.integration)
-    } catch (error) {
-      setUiState('error')
-      setErrorMessage(
-        error instanceof PostizApiError
-          ? error.message
-          : error instanceof Error
-            ? error.message
-            : t('postiz.calendar.claimFailed'),
-      )
-    } finally {
-      setIsClaiming(false)
-    }
-  }
+  }, [applyConnected, avatarId])
 
   async function loadInitialStatus() {
     setUiState('checking')
@@ -1251,22 +1175,11 @@ function CalendarPostizPanel({ avatarId }: { avatarId: string }) {
         applyConnected(status.integration)
         return
       }
-      if (status.claim_candidates.length > 0) {
-        applyClaimCandidates(status.claim_candidates)
-        return
-      }
       setIntegration(null)
-      setClaimCandidates([])
       setUiState('disconnected')
     } catch (error) {
       setUiState('error')
-      setErrorMessage(
-        error instanceof PostizApiError
-          ? error.message
-          : error instanceof Error
-            ? error.message
-            : t('postiz.calendar.statusFailed'),
-      )
+      setErrorMessage(userFacingMessage(error, t('postiz.calendar.statusFailed')))
     }
   }
 
@@ -1286,21 +1199,11 @@ function CalendarPostizPanel({ avatarId }: { avatarId: string }) {
               applyConnected(status.integration)
               return
             }
-            if (status.claim_candidates.length > 0) {
-              applyClaimCandidates(status.claim_candidates)
-              return
-            }
             setUiState('error')
             setErrorMessage(t('postiz.calendar.timeout'))
           } catch (error) {
             setUiState('error')
-            setErrorMessage(
-              error instanceof PostizApiError
-                ? error.message
-                : error instanceof Error
-                  ? error.message
-                  : t('postiz.calendar.timeout'),
-            )
+            setErrorMessage(userFacingMessage(error, t('postiz.calendar.timeout')))
           }
           return
         }
@@ -1315,15 +1218,7 @@ function CalendarPostizPanel({ avatarId }: { avatarId: string }) {
         }
       })()
     }, POLL_INTERVAL_MS)
-  }, [
-    applyClaimCandidates,
-    applyConnected,
-    avatarId,
-    closePopup,
-    refreshStatus,
-    stopPolling,
-    t,
-  ])
+  }, [applyConnected, avatarId, closePopup, refreshStatus, stopPolling, t])
 
   async function handleConnectLinkedIn() {
     setConnectPrepOpen(false)
@@ -1349,13 +1244,7 @@ function CalendarPostizPanel({ avatarId }: { avatarId: string }) {
       popup.close()
       popupRef.current = null
       setUiState('error')
-      setErrorMessage(
-        error instanceof PostizApiError
-          ? error.message
-          : error instanceof Error
-            ? error.message
-            : t('postiz.calendar.connectFailed'),
-      )
+      setErrorMessage(userFacingMessage(error, t('postiz.calendar.connectFailed')))
     }
   }
 
@@ -1374,13 +1263,7 @@ function CalendarPostizPanel({ avatarId }: { avatarId: string }) {
       setIntegration(null)
       setUiState('disconnected')
     } catch (error) {
-      setErrorMessage(
-        error instanceof PostizApiError
-          ? error.message
-          : error instanceof Error
-            ? error.message
-            : t('postiz.calendar.disconnectFailed'),
-      )
+      setErrorMessage(userFacingMessage(error, t('postiz.calendar.disconnectFailed')))
     } finally {
       setIsDisconnecting(false)
     }
@@ -1463,27 +1346,6 @@ function CalendarPostizPanel({ avatarId }: { avatarId: string }) {
                 </>
               )}
             />
-            {uiState === 'choose_account' ? (
-              <div className="rounded-2xl border border-border-hairline bg-white px-3 py-3 dark:bg-canvas">
-                <p className="text-sm font-semibold text-ink">{t('postiz.calendar.chooseTitle')}</p>
-                <p className="mt-1 text-xs text-ink-muted">{t('postiz.calendar.chooseBody')}</p>
-                <ul className="mt-3 space-y-2">
-                  {claimCandidates.map((candidate) => (
-                    <li key={candidate.id} className="flex items-center justify-between gap-3">
-                      <span className="truncate text-sm text-ink">{candidate.name}</span>
-                      <button
-                        type="button"
-                        disabled={isClaiming}
-                        onClick={() => void handleClaimAccount(candidate)}
-                        className={`${CALENDAR_CREATE_BTN} w-auto px-3 py-2`}
-                      >
-                        {t('postiz.calendar.useThisAccount')}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
             {uiState === 'disconnected' || uiState === 'connecting' ? (
               <p className="text-xs leading-relaxed text-ink-muted">{t('postiz.calendar.switchAccountHint')}</p>
             ) : null}
@@ -1674,13 +1536,7 @@ function AvatarCalendarBoard({
           return
         }
         setPosts([])
-        setError(
-          err instanceof PostizApiError
-            ? err.message
-            : err instanceof Error
-              ? err.message
-              : t('postiz.calendar.postsLoadFailed'),
-        )
+        setError(userFacingMessage(err, t('postiz.calendar.postsLoadFailed')))
       } finally {
         if (!cancelled) {
           setLoading(false)
@@ -1788,9 +1644,14 @@ function AvatarCalendarBoard({
     }).format(anchor)
   }, [anchor, displaySpan.end, displaySpan.start, i18n.language, viewMode])
 
+  const nowMs = Date.now()
+
   const upcomingPosts = useMemo(() => {
     return posts
       .filter((post) => {
+        if (post.state.toUpperCase() === 'PUBLISHED') {
+          return false
+        }
         const d = new Date(post.publish_date)
         return (
           !Number.isNaN(d.getTime()) &&
@@ -1988,11 +1849,7 @@ function AvatarCalendarBoard({
       return uploaded
     } catch (err) {
       const message = sanitizeUploadErrorMessage(
-        err instanceof PostizApiError
-          ? err.message
-          : err instanceof Error
-            ? err.message
-            : t('postiz.calendar.mediaUploadFailed'),
+        userFacingMessage(err, t('postiz.calendar.mediaUploadFailed')),
       )
       setAttachments((prev) =>
         prev.map((entry) =>
@@ -2081,13 +1938,7 @@ function AvatarCalendarBoard({
       clearAttachments()
       beginPostsReload()
     } catch (err) {
-      setFormError(
-        err instanceof PostizApiError
-          ? err.message
-          : err instanceof Error
-            ? err.message
-            : t('postiz.calendar.saveFailed'),
-      )
+      setFormError(userFacingMessage(err, t('postiz.calendar.saveFailed')))
     } finally {
       setSaving(false)
     }
@@ -2115,13 +1966,7 @@ function AvatarCalendarBoard({
       clearAttachments()
       beginPostsReload()
     } catch (err) {
-      setFormError(
-        err instanceof PostizApiError
-          ? err.message
-          : err instanceof Error
-            ? err.message
-            : t('postiz.calendar.saveFailed'),
-      )
+      setFormError(userFacingMessage(err, t('postiz.calendar.saveFailed')))
     } finally {
       setSaving(false)
     }
@@ -2138,13 +1983,7 @@ function AvatarCalendarBoard({
       setModalOpen(false)
       beginPostsReload()
     } catch (err) {
-      setFormError(
-        err instanceof PostizApiError
-          ? err.message
-          : err instanceof Error
-            ? err.message
-            : t('postiz.calendar.saveFailed'),
-      )
+      setFormError(userFacingMessage(err, t('postiz.calendar.saveFailed')))
     } finally {
       setSaving(false)
     }
@@ -2162,13 +2001,7 @@ function AvatarCalendarBoard({
       setEditingPost(null)
       beginPostsReload()
     } catch (err) {
-      setFormError(
-        err instanceof PostizApiError
-          ? err.message
-          : err instanceof Error
-            ? err.message
-            : t('postiz.calendar.deleteFailed'),
-      )
+      setFormError(userFacingMessage(err, t('postiz.calendar.deleteFailed')))
     } finally {
       setDeleting(false)
     }
@@ -2240,6 +2073,8 @@ function AvatarCalendarBoard({
                   >
                     <p className="text-[11px] font-medium text-ink-muted">
                       {isXPost(post) ? `${t('postiz.calendar.platformX')} · ` : ''}
+                      {t(calendarStatusKey(post.state, post.publish_date, nowMs))}
+                      {' · '}
                       {formatPostDateTime(post.publish_date, i18n.language)}
                     </p>
                     <p className="mt-1 line-clamp-2 text-sm font-medium text-ink">
@@ -2349,10 +2184,8 @@ function AvatarCalendarBoard({
                 <PostEventChip
                   key={post.id}
                   isX={isXPost(post)}
-                  title={post.content}
-                  label={t('postiz.calendar.eventChip', {
-                    time: formatPostTime(post.publish_date, i18n.language),
-                  })}
+                  title={`${t(calendarStatusKey(post.state, post.publish_date, nowMs))} · ${formatPostTime(post.publish_date, i18n.language)} · ${post.content}`}
+                  label={t(calendarStatusKey(post.state, post.publish_date, nowMs))}
                   onOpen={() => openEdit(post)}
                 />
               ))}
@@ -2408,10 +2241,8 @@ function AvatarCalendarBoard({
                           <li key={post.id}>
                             <PostEventChip
                               isX={isXPost(post)}
-                              title={post.content}
-                              label={t('postiz.calendar.eventChip', {
-                                time: formatPostTime(post.publish_date, i18n.language),
-                              })}
+                              title={`${t(calendarStatusKey(post.state, post.publish_date, nowMs))} · ${formatPostTime(post.publish_date, i18n.language)} · ${post.content}`}
+                              label={t(calendarStatusKey(post.state, post.publish_date, nowMs))}
                               onOpen={() => openEdit(post)}
                             />
                           </li>
@@ -2536,9 +2367,16 @@ function AvatarCalendarBoard({
               {editingPost ? (
                 <p className="mt-3">
                   <span
-                    className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${stateBadgeClass(editingPost.state)}`}
+                    className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
+                      calendarStatusKey(editingPost.state, editingPost.publish_date, nowMs) ===
+                      'postiz.calendar.stateNotPublished'
+                        ? stateBadgeClass('ERROR')
+                        : stateBadgeClass(editingPost.state)
+                    }`}
                   >
-                    {t(stateLabelKey(editingPost.state), { state: editingPost.state })}
+                    {t(calendarStatusKey(editingPost.state, editingPost.publish_date, nowMs), {
+                      state: editingPost.state,
+                    })}
                   </span>
                 </p>
               ) : null}
@@ -2839,14 +2677,24 @@ function AvatarCalendarBoard({
                     </button>
                   </>
                 ) : modalMode === 'edit' && composerPlatform === 'x' ? (
-                  <button
-                    type="button"
-                    disabled={saving || !formContent.trim() || !formWhen || mediaBlocksSave}
-                    className={COMPOSER_PRIMARY_BTN}
-                    onClick={() => void submitUpdate()}
-                  >
-                    {t('postiz.calendar.saveChanges')}
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      disabled={saving || deleting}
+                      className={COMPOSER_SECONDARY_BTN}
+                      onClick={() => setDeleteOpen(true)}
+                    >
+                      {t('common.delete')}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={saving || !formContent.trim() || !formWhen || mediaBlocksSave}
+                      className={COMPOSER_PRIMARY_BTN}
+                      onClick={() => void submitUpdate()}
+                    >
+                      {t('postiz.calendar.saveChanges')}
+                    </button>
+                  </>
                 ) : modalMode === 'edit' ? (
                   <>
                     <button

@@ -1,3 +1,4 @@
+import { remoteStatusCode } from './devLog'
 import { supabase } from './supabase'
 import { requireAuthenticatedUserId } from './auth'
 import {
@@ -15,9 +16,12 @@ const LAST_AVATAR_STORAGE_KEY = 'contos_last_avatar_id'
 const LEGACY_LAST_PROJECT_STORAGE_KEY = 'contos_last_project_id'
 
 export class ProjectsServiceError extends Error {
-  constructor(message: string, cause?: unknown) {
+  readonly statusCode: number | null
+
+  constructor(message: string, cause?: unknown, statusCode?: number | null) {
     super(message)
     this.name = 'ProjectsServiceError'
+    this.statusCode = remoteStatusCode(cause, statusCode)
     if (cause instanceof Error) {
       this.cause = cause
     }
@@ -76,6 +80,7 @@ export async function createProject(
       throw new ProjectsServiceError(
         "You've reached the maximum number of avatars on your current plan.",
         error,
+        null,
       )
     }
     throw new ProjectsServiceError(`Failed to create avatar: ${error.message}`, error)

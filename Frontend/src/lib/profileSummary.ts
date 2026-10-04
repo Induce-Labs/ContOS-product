@@ -1,5 +1,6 @@
 import { getAccessToken as getAuthAccessToken } from './auth'
 import { AgentsApiError, getAgentApiBaseUrl } from './agentsApi'
+import { logDevError, remoteStatusCode } from './devLog'
 import { fetchAvatar } from './avatars'
 
 export type ProfileSummarizeResponse = {
@@ -22,6 +23,7 @@ async function getAccessToken(): Promise<string> {
       error instanceof Error
         ? error.message
         : 'You must be signed in to generate a profile summary.',
+      error instanceof Error ? remoteStatusCode(error) : null,
     )
   }
 }
@@ -66,6 +68,12 @@ async function waitForProfileSummary(
           avatar.profile_summary_error.trim()
             ? avatar.profile_summary_error.trim()
             : 'Profile summary generation failed.'
+        logDevError('POST /api/profiling/summarize', {
+          method: 'POST',
+          path: '/api/profiling/summarize',
+          status: 502,
+          error: detail,
+        })
         throw new AgentsApiError(detail, 502)
       }
 
@@ -120,6 +128,12 @@ export async function summarizeProfiling(
           : typeof detail === 'string'
             ? detail
             : `Profile summary request failed (${response.status}).`
+      logDevError('POST /api/profiling/summarize', {
+        method: 'POST',
+        path: '/api/profiling/summarize',
+        status: response.status,
+        error: message,
+      })
       throw new AgentsApiError(message, response.status)
     }
 
@@ -141,6 +155,7 @@ export async function summarizeProfiling(
     }
     throw new AgentsApiError(
       error instanceof Error ? error.message : 'Profile summary request failed.',
+      error instanceof Error ? remoteStatusCode(error) : 500,
     )
   } finally {
     window.clearTimeout(timeoutId)

@@ -8,6 +8,7 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 from app.api.routes.avatars import router as avatars_router
 from app.api.routes.postiz import router as postiz_router
 from app.config import get_settings
+from app.monitoring import capture_server_exception, init_glitchtip
 from app.services.redis_health import ping_redis
 
 settings = get_settings()
@@ -36,6 +37,8 @@ if settings.pipeline_verbose:
         "app.services.instagram_parser",
     ):
         logging.getLogger(logger_name).setLevel(logging.DEBUG)
+
+init_glitchtip(settings.sentry_dsn, settings.sentry_environment)
 
 app = FastAPI(
     title="ContOS API",
@@ -68,9 +71,10 @@ class _UnhandledErrorMiddleware:
 
         try:
             await self.app(scope, receive, _send)
-        except Exception:
+        except Exception as exc:
             if response_started:
                 raise
+            capture_server_exception(exc)
             _logger.exception(
                 "Unhandled request error",
                 extra={"path": scope.get("path"), "method": scope.get("method")},

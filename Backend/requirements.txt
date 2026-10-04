@@ -11,3 +11,4 @@ celery[redis]==5.5.3
 redis==5.2.1
 cryptography==44.0.2
 python-multipart==0.0.20
+sentry-sdk==2.67.0

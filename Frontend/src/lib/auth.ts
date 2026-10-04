@@ -1,13 +1,20 @@
 import type { AuthError, Provider } from '@supabase/supabase-js'
+import { remoteStatusCode } from './devLog'
 import { supabase } from './supabase'
 
 export class AuthServiceError extends Error {
   readonly cause: AuthError | null
+  readonly statusCode: number | null
 
-  constructor(message: string, cause: AuthError | null = null) {
+  constructor(
+    message: string,
+    cause: AuthError | null = null,
+    statusCode?: number | null,
+  ) {
     super(message)
     this.name = 'AuthServiceError'
     this.cause = cause
+    this.statusCode = remoteStatusCode(cause, statusCode)
   }
 }
 
@@ -56,6 +63,7 @@ export function isInvalidOrDeletedUserError(error: {
  */
 export async function clearInvalidSessionAndRedirectToSignUp(
   reason = 'Your account is no longer available. Please sign up again.',
+  statusCode: number | null = null,
 ): Promise<never> {
   try {
     await supabase.auth.signOut({ scope: 'local' })
@@ -71,7 +79,7 @@ export async function clearInvalidSessionAndRedirectToSignUp(
     window.location.replace(SIGNUP_INVALID_SESSION_PATH)
   }
 
-  throw new AuthServiceError(reason)
+  throw new AuthServiceError(reason, null, statusCode)
 }
 
 export async function signInWithEmail(email: string, password: string): Promise<void> {
@@ -170,6 +178,17 @@ async function waitForSession(attempts = 5, delayMs = 400) {
   return null
 }
 
+function clearOAuthCallbackParams(): void {
+  const url = new URL(window.location.href)
+  if (!url.searchParams.has('code') && !url.searchParams.has('error_description')) {
+    return
+  }
+  url.searchParams.delete('code')
+  url.searchParams.delete('error_description')
+  const next = `${url.pathname}${url.search}${url.hash}`
+  window.history.replaceState(window.history.state, '', next)
+}
+
 export async function completeOAuthCallback(): Promise<void> {
   const url = new URL(window.location.href)
   const code = url.searchParams.get('code')
@@ -179,6 +198,8 @@ export async function completeOAuthCallback(): Promise<void> {
   if (oauthError || errorDescription) {
     throw new AuthServiceError(
       decodeURIComponent(errorDescription ?? oauthError ?? 'OAuth sign in was denied'),
+      null,
+      400,
     )
   }
 
@@ -187,6 +208,7 @@ export async function completeOAuthCallback(): Promise<void> {
   if (code) {
     const existing = await waitForSession(6, 300)
     if (existing) {
+      clearOAuthCallbackParams()
       return
     }
 
@@ -195,17 +217,20 @@ export async function completeOAuthCallback(): Promise<void> {
     if (error) {
       const afterExchange = await waitForSession(3, 250)
       if (afterExchange) {
+        clearOAuthCallbackParams()
         return
       }
       if (isRecoverableCodeExchangeError(error)) {
         throw new AuthServiceError(
           'OAuth authorization code was already used and no session is available. Please try signing in again.',
           error,
+          null,
         )
       }
       throw mapAuthError(error, 'Failed to complete OAuth sign in')
     }
 
+    clearOAuthCallbackParams()
     return
   }
 
@@ -215,6 +240,7 @@ export async function completeOAuthCallback(): Promise<void> {
       'No authorization code or session found after OAuth redirect',
     )
   }
+  clearOAuthCallbackParams()
 }
 
 const TOKEN_REFRESH_SKEW_MS = 60_000
@@ -232,7 +258,10 @@ async function ensureFreshSession() {
 
   if (sessionError) {
     if (isInvalidOrDeletedUserError(sessionError)) {
-      return await clearInvalidSessionAndRedirectToSignUp(sessionError.message)
+      return await clearInvalidSessionAndRedirectToSignUp(
+        sessionError.message,
+        typeof sessionError.status === 'number' ? sessionError.status : 400,
+      )
     }
     throw mapAuthError(sessionError, 'Failed to read auth session')
   }
@@ -250,6 +279,11 @@ async function ensureFreshSession() {
     return await clearInvalidSessionAndRedirectToSignUp(
       refreshError?.message ??
         'Your session is no longer valid. Please sign up again.',
+      typeof refreshError?.status === 'number'
+        ? refreshError.status
+        : refreshError
+          ? 400
+          : null,
     )
   }
 

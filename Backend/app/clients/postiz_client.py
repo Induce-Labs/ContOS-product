@@ -53,7 +53,19 @@ _BEARER_RE = re.compile(r"(?i)\bbearer\s+[A-Za-z0-9\-._~+/]+=*")
 _SENSITIVE_JSON_FIELD_RE = re.compile(
     r'(?i)("(?:authorization|access_token|accessToken|refresh_token|refreshToken|'
     r'api_secret|apiSecret|api_key|apiKey|oauth_token|oauth_token_secret|'
-    r'client_secret|clientSecret|encrypted_access_token)"\s*:\s*)"(.*?)"'
+    r'client_secret|clientSecret|encrypted_access_token|password|secret)"\s*:\s*)"(.*?)"'
+)
+_CREDENTIAL_URL_RE = re.compile(
+    r"(?i)\b[a-z][a-z0-9+.-]*://[^\s/@]+:[^\s/@]+@\S+"
+)
+_DATASTORE_URL_RE = re.compile(
+    r"(?i)\b(?:redis|rediss|postgres|postgresql|mysql|mongodb(?:\+srv)?)://\S+"
+)
+_ASSIGNMENT_SECRET_RE = re.compile(
+    r"(?i)\b(access_token|refresh_token|client_secret|api_key|api_secret|"
+    r"oauth_token|oauth_token_secret|token|password|secret|"
+    r"CONTOS_PROVISION_SECRET|POSTIZ_TOKEN_ENCRYPTION_KEY)"
+    r"(\s*[=:]\s*)([^\s&\"']+)"
 )
 
 
@@ -66,14 +78,17 @@ def _is_create_posts_request(method: str, url: str) -> bool:
 def _sanitize_postiz_error_body(body_text: str) -> str:
     """Remove credential-shaped values from a Postiz error body before logging."""
     cleaned = body_text or ""
+    cleaned = _CREDENTIAL_URL_RE.sub("[redacted]", cleaned)
+    cleaned = _DATASTORE_URL_RE.sub("[redacted]", cleaned)
     cleaned = _POS_TOKEN_RE.sub("[redacted]", cleaned)
     cleaned = _BEARER_RE.sub("Bearer [redacted]", cleaned)
     cleaned = _SENSITIVE_JSON_FIELD_RE.sub(r'\1"[redacted]"', cleaned)
+    cleaned = _ASSIGNMENT_SECRET_RE.sub(r"\1\2[redacted]", cleaned)
     return cleaned
 
 
 def _sanitize_upstream_body_preview(body_text: str, *, status_code: int) -> str:
-    """Keep error messages actionable without dumping HTML gateway pages to clients."""
+    """Keep error messages actionable without dumping HTML gateway pages or secrets."""
     cleaned = (body_text or "").strip()
     lowered = cleaned.lower()
     if (
@@ -88,7 +103,10 @@ def _sanitize_upstream_body_preview(body_text: str, *, status_code: int) -> str:
             "finish before the reverse proxy gave up — check Postiz storage "
             "(STORAGE_PROVIDER / R2 / UPLOAD_DIRECTORY) and container logs."
         )
-    return cleaned[:200]
+    redacted = _sanitize_postiz_error_body(cleaned).strip()
+    if not redacted:
+        return f"Postiz request failed with status {status_code}."
+    return redacted[:200]
 
 
 def _extract_postiz_error_message(body: Any) -> str:
@@ -143,6 +161,9 @@ class PostizClient:
 
         self._settings = settings
         self._timeout = httpx.Timeout(connect=10.0, read=30.0, write=30.0, pool=10.0)
+        # POST /posts waits while Postiz publishes to LinkedIn or X. A 30s read
+        # budget aborts that call before Postiz returns.
+        self._publish_timeout = httpx.Timeout(connect=10.0, read=120.0, write=60.0, pool=10.0)
 
     def provision_avatar(self, avatar_id: UUID) -> dict[str, Any]:
         """Ensure a dedicated Postiz org+token for this avatar.
@@ -240,6 +261,7 @@ class PostizClient:
             headers={"Authorization": access_token},
             json_body=payload,
             allow_retries=False,
+            timeout=self._publish_timeout,
         )
 
     def delete_post(self, access_token: str, post_id: str) -> Any:
@@ -645,13 +667,15 @@ class PostizClient:
         allow_retries: bool,
         treat_provision_409: bool = False,
         allow_empty_body: bool = False,
+        timeout: httpx.Timeout | None = None,
     ) -> Any:
         last_error: Exception | None = None
         attempts = _MAX_RETRIES + 1 if allow_retries else 1
+        request_timeout = timeout or self._timeout
 
         for attempt in range(1, attempts + 1):
             try:
-                with httpx.Client(timeout=self._timeout) as client:
+                with httpx.Client(timeout=request_timeout) as client:
                     response = client.request(
                         method,
                         url,
@@ -668,6 +692,8 @@ class PostizClient:
                         "url": _redact_url(url),
                         "attempt": attempt,
                         "error_type": type(error).__name__,
+                        "error_message": str(error)[:300],
+                        "read_timeout_seconds": request_timeout.read,
                     },
                 )
                 if attempt < attempts:

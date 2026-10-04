@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, patch
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 import pytest
 from cryptography.fernet import Fernet
@@ -26,6 +28,7 @@ from app.errors import (
     PostizNotConnectedError,
     PostizPostNotFoundError,
     PostizServiceError,
+    RepositoryError,
 )
 from app.services.postiz_oauth import PostizOAuthService, PostizStatus, SafeIntegration
 from app.services.postiz_posts import PostizPostsService
@@ -159,6 +162,22 @@ class TestPostizUploadErrorSanitization:
             status_code=400,
         )
         assert preview == '{"msg":"Unsupported file type."}'
+
+    def test_error_preview_redacts_secrets_before_return(self) -> None:
+        preview = _sanitize_upstream_body_preview(
+            "Unsupported file type. Authorization: Bearer eyJhbGciOi.sig "
+            "token pos_live_example client_secret=oauth-secret "
+            "redis://user:pass@redis:6379/0 "
+            '{"access_token":"pos_json_example","oauth_token_secret":"x-secret"}',
+            status_code=400,
+        )
+        assert "Unsupported file type." in preview
+        assert "pos_" not in preview
+        assert "Bearer eyJ" not in preview
+        assert "oauth-secret" not in preview
+        assert "x-secret" not in preview
+        assert "user:pass@" not in preview
+        assert "redis://" not in preview
 
     def test_upload_log_extra_must_not_use_reserved_filename_key(self) -> None:
         """Logging extra key `filename` crashes LogRecord and becomes ContOS 500."""
@@ -365,6 +384,20 @@ class TestPostizProvisionSecretNormalization:
 
 
 class TestPostizClientNavigation:
+    def test_create_post_uses_the_publish_read_timeout(self) -> None:
+        client = PostizClient(_settings())
+        response = MagicMock()
+        response.status_code = 200
+        response.text = '{"ok": true}'
+        response.json.return_value = {"ok": True}
+        with patch("app.clients.postiz_client.httpx.Client") as client_cls:
+            instance = client_cls.return_value.__enter__.return_value
+            instance.request.return_value = response
+            client.create_post("pos_" + ("a" * 32), {"type": "draft", "posts": []})
+        timeout = client_cls.call_args.kwargs["timeout"]
+        assert timeout.read == 120.0
+        assert client._timeout.read == 30.0
+
     def test_rejects_disallowed_navigation_origin(self) -> None:
         client = PostizClient(_settings())
         with pytest.raises(PostizServiceError):
@@ -532,6 +565,82 @@ class TestPostizOAuthService:
             picture="https://example.com/sheema.jpg",
         )
 
+    def test_status_does_not_offer_other_linkedin_accounts_when_stored_id_is_missing(self) -> None:
+        settings = _settings()
+        repository = MagicMock()
+        client = MagicMock()
+        repository.get_connection.return_value = _connection(
+            settings=settings,
+            integration_id="li-gone",
+            x_integration_id="x-kept",
+        )
+        repository.get_connection_by_integration_id.return_value = None
+        client.list_integrations.return_value = [
+            {
+                "id": "x-kept",
+                "name": "contos",
+                "identifier": "x",
+                "disabled": False,
+            },
+            {
+                "id": "li-live-1",
+                "name": "First",
+                "identifier": "linkedin",
+                "disabled": False,
+            },
+            {
+                "id": "li-live-2",
+                "name": "Second",
+                "identifier": "linkedin",
+                "disabled": False,
+            },
+        ]
+        service = _service(settings=settings, client=client, repository=repository)
+        status = service.get_status(contos_user_id=USER_A, avatar_id=AVATAR_A)
+        repository.clear_integration_id.assert_not_called()
+        repository.claim_integration.assert_not_called()
+        assert status.connected is False
+        assert status.claim_candidates == ()
+
+    def test_status_keeps_stored_linkedin_id_when_postiz_returns_empty(self) -> None:
+        settings = _settings()
+        repository = MagicMock()
+        client = MagicMock()
+        repository.get_connection.return_value = _connection(
+            settings=settings,
+            integration_id="li-sheema",
+        )
+        client.list_integrations.return_value = []
+        service = _service(settings=settings, client=client, repository=repository)
+        status = service.get_status(contos_user_id=USER_A, avatar_id=AVATAR_A)
+        repository.clear_integration_id.assert_not_called()
+        assert status.connected is False
+        assert status.claim_candidates == ()
+
+    def test_status_does_not_claim_a_preexisting_linkedin_when_stored_id_is_missing(self) -> None:
+        settings = _settings()
+        repository = MagicMock()
+        client = MagicMock()
+        repository.get_connection.return_value = _connection(
+            settings=settings,
+            integration_id="li-gone",
+        )
+        repository.get_connection_by_integration_id.return_value = None
+        client.list_integrations.return_value = [
+            {
+                "id": "li-live",
+                "name": "Only",
+                "identifier": "linkedin",
+                "disabled": False,
+            },
+        ]
+        service = _service(settings=settings, client=client, repository=repository)
+        status = service.get_status(contos_user_id=USER_A, avatar_id=AVATAR_A)
+        repository.clear_integration_id.assert_not_called()
+        repository.claim_integration.assert_not_called()
+        assert status.connected is False
+        assert status.claim_candidates == ()
+
     def test_status_false_without_guessing_when_unbound_and_multiple_linkedin(
         self,
     ) -> None:
@@ -588,10 +697,11 @@ class TestPostizOAuthService:
             PostizStatus(connected=False, integration=None),
         )
         status = service.get_status(contos_user_id=USER_A, avatar_id=AVATAR_A)
-        assert [c.id for c in status.claim_candidates] == ["li-1", "li-2"]
+        assert status.connected is False
+        assert status.claim_candidates == ()
         repository.claim_integration.assert_not_called()
 
-    def test_manual_claim_binds_selected_integration(self) -> None:
+    def test_manual_claim_is_rejected(self) -> None:
         settings = _settings()
         repository = MagicMock()
         client = MagicMock()
@@ -618,17 +728,13 @@ class TestPostizOAuthService:
         client.list_integrations.return_value = integrations
         service = _service(settings=settings, client=client, repository=repository)
         service._store_linkedin_snapshot(AVATAR_A, integrations)
-        status = service.claim_linkedin_integration(
-            contos_user_id=USER_A,
-            avatar_id=AVATAR_A,
-            integration_id="li-1",
-        )
-        assert status.connected is True
-        repository.claim_integration.assert_called_once_with(
-            contos_user_id=USER_A,
-            avatar_id=AVATAR_A,
-            postiz_integration_id="li-1",
-        )
+        with pytest.raises(PostizIntegrationClaimError, match="cannot select"):
+            service.claim_linkedin_integration(
+                contos_user_id=USER_A,
+                avatar_id=AVATAR_A,
+                integration_id="li-1",
+            )
+        repository.claim_integration.assert_not_called()
 
     def test_claim_rejects_integration_owned_by_other_avatar(self) -> None:
         settings = _settings()
@@ -2604,6 +2710,44 @@ class TestPostizX:
                 thread=("Edit", "Reply"),
             )
 
+    def test_x_delete_allows_draft_and_scheduled_only(self) -> None:
+        service, client, _repository, _settings_obj = self._ready()
+        client.delete_post.return_value = {"id": "px"}
+
+        for state in ("DRAFT", "QUEUE"):
+            client.delete_post.reset_mock()
+            client.list_posts.return_value = [
+                _raw_post(
+                    post_id="px",
+                    content="Old",
+                    integration_id="x-a",
+                    state=state,
+                ),
+            ]
+            service.delete_post(
+                contos_user_id=USER_A,
+                avatar_id=AVATAR_A,
+                post_id="px",
+            )
+            client.delete_post.assert_called_once_with("pos_token_a", "px")
+
+        client.delete_post.reset_mock()
+        client.list_posts.return_value = [
+            _raw_post(
+                post_id="px",
+                content="Live",
+                integration_id="x-a",
+                state="PUBLISHED",
+            ),
+        ]
+        with pytest.raises(PostizBadRequestError, match="Only draft and scheduled"):
+            service.delete_post(
+                contos_user_id=USER_A,
+                avatar_id=AVATAR_A,
+                post_id="px",
+            )
+        client.delete_post.assert_not_called()
+
     def test_list_returns_linkedin_and_x_posts_for_same_avatar(self) -> None:
         settings = _settings()
         client = MagicMock()
@@ -2740,3 +2884,447 @@ class TestPostizX:
         assert {post.integration_id for post in b_posts} == {"li-b", "x-b"}
         assert "li-a" not in {post.integration_id for post in b_posts}
         assert "x-a" not in {post.integration_id for post in b_posts}
+
+
+def _kolkata(year: int, month: int, day: int, hour: int = 12) -> datetime:
+    return datetime(year, month, day, hour, 0, 0, tzinfo=ZoneInfo("Asia/Kolkata"))
+
+
+class TestPostizMonthlyConsistency:
+    """Published LinkedIn/X roots bucketed into one local calendar month."""
+
+    def _service(
+        self,
+        posts: list[dict[str, Any]] | None,
+        *,
+        integration_id: str | None = "li-a",
+        x_integration_id: str | None = "x-a",
+        user_id: UUID = USER_A,
+        connected: bool = True,
+    ) -> tuple[PostizPostsService, MagicMock]:
+        settings = _settings()
+        client = MagicMock()
+        repository = MagicMock()
+        if connected:
+            repository.get_connection.return_value = _connection(
+                settings=settings,
+                avatar_id=AVATAR_A,
+                user_id=user_id,
+                integration_id=integration_id,
+                x_integration_id=x_integration_id,
+                token=b"pos_token_a",
+            )
+        else:
+            repository.get_connection.return_value = None
+        client.list_posts.return_value = posts or []
+        return (
+            _posts_service(settings=settings, client=client, repository=repository),
+            client,
+        )
+
+    def _load(
+        self,
+        posts: list[dict[str, Any]] | None,
+        *,
+        month: str,
+        now: datetime,
+        integration_id: str | None = "li-a",
+        x_integration_id: str | None = "x-a",
+        user_id: UUID = USER_A,
+        connected: bool = True,
+        timezone: str = "Asia/Kolkata",
+    ):
+        service, client = self._service(
+            posts,
+            integration_id=integration_id,
+            x_integration_id=x_integration_id,
+            user_id=user_id,
+            connected=connected,
+        )
+        result = service.monthly_consistency(
+            contos_user_id=USER_A,
+            avatar_id=AVATAR_A,
+            month=month,
+            timezone_name=timezone,
+            now=now,
+        )
+        return result, client
+
+    def test_current_month_with_no_posts(self) -> None:
+        result, _client = self._load([], month="2026-09", now=_kolkata(2026, 9, 29))
+        assert result.connected is True
+        assert result.posted_days == 0
+        assert result.current_streak == 0
+        assert result.longest_streak == 0
+        assert result.days_in_month == 30
+        assert len(result.days) == 30
+        assert result.days[0].date == "2026-09-01"
+        assert result.days[-1].date == "2026-09-30"
+        assert result.days[-1].is_today is False
+        assert result.days[28].date == "2026-09-29"
+        assert result.days[28].is_today is True
+        assert result.days[28].posted is False
+
+    def test_one_published_post_uses_local_day_not_utc_date(self) -> None:
+        # 2026-08-31 20:00 UTC is 2026-09-01 01:30 in Asia/Kolkata.
+        result, _client = self._load(
+            [
+                _raw_post(
+                    post_id="p1",
+                    content="hello",
+                    integration_id="li-a",
+                    state="PUBLISHED",
+                    publish_date="2026-08-31T20:00:00Z",
+                ),
+            ],
+            month="2026-09",
+            now=_kolkata(2026, 9, 1, 10),
+        )
+        assert result.posted_days == 1
+        assert result.total_published_posts == 1
+        assert result.days[0].posted is True
+        assert result.days[0].is_today is True
+        assert result.current_streak == 1
+
+    def test_multiple_posts_same_day_count_as_one_posted_day(self) -> None:
+        result, _client = self._load(
+            [
+                _raw_post(
+                    post_id="p1",
+                    content="a",
+                    integration_id="li-a",
+                    state="PUBLISHED",
+                    publish_date="2026-09-10T04:30:00Z",
+                ),
+                _raw_post(
+                    post_id="p2",
+                    content="b",
+                    integration_id="li-a",
+                    state="PUBLISHED",
+                    publish_date="2026-09-10T12:30:00Z",
+                ),
+            ],
+            month="2026-09",
+            now=_kolkata(2026, 9, 10),
+        )
+        assert result.posted_days == 1
+        assert result.total_published_posts == 2
+        assert result.linkedin_posted_days == 1
+
+    def test_linkedin_and_x_same_day_count_as_one_posted_day(self) -> None:
+        result, _client = self._load(
+            [
+                _raw_post(
+                    post_id="li",
+                    content="li",
+                    integration_id="li-a",
+                    state="PUBLISHED",
+                    publish_date="2026-09-10T04:30:00Z",
+                ),
+                _raw_post(
+                    post_id="x",
+                    content="x",
+                    integration_id="x-a",
+                    state="PUBLISHED",
+                    publish_date="2026-09-10T10:30:00Z",
+                ),
+            ],
+            month="2026-09",
+            now=_kolkata(2026, 9, 10),
+        )
+        assert result.posted_days == 1
+        assert result.linkedin_posted_days == 1
+        assert result.x_posted_days == 1
+        assert result.total_published_posts == 2
+
+    def test_x_thread_root_counts_as_one_posted_day(self) -> None:
+        """GET /posts returns the thread root only, so one root is one day."""
+        result, _client = self._load(
+            [
+                _raw_post(
+                    post_id="thread-root",
+                    content="1/5",
+                    integration_id="x-a",
+                    state="PUBLISHED",
+                    publish_date="2026-09-12T06:00:00Z",
+                ),
+            ],
+            month="2026-09",
+            now=_kolkata(2026, 9, 12),
+        )
+        assert result.posted_days == 1
+        assert result.x_posted_days == 1
+        assert result.total_published_posts == 1
+
+    def test_draft_queue_error_and_interval_are_ignored(self) -> None:
+        day = "2026-09-12T06:00:00Z"
+        ignored = []
+        for state in ("DRAFT", "QUEUE", "ERROR"):
+            ignored.append(
+                _raw_post(
+                    post_id=state,
+                    content=state,
+                    integration_id="li-a",
+                    state=state,
+                    publish_date=day,
+                ),
+            )
+        repeating = _raw_post(
+            post_id="repeat",
+            content="repeat",
+            integration_id="li-a",
+            state="PUBLISHED",
+            publish_date=day,
+        )
+        repeating["intervalInDays"] = 7
+        child = _raw_post(
+            post_id="child",
+            content="reply",
+            integration_id="x-a",
+            state="PUBLISHED",
+            publish_date=day,
+        )
+        child["parentPostId"] = "thread-root"
+        result, _client = self._load(
+            ignored + [repeating, child],
+            month="2026-09",
+            now=_kolkata(2026, 9, 12),
+        )
+        assert result.posted_days == 0
+        assert result.total_published_posts == 0
+
+    def test_consecutive_days_and_gap_reset_streak(self) -> None:
+        posts = [
+            _raw_post(
+                post_id=f"d{day}",
+                content="x",
+                integration_id="li-a",
+                state="PUBLISHED",
+                publish_date=f"2026-09-{day:02d}T06:00:00Z",
+            )
+            for day in (1, 2, 3, 5, 6)
+        ]
+        result, _client = self._load(posts, month="2026-09", now=_kolkata(2026, 9, 6))
+        assert result.current_streak == 2
+        assert result.longest_streak == 3
+        assert result.posted_days == 5
+
+    def test_today_pending_keeps_streak_when_yesterday_posted(self) -> None:
+        posts = [
+            _raw_post(
+                post_id=f"d{day}",
+                content="x",
+                integration_id="li-a",
+                state="PUBLISHED",
+                publish_date=f"2026-09-{day:02d}T06:00:00Z",
+            )
+            for day in (25, 26, 27)
+        ]
+        result, _client = self._load(posts, month="2026-09", now=_kolkata(2026, 9, 28))
+        assert result.days[27].is_today is True
+        assert result.days[27].posted is False
+        assert result.current_streak == 3
+        assert result.longest_streak == 3
+
+    def test_today_pending_and_yesterday_missing_resets_streak(self) -> None:
+        posts = [
+            _raw_post(
+                post_id=f"d{day}",
+                content="x",
+                integration_id="li-a",
+                state="PUBLISHED",
+                publish_date=f"2026-09-{day:02d}T06:00:00Z",
+            )
+            for day in (25, 26, 27)
+        ]
+        result, _client = self._load(posts, month="2026-09", now=_kolkata(2026, 9, 29))
+        assert result.current_streak == 0
+        assert result.longest_streak == 3
+
+    def test_historical_month_current_streak_is_null_and_longest_is_inside_month(self) -> None:
+        posts = [
+            _raw_post(
+                post_id=f"d{day}",
+                content="x",
+                integration_id="li-a",
+                state="PUBLISHED",
+                publish_date=f"2026-08-{day:02d}T06:00:00Z",
+            )
+            for day in (1, 2, 3, 4, 10, 11)
+        ]
+        result, _client = self._load(posts, month="2026-08", now=_kolkata(2026, 9, 2))
+        assert result.current_streak is None
+        assert result.longest_streak == 4
+        assert result.posted_days == 6
+        assert all(day.is_today is False for day in result.days)
+        assert result.days_in_month == 31
+
+    def test_streak_does_not_cross_month_boundary(self) -> None:
+        posts = [
+            _raw_post(
+                post_id="aug",
+                content="aug",
+                integration_id="li-a",
+                state="PUBLISHED",
+                publish_date="2026-08-31T06:00:00Z",
+            ),
+            _raw_post(
+                post_id="sep",
+                content="sep",
+                integration_id="li-a",
+                state="PUBLISHED",
+                publish_date="2026-09-01T06:00:00Z",
+            ),
+        ]
+        september, _client = self._load(posts, month="2026-09", now=_kolkata(2026, 9, 2))
+        assert september.posted_days == 1
+        assert september.current_streak == 1
+        assert september.longest_streak == 1
+        opening, _client = self._load(
+            [posts[0]],
+            month="2026-09",
+            now=_kolkata(2026, 9, 1, 8),
+        )
+        assert opening.days[0].posted is False
+        assert opening.current_streak == 0
+        august, _client = self._load(posts, month="2026-08", now=_kolkata(2026, 9, 2))
+        assert august.current_streak is None
+        assert august.posted_days == 1
+        assert august.longest_streak == 1
+
+    def test_month_lengths(self) -> None:
+        february, _client = self._load([], month="2026-02", now=_kolkata(2026, 2, 10))
+        september, _client = self._load([], month="2026-09", now=_kolkata(2026, 9, 10))
+        october, _client = self._load([], month="2026-10", now=_kolkata(2026, 10, 10))
+        assert february.days_in_month == 28
+        assert len(february.days) == 28
+        assert september.days_in_month == 30
+        assert len(september.days) == 30
+        assert october.days_in_month == 31
+        assert len(october.days) == 31
+
+    def test_invalid_timezone_and_future_month(self) -> None:
+        service, _client = self._service([])
+        with pytest.raises(PostizBadRequestError, match="IANA"):
+            service.monthly_consistency(
+                contos_user_id=USER_A,
+                avatar_id=AVATAR_A,
+                month="2026-09",
+                timezone_name="Not/AZone",
+                now=_kolkata(2026, 9, 10),
+            )
+        with pytest.raises(PostizBadRequestError, match="future"):
+            service.monthly_consistency(
+                contos_user_id=USER_A,
+                avatar_id=AVATAR_A,
+                month="2099-01",
+                timezone_name="Asia/Kolkata",
+                now=_kolkata(2026, 9, 10),
+            )
+
+    def test_other_integration_and_outside_month_are_ignored(self) -> None:
+        result, _client = self._load(
+            [
+                _raw_post(
+                    post_id="other",
+                    content="other",
+                    integration_id="li-other",
+                    state="PUBLISHED",
+                    publish_date="2026-09-10T06:00:00Z",
+                ),
+                _raw_post(
+                    post_id="october",
+                    content="oct",
+                    integration_id="li-a",
+                    state="PUBLISHED",
+                    publish_date="2026-10-01T06:00:00Z",
+                ),
+            ],
+            month="2026-09",
+            now=_kolkata(2026, 9, 15),
+        )
+        assert result.posted_days == 0
+        assert result.total_published_posts == 0
+
+    def test_disconnected_avatar_returns_empty_month_without_postiz_call(self) -> None:
+        result, client = self._load(
+            [],
+            month="2026-09",
+            now=_kolkata(2026, 9, 15),
+            connected=False,
+        )
+        assert result.connected is False
+        assert result.posted_days == 0
+        assert result.current_streak == 0
+        assert len(result.days) == 30
+        client.list_posts.assert_not_called()
+
+    def test_missing_channel_ids_are_disconnected(self) -> None:
+        result, client = self._load(
+            [],
+            month="2026-09",
+            now=_kolkata(2026, 9, 15),
+            integration_id=None,
+            x_integration_id=None,
+        )
+        assert result.connected is False
+        client.list_posts.assert_not_called()
+
+    def test_query_window_is_the_local_month(self) -> None:
+        _result, client = self._load([], month="2026-09", now=_kolkata(2026, 9, 15))
+        client.list_posts.assert_called_once()
+        _token, kwargs = client.list_posts.call_args.args[0], client.list_posts.call_args.kwargs
+        assert kwargs["start_date"] == "2026-09-01T00:00:00+05:30"
+        assert kwargs["end_date"] == "2026-09-30T23:59:59+05:30"
+        assert _token == client.list_posts.call_args.args[0]
+
+    def test_connection_for_another_user_is_rejected(self) -> None:
+        service, _client = self._service([], user_id=USER_B)
+        with pytest.raises(RepositoryError, match="different ContOS user"):
+            service.monthly_consistency(
+                contos_user_id=USER_A,
+                avatar_id=AVATAR_A,
+                month="2026-09",
+                timezone_name="Asia/Kolkata",
+                now=_kolkata(2026, 9, 15),
+            )
+
+    def test_consistency_route_auth_timezone_and_ownership(self) -> None:
+        from app.api.deps import get_current_user_id
+        from app.main import app
+
+        client = TestClient(app)
+        assert (
+            client.get(
+                f"/api/postiz/consistency?avatar_id={AVATAR_A}&month=2026-09&timezone=Asia/Kolkata",
+            ).status_code
+            == 401
+        )
+
+        app.dependency_overrides[get_current_user_id] = lambda: USER_A
+        try:
+            with patch("app.api.routes.postiz.SupabaseRepository") as repo_cls:
+                repo_cls.return_value.verify_avatar_owner.side_effect = RepositoryError(
+                    "Avatar not found or you do not have permission to access it.",
+                )
+                denied = client.get(
+                    f"/api/postiz/consistency?avatar_id={AVATAR_B}&month=2026-09&timezone=Asia/Kolkata",
+                )
+                assert denied.status_code == 404
+
+            with patch("app.api.routes.postiz.SupabaseRepository") as repo_cls:
+                repo_cls.return_value.verify_avatar_owner.return_value = None
+                with patch("app.api.routes.postiz._get_posts_service") as posts_factory:
+                    service, _postiz = self._service([])
+                    posts_factory.return_value = service
+                    bad_zone = client.get(
+                        f"/api/postiz/consistency?avatar_id={AVATAR_A}&month=2026-09&timezone=Not/AZone",
+                    )
+                    assert bad_zone.status_code == 400
+                    assert "IANA" in bad_zone.json()["detail"]
+                    future = client.get(
+                        f"/api/postiz/consistency?avatar_id={AVATAR_A}&month=2099-01&timezone=Asia/Kolkata",
+                    )
+                    assert future.status_code == 400
+        finally:
+            app.dependency_overrides.clear()

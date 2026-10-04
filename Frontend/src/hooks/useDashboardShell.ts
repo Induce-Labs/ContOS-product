@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { logDevError, userFacingMessage } from '../lib/devLog'
 import { useAuth } from './useAuth'
 import {
   fetchUserProjects,
@@ -52,9 +53,10 @@ export function useDashboardShell() {
       const userProjects = await fetchUserProjects()
       setProjects(userProjects)
     } catch (error) {
-      setProjectsFetchError(
-        error instanceof Error ? error.message : 'Failed to load dashboard',
-      )
+      logDevError('dashboard load projects', {
+        error: error instanceof Error ? error.message : String(error),
+      })
+      setProjectsFetchError(userFacingMessage(error, 'Failed to load dashboard'))
     } finally {
       setProjectsLoading(false)
     }
@@ -89,7 +91,10 @@ export function useDashboardShell() {
       await signOut()
       navigate('/login', { replace: true })
     } catch (error) {
-      setProjectsFetchError(error instanceof Error ? error.message : 'Sign out failed')
+      logDevError('dashboard sign out', {
+        error: error instanceof Error ? error.message : String(error),
+      })
+      setProjectsFetchError(userFacingMessage(error, 'Sign out failed'))
       setIsSigningOut(false)
     }
   }

@@ -1,5 +1,6 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { logDevError, userFacingMessage } from '../lib/devLog'
 import type { ProfilingQuestionDef } from '../config/onboardingProfilingQuestions'
 import {
   buildLocalizedQuestionnaire,
@@ -90,9 +91,10 @@ export function useLocalizedQuestionnaire(
           return
         }
         setLocalized({ displayQuestions: canonicalQuestions, optionMaps: {} })
-        setTranslationError(
-          error instanceof Error ? error.message : t('agents.translationFailed'),
-        )
+        logDevError('localized questionnaire', {
+          error: error instanceof Error ? error.message : String(error),
+        })
+        setTranslationError(userFacingMessage(error, t('agents.translationFailed')))
       } finally {
         if (!cancelled && requestId === requestIdRef.current) {
           setIsTranslating(false)

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { Link, useNavigate } from 'react-router-dom'
 import i18n from '../i18n'
 import { completeOAuthCallback } from '../lib/auth'
+import { logDevError, userFacingMessage } from '../lib/devLog'
 import { hydrateAppLanguageFromProfile } from '../lib/onboarding'
 import { resolvePostAuthPath } from '../lib/projects'
 
@@ -67,9 +68,10 @@ export function AuthCallbackPage() {
       } catch (error) {
         if (!settledRef.current) {
           settledRef.current = true
-          setErrorMessage(
-            error instanceof Error ? error.message : unexpectedMessage,
-          )
+          logDevError('auth callback', {
+            error: error instanceof Error ? error.message : String(error),
+          })
+          setErrorMessage(userFacingMessage(error, unexpectedMessage))
         }
       }
     }

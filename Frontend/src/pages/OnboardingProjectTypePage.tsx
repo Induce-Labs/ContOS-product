@@ -8,6 +8,7 @@ import {
   defaultAvatarNameForType,
 } from '../lib/avatars'
 import { advanceOnboardingStep } from '../lib/onboarding'
+import { logDevError, userFacingMessage } from '../lib/devLog'
 import { setLastUsedProjectId } from '../lib/projects'
 import type { ProjectType } from '../types/contos'
 
@@ -38,10 +39,14 @@ function OnboardingProjectTypeContent() {
       })
       navigate('/onboarding/profiling', { replace: true })
     } catch (error) {
+      logDevError('onboarding create avatar', {
+        error: error instanceof Error ? error.message : String(error),
+      })
       setErrorMessage(
-        error instanceof Error
-          ? error.message
-          : `Failed to create avatar (max ${MAX_AVATARS} on Basic plan).`,
+        userFacingMessage(
+          error,
+          `Failed to create avatar (max ${MAX_AVATARS} on Basic plan).`,
+        ),
       )
       setIsSubmitting(false)
     }

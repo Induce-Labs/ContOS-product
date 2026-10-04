@@ -1,4 +1,7 @@
 import { getAccessToken } from './auth'
+import { consistencyRequestUrl, type ConsistencyDay } from './consistency'
+import { logDevError, remoteStatusCode } from './devLog'
+import { reportServerFailure } from './glitchtip'
 import { getApiBaseUrl } from './supabase'
 
 export class PostizApiError extends Error {
@@ -8,6 +11,7 @@ export class PostizApiError extends Error {
     super(message)
     this.name = 'PostizApiError'
     this.statusCode = statusCode
+    reportServerFailure(this, statusCode)
   }
 }
 
@@ -164,6 +168,7 @@ async function requireAccessToken(): Promise<string> {
   } catch (error: unknown) {
     throw new PostizApiError(
       error instanceof Error ? error.message : 'You must be signed in to continue.',
+      error instanceof Error ? remoteStatusCode(error) : null,
     )
   }
 }
@@ -189,6 +194,21 @@ async function readErrorDetail(response: Response): Promise<string> {
   }
 
   return bodyText
+}
+
+async function throwPostizResponse(
+  response: Response,
+  method: string,
+  path: string,
+): Promise<never> {
+  const detail = await readErrorDetail(response)
+  logDevError(`${method} ${path}`, {
+    method,
+    path,
+    status: response.status,
+    error: detail,
+  })
+  throw new PostizApiError(detail, response.status)
 }
 
 function requireAvatarId(avatarId: string): string {
@@ -219,7 +239,7 @@ export async function getPostizStatus(
   })
 
   if (!response.ok) {
-    throw new PostizApiError(await readErrorDetail(response), response.status)
+    await throwPostizResponse(response, 'GET', '/api/postiz/status')
   }
 
   return parseStatusResponse(await response.json(), 'status')
@@ -242,7 +262,7 @@ export async function claimPostizIntegration(
   })
 
   if (!response.ok) {
-    throw new PostizApiError(await readErrorDetail(response), response.status)
+    await throwPostizResponse(response, 'POST', '/api/postiz/claim')
   }
 
   return parseStatusResponse(await response.json(), 'claim')
@@ -268,7 +288,7 @@ export async function startPostizConnect(
   })
 
   if (!response.ok) {
-    throw new PostizApiError(await readErrorDetail(response), response.status)
+    await throwPostizResponse(response, 'GET', '/api/postiz/connect')
   }
 
   const data: unknown = await response.json()
@@ -475,7 +495,7 @@ export async function listPostizPosts(
   })
 
   if (!response.ok) {
-    throw new PostizApiError(await readErrorDetail(response), response.status)
+    await throwPostizResponse(response, 'GET', '/api/postiz/posts')
   }
 
   const data: unknown = await response.json()
@@ -512,7 +532,7 @@ export async function createPostizPost(input: {
   })
 
   if (!response.ok) {
-    throw new PostizApiError(await readErrorDetail(response), response.status)
+    await throwPostizResponse(response, 'POST', '/api/postiz/posts')
   }
   return response.json()
 }
@@ -537,7 +557,7 @@ export async function uploadPostizMedia(
   })
 
   if (!response.ok) {
-    throw new PostizApiError(await readErrorDetail(response), response.status)
+    await throwPostizResponse(response, 'POST', '/api/postiz/upload')
   }
   // ContOS returns 200 with MediaItemResponse; Postiz upstream often used 201.
   // response.ok is true for both 200–299 — never treat 201 as failure here.
@@ -586,7 +606,7 @@ export async function changePostizPostStatus(
   )
 
   if (!response.ok) {
-    throw new PostizApiError(await readErrorDetail(response), response.status)
+    await throwPostizResponse(response, 'PUT', '/api/postiz/posts/status')
   }
   return response.json()
 }
@@ -607,7 +627,7 @@ export async function deletePostizPost(avatarId: string, postId: string): Promis
   })
 
   if (!response.ok) {
-    throw new PostizApiError(await readErrorDetail(response), response.status)
+    await throwPostizResponse(response, 'DELETE', '/api/postiz/posts')
   }
   return response.json()
 }
@@ -632,7 +652,7 @@ export async function disconnectPostizIntegration(
   })
 
   if (!response.ok) {
-    throw new PostizApiError(await readErrorDetail(response), response.status)
+    await throwPostizResponse(response, 'DELETE', '/api/postiz/integration')
   }
 
   const data: unknown = await response.json()
@@ -648,4 +668,97 @@ export async function disconnectPostizIntegration(
     disconnected: (data as PostizDisconnectResponse).disconnected,
     warning: (data as PostizDisconnectResponse).warning,
   }
+}
+
+export type PostizConsistency = {
+  avatar_id: string
+  timezone: string
+  month: string
+  days_in_month: number
+  connected: boolean
+  posted_days: number
+  current_streak: number | null
+  longest_streak: number
+  total_published_posts: number
+  linkedin_posted_days: number
+  x_posted_days: number
+  days: ConsistencyDay[]
+}
+
+function parseConsistencyDay(value: unknown, index: number): ConsistencyDay {
+  if (typeof value !== 'object' || value === null) {
+    throw new PostizApiError(`Consistency day at index ${index} is invalid.`)
+  }
+  const day = value as Record<string, unknown>
+  if (typeof day.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(day.date)) {
+    throw new PostizApiError(`Consistency day at index ${index} is missing a YYYY-MM-DD date.`)
+  }
+  if (typeof day.posted !== 'boolean' || typeof day.is_today !== 'boolean') {
+    throw new PostizApiError(`Consistency day at index ${index} is missing posted or is_today.`)
+  }
+  return { date: day.date, posted: day.posted, is_today: day.is_today }
+}
+
+export function parsePostizConsistency(value: unknown): PostizConsistency {
+  if (typeof value !== 'object' || value === null) {
+    throw new PostizApiError('Consistency response was not an object.')
+  }
+  const item = value as Record<string, unknown>
+  if (
+    typeof item.avatar_id !== 'string' ||
+    typeof item.timezone !== 'string' ||
+    typeof item.month !== 'string' ||
+    typeof item.days_in_month !== 'number' ||
+    typeof item.connected !== 'boolean' ||
+    typeof item.posted_days !== 'number' ||
+    typeof item.longest_streak !== 'number' ||
+    typeof item.total_published_posts !== 'number' ||
+    typeof item.linkedin_posted_days !== 'number' ||
+    typeof item.x_posted_days !== 'number' ||
+    !Array.isArray(item.days)
+  ) {
+    throw new PostizApiError('Consistency response is missing required fields.')
+  }
+  if (item.current_streak !== null && typeof item.current_streak !== 'number') {
+    throw new PostizApiError('Consistency current_streak must be a number or null.')
+  }
+  if (item.days.length !== item.days_in_month) {
+    throw new PostizApiError(
+      `Consistency returned ${item.days.length} days for a ${item.days_in_month}-day month.`,
+    )
+  }
+  return {
+    avatar_id: item.avatar_id,
+    timezone: item.timezone,
+    month: item.month,
+    days_in_month: item.days_in_month,
+    connected: item.connected,
+    posted_days: item.posted_days,
+    current_streak: item.current_streak,
+    longest_streak: item.longest_streak,
+    total_published_posts: item.total_published_posts,
+    linkedin_posted_days: item.linkedin_posted_days,
+    x_posted_days: item.x_posted_days,
+    days: item.days.map(parseConsistencyDay),
+  }
+}
+
+export async function getPostizConsistency(
+  avatarId: string,
+  month: string,
+  timezone: string,
+): Promise<PostizConsistency> {
+  const accessToken = await requireAccessToken()
+  const id = requireAvatarId(avatarId)
+  const url = consistencyRequestUrl(getApiBaseUrl(), id, month, timezone)
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  })
+  if (!response.ok) {
+    await throwPostizResponse(response, 'GET', '/api/postiz/consistency')
+  }
+  return parsePostizConsistency(await response.json())
 }

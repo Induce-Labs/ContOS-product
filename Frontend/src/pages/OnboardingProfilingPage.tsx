@@ -11,6 +11,7 @@ import {
   getOnboardingAvatarId,
 } from "../lib/onboarding";
 import { useEffect, useState } from "react";
+import { logDevError, userFacingMessage } from "../lib/devLog";
 
 function OnboardingProfilingContent() {
   const navigate = useNavigate();
@@ -34,10 +35,11 @@ function OnboardingProfilingContent() {
         }
       } catch (error) {
         if (isMounted) {
+          logDevError("onboarding profiling avatar", {
+            error: error instanceof Error ? error.message : String(error),
+          });
           setResolveError(
-            error instanceof Error
-              ? error.message
-              : "Failed to load onboarding avatar.",
+            userFacingMessage(error, "Failed to load onboarding avatar."),
           );
         }
       } finally {

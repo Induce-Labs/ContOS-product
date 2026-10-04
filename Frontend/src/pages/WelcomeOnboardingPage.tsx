@@ -6,6 +6,7 @@ import welcomeCard2 from '../assets/welcome-card-2.png'
 import welcomeCard3 from '../assets/welcome-card-3.png'
 import welcomeCard4 from '../assets/welcome-card-4.png'
 import { isOnboardingComplete, advanceOnboardingStep, getOnboardingStep, needsLanguageSelection, ONBOARDING_LANGUAGE_PATH, resolveOnboardingPath } from '../lib/onboarding'
+import { logDevError, userFacingMessage } from '../lib/devLog'
 import { resolveDashboardPath } from '../lib/projects'
 
 type OnboardingModule = {
@@ -145,11 +146,10 @@ export function WelcomeOnboardingPage() {
         setIsLoading(false)
       } catch (error) {
         if (isMounted) {
-          setErrorMessage(
-            error instanceof Error
-              ? error.message
-              : t('onboarding.welcome.loadStateFailed'),
-          )
+          logDevError('onboarding welcome load', {
+            error: error instanceof Error ? error.message : String(error),
+          })
+          setErrorMessage(userFacingMessage(error, t('onboarding.welcome.loadStateFailed')))
           setIsLoading(false)
         }
       }
@@ -170,9 +170,10 @@ export function WelcomeOnboardingPage() {
       await advanceOnboardingStep('project_type')
       navigate('/onboarding/project', { replace: true })
     } catch (error) {
-      setErrorMessage(
-        error instanceof Error ? error.message : t('onboarding.welcome.completeFailed'),
-      )
+      logDevError('onboarding welcome continue', {
+        error: error instanceof Error ? error.message : String(error),
+      })
+      setErrorMessage(userFacingMessage(error, t('onboarding.welcome.completeFailed')))
       setIsSubmitting(false)
     }
   }

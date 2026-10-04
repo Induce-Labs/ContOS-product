@@ -1,3 +1,4 @@
+import { logDevError, remoteStatusCode } from './devLog'
 import { supabase } from './supabase'
 import {
   clearInvalidSessionAndRedirectToSignUp,
@@ -27,9 +28,12 @@ export type AdvanceOnboardingExtras = {
 }
 
 export class OnboardingServiceError extends Error {
-  constructor(message: string, cause?: unknown) {
+  readonly statusCode: number | null
+
+  constructor(message: string, cause?: unknown, statusCode?: number | null) {
     super(message)
     this.name = 'OnboardingServiceError'
+    this.statusCode = remoteStatusCode(cause, statusCode)
     if (cause instanceof Error) {
       this.cause = cause
     }
@@ -139,8 +143,11 @@ async function createOrLoadUserProfile(userId: string): Promise<UserProfile> {
 
   // Auth user was deleted in Supabase while a local JWT remained.
   if (error && isInvalidOrDeletedUserError(error)) {
+    logDevError('create user profile', {
+      error: error.message ?? 'unknown error',
+    })
     return await clearInvalidSessionAndRedirectToSignUp(
-      `Failed to create user profile: ${error.message}`,
+      'Your account is no longer available. Please sign up again.',
     )
   }
 

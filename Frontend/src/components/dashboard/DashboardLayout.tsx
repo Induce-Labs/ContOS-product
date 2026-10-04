@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { DashboardSidebarNav } from './DashboardSidebarNav'
+import { PostingConsistency } from './PostingConsistency'
 import { DashboardTopBar } from './DashboardTopBar'
 import { ProjectSwitcher } from './ProjectSwitcher'
 import { SidebarUserMenu } from './SidebarUserMenu'
@@ -214,7 +215,7 @@ export function DashboardLayout({
           className={
             railCollapsed
               ? 'flex w-full justify-center px-0 pb-1 pt-3'
-              : 'px-3 pb-3'
+              : 'px-3 pb-2'
           }
         >
           <ProjectSwitcher
@@ -224,6 +225,8 @@ export function DashboardLayout({
             collapsed={railCollapsed}
           />
         </div>
+
+        <PostingConsistency avatarId={projectId} collapsed={railCollapsed} />
 
         <DashboardSidebarNav
           projectId={projectId}

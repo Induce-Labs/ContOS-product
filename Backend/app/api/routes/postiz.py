@@ -99,6 +99,27 @@ class CalendarPostsResponse(BaseModel):
     posts: list[CalendarPostResponse]
 
 
+class ConsistencyDayResponse(BaseModel):
+    date: str
+    posted: bool
+    is_today: bool
+
+
+class ConsistencyResponse(BaseModel):
+    avatar_id: UUID
+    timezone: str
+    month: str
+    days_in_month: int
+    connected: bool
+    posted_days: int
+    current_streak: int | None
+    longest_streak: int
+    total_published_posts: int
+    linkedin_posted_days: int
+    x_posted_days: int
+    days: list[ConsistencyDayResponse]
+
+
 class XThreadEntryRequest(BaseModel):
     """One X thread entry. Content is kept as typed; later entries cannot carry media."""
 
@@ -446,6 +467,50 @@ def list_postiz_posts(
                 ],
             )
             for post in posts
+        ],
+    )
+
+
+@router.get("/consistency", response_model=ConsistencyResponse)
+def get_postiz_consistency(
+    avatar_id: UUID = Query(...),
+    month: str = Query(..., min_length=7, max_length=7),
+    timezone: str = Query(..., min_length=1, max_length=100),
+    user_id: UUID = Depends(get_current_user_id),
+) -> ConsistencyResponse:
+    """Avatar-scoped published-post consistency for one local calendar month."""
+    try:
+        _verify_avatar_owner(avatar_id, user_id)
+        result = _get_posts_service().monthly_consistency(
+            contos_user_id=user_id,
+            avatar_id=avatar_id,
+            month=month,
+            timezone_name=timezone,
+        )
+    except (
+        ConfigurationError,
+        PostizAuthorizationInvalidError,
+        PostizNotConnectedError,
+        PostizServiceError,
+        RepositoryError,
+    ) as error:
+        _raise_postiz_http(error)
+
+    return ConsistencyResponse(
+        avatar_id=avatar_id,
+        timezone=result.timezone,
+        month=result.month,
+        days_in_month=result.days_in_month,
+        connected=result.connected,
+        posted_days=result.posted_days,
+        current_streak=result.current_streak,
+        longest_streak=result.longest_streak,
+        total_published_posts=result.total_published_posts,
+        linkedin_posted_days=result.linkedin_posted_days,
+        x_posted_days=result.x_posted_days,
+        days=[
+            ConsistencyDayResponse(date=day.date, posted=day.posted, is_today=day.is_today)
+            for day in result.days
         ],
     )
 

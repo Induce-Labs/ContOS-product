@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { logDevError, userFacingMessage } from '../lib/devLog'
 import type { ProfilingQuestionDef } from '../config/onboardingProfilingQuestions'
 import { useLocalizedQuestionnaire } from './useLocalizedQuestionnaire'
 import { fetchAvatar, type Avatar } from '../lib/avatars'
@@ -100,11 +101,10 @@ export function useProfilingReview({ avatarId }: UseProfilingReviewOptions) {
         setFieldErrors({})
       } catch (error) {
         if (isMounted) {
-          setErrorMessage(
-            error instanceof Error
-              ? error.message
-              : t('profiling.errors.loadAnswers'),
-          )
+          logDevError('profiling review load', {
+            error: error instanceof Error ? error.message : String(error),
+          })
+          setErrorMessage(userFacingMessage(error, t('profiling.errors.loadAnswers')))
         }
       } finally {
         if (isMounted) {
@@ -157,9 +157,7 @@ export function useProfilingReview({ avatarId }: UseProfilingReviewOptions) {
         if (!cancelled) {
           setSavedAnswers({ ...english })
           setDraftAnswers({ ...english })
-          setErrorMessage(
-            error instanceof Error ? error.message : t('agents.translationFailed'),
-          )
+          setErrorMessage(userFacingMessage(error, t('agents.translationFailed')))
         }
       } finally {
         if (!cancelled) {
@@ -291,13 +289,13 @@ export function useProfilingReview({ avatarId }: UseProfilingReviewOptions) {
       try {
         await summarizeProfiling(avatarId)
       } catch (error) {
-        console.error('Profile summary generation failed:', error)
+        logDevError('POST /api/profiling/summarize', {
+          method: 'POST',
+          path: '/api/profiling/summarize',
+          error: error instanceof Error ? error.message : String(error),
+        })
         setErrorMessage(
-          error instanceof Error
-            ? t('profiling.errors.summaryAfterReviewSaveWithDetail', {
-                detail: error.message,
-              })
-            : t('profiling.errors.summaryAfterReviewSave'),
+          userFacingMessage(error, t('profiling.errors.summaryAfterReviewSave')),
         )
       } finally {
         setIsSummarizing(false)
@@ -305,9 +303,10 @@ export function useProfilingReview({ avatarId }: UseProfilingReviewOptions) {
 
       return true
     } catch (error) {
-      setErrorMessage(
-        error instanceof Error ? error.message : t('profiling.errors.saveAnswers'),
-      )
+      logDevError('profiling review save', {
+        error: error instanceof Error ? error.message : String(error),
+      })
+      setErrorMessage(userFacingMessage(error, t('profiling.errors.saveAnswers')))
       if (!answersEqual(draftAnswers, savedAnswers, keysToSave)) {
         setDraftAnswers((current) => ({ ...current }))
       }

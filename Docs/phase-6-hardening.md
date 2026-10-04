@@ -120,6 +120,12 @@ supabase db push
 
 Or run the SQL in `supabase/migrations/20260708120000_phase6_competitor_cap.sql` via the Supabase SQL editor.
 
+## User-facing errors
+
+Screens that can fail because of Supabase, Auth, Postiz, or the Agents API show `userFacingMessage()` from `Frontend/src/lib/devLog.ts`. That helper keeps a message only when it has no HTTP status (a check written in the frontend) or when the text is on the existing allowlist. Unknown 4xx and all 5xx responses use the friendly fallback already on that screen.
+
+Remote failures are marked with `statusCode` on the service error (`remoteStatusCode`). Rewritten sentences such as the avatar limit and competitor cap stay without a status so they still appear. Agent stream `error` events and catch-up run errors are replaced before they are stored on the chat snapshot. Development consoles still get `logDevError()`, which drops credential fields and redacts tokens. GlitchTip capture on `PostizApiError` is unchanged.
+
 ## Known limitations
 
 - RLS integration tests require a live Supabase project with two users (not automated in CI yet).

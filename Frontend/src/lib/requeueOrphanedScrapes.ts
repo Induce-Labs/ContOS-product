@@ -3,6 +3,7 @@
  * (still pending/queued) while Celery/Redis may have lost the task.
  */
 import { enqueueCompetitorScrapeJobs } from './api'
+import { logDevError } from './devLog'
 import type { Competitor } from './competitors'
 
 const ORPHAN_AGE_MS = 90_000
@@ -64,9 +65,9 @@ export async function requeueOrphanedCompetitorScrapes(
     } catch {
       // ignore
     }
-    console.warn('Failed to requeue orphaned competitor scrapes', {
-      projectId,
-      orphanIds,
+    logDevError('POST /avatars/competitors/scrape', {
+      method: 'POST',
+      path: '/avatars/competitors/scrape',
       error: error instanceof Error ? error.message : String(error),
     })
     return []

@@ -15,6 +15,7 @@ import {
   resolveCurrentOnboardingPath,
   savePreferredLanguage,
 } from '../lib/onboarding'
+import { logDevError, userFacingMessage } from '../lib/devLog'
 import { resolveDashboardPath } from '../lib/projects'
 
 export function OnboardingLanguagePage() {
@@ -57,11 +58,10 @@ export function OnboardingLanguagePage() {
         setIsLoading(false)
       } catch (error) {
         if (isMounted) {
-          setErrorMessage(
-            error instanceof Error
-              ? error.message
-              : t('onboarding.language.loadFailed'),
-          )
+          logDevError('onboarding language load', {
+            error: error instanceof Error ? error.message : String(error),
+          })
+          setErrorMessage(userFacingMessage(error, t('onboarding.language.loadFailed')))
           setIsLoading(false)
         }
       }
@@ -97,11 +97,10 @@ export function OnboardingLanguagePage() {
       const nextPath = await resolveCurrentOnboardingPath()
       navigate(nextPath, { replace: true })
     } catch (error) {
-      setErrorMessage(
-        error instanceof Error
-          ? error.message
-          : t('onboarding.language.saveFailed'),
-      )
+      logDevError('onboarding language save', {
+        error: error instanceof Error ? error.message : String(error),
+      })
+      setErrorMessage(userFacingMessage(error, t('onboarding.language.saveFailed')))
       setIsSubmitting(false)
     }
   }

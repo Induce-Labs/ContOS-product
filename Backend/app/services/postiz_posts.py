@@ -21,9 +21,24 @@ from app.errors import (
     PostizServiceError,
     RepositoryError,
 )
+from app.services.postiz_consistency import (
+    ConsistencyMonth,
+    aggregate_published_posts,
+    empty_consistency,
+    local_month_bounds,
+    month_key,
+    require_month,
+    require_timezone,
+)
 from app.services.postiz_oauth import PostizOAuthService, require_postiz_settings
 
 logger = logging.getLogger(__name__)
+
+
+def _clean_id(value: Any) -> str | None:
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    return None
 
 PostType = Literal["now", "schedule", "draft", "update"]
 PostStatusAction = Literal["draft", "schedule"]
@@ -176,6 +191,94 @@ class PostizPostsService:
             for mapped in (self._map_post(item) for item in raw_posts)
             if mapped is not None and mapped.integration_id in channel_ids
         ]
+
+    def monthly_consistency(
+        self,
+        *,
+        contos_user_id: UUID,
+        avatar_id: UUID,
+        month: str,
+        timezone_name: str,
+        now: datetime | None = None,
+    ) -> ConsistencyMonth:
+        """One Postiz list for the local month, then avatar LinkedIn/X day buckets."""
+        tz = require_timezone(timezone_name)
+        year, month_number = require_month(month)
+        if now is None:
+            clock = datetime.now(tz)
+        else:
+            if now.tzinfo is None:
+                raise PostizBadRequestError(
+                    "Consistency clock must include a timezone offset.",
+                )
+            clock = now.astimezone(tz)
+        today = clock.date()
+        canonical_month = f"{year:04d}-{month_number:02d}"
+        if canonical_month > month_key(today):
+            raise PostizBadRequestError(
+                f"month {canonical_month} is in the future for timezone {tz.key}. "
+                f"Current month is {month_key(today)}.",
+            )
+
+        try:
+            connection = self._require_avatar_connection(
+                contos_user_id=contos_user_id,
+                avatar_id=avatar_id,
+            )
+        except PostizNotConnectedError:
+            return empty_consistency(
+                avatar_id=str(avatar_id),
+                timezone=tz.key,
+                month=canonical_month,
+                today=today,
+                connected=False,
+            )
+
+        linkedin_id = _clean_id(connection.get("postiz_integration_id"))
+        x_id = _clean_id(connection.get("postiz_x_integration_id"))
+        if linkedin_id is None and x_id is None:
+            return empty_consistency(
+                avatar_id=str(avatar_id),
+                timezone=tz.key,
+                month=canonical_month,
+                today=today,
+                connected=False,
+            )
+
+        start, end, _last_day = local_month_bounds(year, month_number, tz)
+        query_start = start.isoformat()
+        query_end = end.isoformat()
+        access_token = self._oauth.decrypt_access_token(connection["encrypted_access_token"])
+        raw_posts = self._client.list_posts(
+            access_token,
+            start_date=query_start,
+            end_date=query_end,
+        )
+        result = aggregate_published_posts(
+            raw_posts,
+            avatar_id=str(avatar_id),
+            timezone_name=tz.key,
+            tz=tz,
+            year=year,
+            month=month_number,
+            today=today,
+            linkedin_id=linkedin_id,
+            x_id=x_id,
+            query_start=query_start,
+            query_end=query_end,
+        )
+        logger.info(
+            "Computed monthly posting consistency",
+            extra={
+                "avatar_id": str(avatar_id),
+                "month": result.month,
+                "timezone": result.timezone,
+                "connected": result.connected,
+                "posted_days": result.posted_days,
+                "total_published_posts": result.total_published_posts,
+            },
+        )
+        return result
 
     def upload_media(
         self,
@@ -491,15 +594,34 @@ class PostizPostsService:
         avatar_id: UUID,
         post_id: str,
     ) -> Any:
-        access_token, integration_id = self._require_connected_context(
+        connection = self._require_avatar_connection(
             contos_user_id=contos_user_id,
             avatar_id=avatar_id,
         )
-        self._require_owned_post(
+        channel_ids = self._stored_channel_ids(connection)
+        if not channel_ids:
+            raise PostizNotConnectedError(
+                "Connect LinkedIn or X for this avatar before deleting posts.",
+            )
+        access_token = self._oauth.decrypt_access_token(
+            connection["encrypted_access_token"],
+        )
+        owned = self._require_owned_post_on_channels(
             access_token=access_token,
-            integration_id=integration_id,
+            channel_ids=channel_ids,
             post_id=post_id,
         )
+        x_integration_id = connection.get("postiz_x_integration_id")
+        is_x_post = (
+            isinstance(x_integration_id, str)
+            and x_integration_id.strip()
+            and owned.integration_id == x_integration_id.strip()
+        )
+        if is_x_post and owned.state not in {"DRAFT", "QUEUE"}:
+            raise PostizBadRequestError(
+                "Only draft and scheduled X posts can be deleted. "
+                f"This post is {owned.state}.",
+            )
         result = self._client.delete_post(access_token, post_id)
         logger.info(
             "Deleted Postiz post",
@@ -700,6 +822,37 @@ class PostizPostsService:
 
         raise PostizPostNotFoundError(
             f"Post was not found for this avatar's {channel_label} channel.",
+        )
+
+    def _require_owned_post_on_channels(
+        self,
+        *,
+        access_token: str,
+        channel_ids: set[str],
+        post_id: str,
+    ) -> CalendarPost:
+        cleaned = post_id.strip()
+        if not cleaned:
+            raise PostizBadRequestError("post_id is required.")
+        if not channel_ids:
+            raise PostizNotConnectedError(
+                "Connect LinkedIn or X for this avatar before deleting posts.",
+            )
+
+        raw_posts = self._client.list_posts(
+            access_token,
+            start_date=_OWNERSHIP_START,
+            end_date=_OWNERSHIP_END,
+        )
+        for item in raw_posts:
+            mapped = self._map_post(item)
+            if mapped is None:
+                continue
+            if mapped.id == cleaned and mapped.integration_id in channel_ids:
+                return mapped
+
+        raise PostizPostNotFoundError(
+            "Post was not found for this avatar's LinkedIn or X channel.",
         )
 
     def _normalize_images(

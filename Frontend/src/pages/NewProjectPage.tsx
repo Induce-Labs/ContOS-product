@@ -16,6 +16,7 @@ import {
   defaultAvatarNameForType,
   type Avatar,
 } from '../lib/avatars'
+import { logDevError, userFacingMessage } from '../lib/devLog'
 import { setLastUsedProjectId } from '../lib/projects'
 import type { ProjectType } from '../types/contos'
 
@@ -155,10 +156,14 @@ export function NewProjectPage() {
       setAvatar(created)
       setStep('profiling')
     } catch (error) {
+      logDevError('new project create avatar', {
+        error: error instanceof Error ? error.message : String(error),
+      })
       setErrorMessage(
-        error instanceof Error
-          ? error.message
-          : `Failed to create avatar (max ${MAX_AVATARS} on Basic plan).`,
+        userFacingMessage(
+          error,
+          `Failed to create avatar (max ${MAX_AVATARS} on Basic plan).`,
+        ),
       )
     } finally {
       setIsCreatingAvatar(false)

@@ -6,6 +6,7 @@ import { AuthLayout, AuthLink } from '../components/auth/AuthLayout'
 import { AuthAlert, GoogleSignInButton, PrimaryButton } from '../components/auth/AuthButtons'
 import { AuthFormField } from '../components/auth/AuthFormField'
 import { signInWithEmail, signInWithOAuthProvider } from '../lib/auth'
+import { logDevError, userFacingMessage } from '../lib/devLog'
 import { resolvePostAuthPath } from '../lib/projects'
 
 export function LoginPage() {
@@ -26,9 +27,10 @@ export function LoginPage() {
       const nextPath = await resolvePostAuthPath()
       navigate(nextPath, { replace: true })
     } catch (error) {
-      setErrorMessage(
-        error instanceof Error ? error.message : t('auth.login.failedUnexpected'),
-      )
+      logDevError('auth email sign in', {
+        error: error instanceof Error ? error.message : String(error),
+      })
+      setErrorMessage(userFacingMessage(error, t('auth.login.failedUnexpected')))
     } finally {
       setIsSubmitting(false)
     }
@@ -41,9 +43,10 @@ export function LoginPage() {
     try {
       await signInWithOAuthProvider('google')
     } catch (error) {
-      setErrorMessage(
-        error instanceof Error ? error.message : t('auth.login.googleFailedUnexpected'),
-      )
+      logDevError('auth google sign in', {
+        error: error instanceof Error ? error.message : String(error),
+      })
+      setErrorMessage(userFacingMessage(error, t('auth.login.googleFailedUnexpected')))
       setIsSubmitting(false)
     }
   }

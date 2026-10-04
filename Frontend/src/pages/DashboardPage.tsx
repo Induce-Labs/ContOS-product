@@ -17,6 +17,7 @@ import { ConfirmDialog } from '../components/ConfirmDialog'
 import { displayCompetitorHandle } from '../lib/instagram-display'
 import { fetchScrapedPostCounts } from '../lib/scrapedPostCounts'
 import { summaryPostCount } from '../lib/workspaceMetrics'
+import { logDevError, userFacingMessage } from '../lib/devLog'
 
 type DeleteDialogState = {
   competitorId: string
@@ -122,9 +123,10 @@ export function DashboardPage() {
       .catch((error: unknown) => {
         if (!cancelled) {
           setScrapedCounts(null)
-          setScrapedCountError(
-            error instanceof Error ? error.message : t('dashboard.scrapedCountFailed'),
-          )
+          logDevError('dashboard scraped counts', {
+            error: error instanceof Error ? error.message : String(error),
+          })
+          setScrapedCountError(userFacingMessage(error, t('dashboard.scrapedCountFailed')))
         }
       })
 
@@ -172,11 +174,10 @@ export function DashboardPage() {
         }
       } catch (error) {
         if (!cancelled) {
-          setActionError(
-            error instanceof Error
-              ? error.message
-              : t('dashboard.retryFailed'),
-          )
+          logDevError('dashboard sync status', {
+            error: error instanceof Error ? error.message : String(error),
+          })
+          setActionError(userFacingMessage(error, t('dashboard.retryFailed')))
         }
       }
     }
@@ -202,9 +203,10 @@ export function DashboardPage() {
       await refresh()
       await refreshProjects()
     } catch (error) {
-      setActionError(
-        error instanceof Error ? error.message : t('dashboard.retryFailed'),
-      )
+      logDevError('dashboard retry competitor', {
+        error: error instanceof Error ? error.message : String(error),
+      })
+      setActionError(userFacingMessage(error, t('dashboard.retryFailed')))
     } finally {
       setRetryingCompetitorId(null)
     }
@@ -243,9 +245,10 @@ export function DashboardPage() {
       await refresh()
       await refreshProjects()
     } catch (error) {
-      setActionError(
-        error instanceof Error ? error.message : t('dashboard.deleteFailed'),
-      )
+      logDevError('dashboard delete competitor', {
+        error: error instanceof Error ? error.message : String(error),
+      })
+      setActionError(userFacingMessage(error, t('dashboard.deleteFailed')))
     } finally {
       setDeletingCompetitorId(null)
     }

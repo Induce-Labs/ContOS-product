@@ -74,6 +74,10 @@ celery_app.conf.update(
     },
 )
 
+from monitoring import init_glitchtip  # noqa: E402
+
+init_glitchtip()
+
 
 @worker_process_init.connect
 def _rebind_backend_path(**_kwargs: object) -> None:

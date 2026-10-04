@@ -5,6 +5,7 @@ import { GuestRoute } from './components/GuestRoute'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { RequireOnboardingComplete } from './components/RequireOnboardingComplete'
 import { CalendarPage } from './pages/CalendarPage'
+import { ConsistencyPage } from './pages/ConsistencyPage'
 import { InsightsPage } from './pages/PlaceholderFeaturePage'
 import { AuthCallbackPage } from './pages/AuthCallbackPage'
 import { PostizCallbackPage } from './pages/PostizCallbackPage'
@@ -58,6 +59,7 @@ function App() {
                 <Route path="/dashboard/:projectId/profiling" element={<EditProfilingPage />} />
                 <Route path="/dashboard/:projectId/analytics" element={<AnalyticsRedirect />} />
                 <Route path="/dashboard/:projectId/calendar" element={<CalendarPage />} />
+                <Route path="/dashboard/:projectId/consistency" element={<ConsistencyPage />} />
                 <Route path="/dashboard/:projectId/insights" element={<InsightsPage />} />
                 <Route path="/projects/new" element={<NewProjectPage />} />
                 <Route path="/avatars/new" element={<NewProjectPage />} />

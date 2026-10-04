@@ -10,6 +10,7 @@ import {
   AgentTypePills,
 } from '../components/agents/AgentChatHistoryPanel'
 import { useDashboardShell } from '../hooks/useDashboardShell'
+import { logDevError, userFacingMessage } from '../lib/devLog'
 import {
   AgentsApiError,
   getUserFirstName,
@@ -248,11 +249,10 @@ export function AgentsPage() {
           setSyncError(null)
         })
         .catch((error) => {
-          setSyncError(
-            error instanceof Error
-              ? error.message
-              : t('agents.syncToFailed'),
-          )
+          logDevError('agents chat sync save', {
+            error: error instanceof Error ? error.message : String(error),
+          })
+          setSyncError(userFacingMessage(error, t('agents.syncToFailed')))
         })
     }, 600)
   }
@@ -430,11 +430,10 @@ export function AgentsPage() {
           if (mounted) setSyncError(null)
         } catch (error) {
           if (mounted) {
-            setSyncError(
-              error instanceof Error
-                ? error.message
-                : translate('agents.syncFromFailed'),
-            )
+            logDevError('agents chat sync load', {
+              error: error instanceof Error ? error.message : String(error),
+            })
+            setSyncError(userFacingMessage(error, translate('agents.syncFromFailed')))
           }
           // Still refresh empty greeting when remote sync fails.
           if (!sessionHasUserMessages(getActiveSession(store).messages)) {
@@ -447,11 +446,10 @@ export function AgentsPage() {
         }
       } catch (error) {
         if (mounted) {
-          setLoadError(
-            error instanceof Error
-              ? error.message
-              : tRef.current('agents.loadFailed'),
-          )
+          logDevError('agents workspace load', {
+            error: error instanceof Error ? error.message : String(error),
+          })
+          setLoadError(userFacingMessage(error, tRef.current('agents.loadFailed')))
           setIsLoading(false)
         }
       }
@@ -538,7 +536,11 @@ export function AgentsPage() {
         ]
       })
       if (snapshot.error) {
-        setSendError(snapshot.error)
+        const streamError = userFacingMessage(
+          new AgentsApiError(snapshot.error, 500),
+          tRef.current('errors.agentsApi.streamFailed'),
+        )
+        setSendError(streamError)
         setAwaitingCatchUp(false)
         setMessages((current) =>
           current.map((entry) =>
@@ -546,7 +548,7 @@ export function AgentsPage() {
               ? {
                   ...entry,
                   content: tRef.current('agents.sorryPrefix', {
-                    message: snapshot.error,
+                    message: streamError,
                   }),
                 }
               : entry,
@@ -892,11 +894,15 @@ export function AgentsPage() {
             )
           },
           onError: (message) => {
-            setSendError(message)
+            const streamError = userFacingMessage(
+              new AgentsApiError(message, 500),
+              t('errors.agentsApi.streamFailed'),
+            )
+            setSendError(streamError)
             setMessages((current) =>
               current.map((entry) =>
                 entry.id === assistantId && !entry.content.trim()
-                  ? { ...entry, content: t('agents.sorryPrefix', { message }) }
+                  ? { ...entry, content: t('agents.sorryPrefix', { message: streamError }) }
                   : entry,
               ),
             )
@@ -907,12 +913,7 @@ export function AgentsPage() {
       if ((error as Error).name === 'AbortError') {
         return
       }
-      const message =
-        error instanceof AgentsApiError
-          ? error.message
-          : error instanceof Error
-            ? error.message
-            : t('agents.reachFailed')
+      const message = userFacingMessage(error, t('agents.reachFailed'))
       setSendError(message)
       setMessages((current) =>
         current.map((entry) =>

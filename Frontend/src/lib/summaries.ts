@@ -1,3 +1,4 @@
+import { remoteStatusCode } from './devLog'
 import { supabase } from './supabase'
 import type { Tables } from '../types/database'
 import type { CompetitorSummary } from '../types/contos'
@@ -17,9 +18,12 @@ export type DashboardSummary = {
 }
 
 export class SummariesServiceError extends Error {
-  constructor(message: string, cause?: unknown) {
+  readonly statusCode: number | null
+
+  constructor(message: string, cause?: unknown, statusCode?: number | null) {
     super(message)
     this.name = 'SummariesServiceError'
+    this.statusCode = remoteStatusCode(cause, statusCode)
     if (cause instanceof Error) {
       this.cause = cause
     }

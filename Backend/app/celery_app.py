@@ -3,6 +3,7 @@
 from celery import Celery
 
 from app.config import get_settings
+from app.monitoring import init_glitchtip
 
 settings = get_settings()
 
@@ -32,6 +33,8 @@ celery_app.conf.update(
         "pipeline.run_competitor": {"queue": "scrape"},
     },
 )
+
+init_glitchtip(settings.sentry_dsn, settings.sentry_environment)
 
 # Alias for `celery -A app.celery_app worker`
 app = celery_app

@@ -8,6 +8,7 @@ import {
   deleteAvatar,
   setDefaultAvatar,
 } from '../../lib/avatars'
+import { logDevError, userFacingMessage } from '../../lib/devLog'
 import type { Project } from '../../lib/projects'
 
 type ProjectSwitcherProps = {
@@ -71,9 +72,10 @@ export function ProjectSwitcher({
         })),
       )
     } catch (error) {
-      setActionError(
-        error instanceof Error ? error.message : t('projectSwitcher.failedSetDefault'),
-      )
+      logDevError('project switcher set default', {
+        error: error instanceof Error ? error.message : String(error),
+      })
+      setActionError(userFacingMessage(error, t('projectSwitcher.failedSetDefault')))
     } finally {
       setBusyAvatarId(null)
     }
@@ -105,9 +107,10 @@ export function ProjectSwitcher({
     } catch (error) {
       setDeleteTargetId(null)
       setOpen(true)
-      setActionError(
-        error instanceof Error ? error.message : t('projectSwitcher.failedDelete'),
-      )
+      logDevError('project switcher delete', {
+        error: error instanceof Error ? error.message : String(error),
+      })
+      setActionError(userFacingMessage(error, t('projectSwitcher.failedDelete')))
     } finally {
       setBusyAvatarId(null)
     }

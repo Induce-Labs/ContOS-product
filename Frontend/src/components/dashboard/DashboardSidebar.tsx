@@ -11,6 +11,7 @@ import {
   deleteAvatar,
   setDefaultAvatar,
 } from '../../lib/avatars'
+import { logDevError, userFacingMessage } from '../../lib/devLog'
 import { PlusIcon } from '../icons/ActionIcons'
 
 type DashboardSidebarProps = {
@@ -63,7 +64,10 @@ export function DashboardSidebar({
       }))
       onAvatarsChanged?.(next)
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : 'Failed to set default avatar.')
+      logDevError('sidebar set default avatar', {
+        error: error instanceof Error ? error.message : String(error),
+      })
+      setActionError(userFacingMessage(error, 'Failed to set default avatar.'))
     } finally {
       setBusyAvatarId(null)
     }
@@ -89,7 +93,10 @@ export function DashboardSidebar({
         navigate(fallback ? `/dashboard/${fallback.id}` : '/dashboard')
       }
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : 'Failed to delete avatar.')
+      logDevError('sidebar delete avatar', {
+        error: error instanceof Error ? error.message : String(error),
+      })
+      setActionError(userFacingMessage(error, 'Failed to delete avatar.'))
     } finally {
       setBusyAvatarId(null)
     }

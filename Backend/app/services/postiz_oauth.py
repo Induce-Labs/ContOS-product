@@ -284,25 +284,24 @@ class PostizOAuthService:
                         "avatar_id": str(avatar_id),
                         "postiz_organization_id": org_id,
                         "reason": "integration_not_found",
-                        "postiz_integration_id": stored_id_str,
                     },
                 )
                 status = PostizStatus(connected=False, integration=None)
                 self._set_status_cache(avatar_id, status)
                 return status
-
-            logger.info(
-                "Postiz status: connected for avatar org",
-                extra={
-                    "contos_user_id": str(contos_user_id),
-                    "avatar_id": str(avatar_id),
-                    "postiz_organization_id": org_id,
-                    "postiz_integration_id": stored_id_str,
-                },
-            )
-            status = PostizStatus(connected=True, integration=matched)
-            self._set_status_cache(avatar_id, status)
-            return status
+            else:
+                logger.info(
+                    "Postiz status: connected for avatar org",
+                    extra={
+                        "contos_user_id": str(contos_user_id),
+                        "avatar_id": str(avatar_id),
+                        "postiz_organization_id": org_id,
+                        "postiz_integration_id": stored_id_str,
+                    },
+                )
+                status = PostizStatus(connected=True, integration=matched)
+                self._set_status_cache(avatar_id, status)
+                return status
 
         claimed = self._try_claim_from_snapshot(
             contos_user_id=contos_user_id,
@@ -313,16 +312,6 @@ class PostizOAuthService:
             status = PostizStatus(connected=True, integration=claimed)
             self._set_status_cache(avatar_id, status)
             return status
-
-        snapshot_ids = self._load_linkedin_snapshot(avatar_id)
-        if snapshot_ids is not None:
-            candidates = self._unclaimed_linkedin_integrations(integrations)
-            if candidates:
-                return PostizStatus(
-                    connected=False,
-                    integration=None,
-                    claim_candidates=candidates,
-                )
 
         status = PostizStatus(connected=False, integration=None)
         self._set_status_cache(avatar_id, status)
@@ -335,62 +324,19 @@ class PostizOAuthService:
         avatar_id: UUID,
         integration_id: str,
     ) -> PostizStatus:
-        """Bind an unclaimed LinkedIn integration during an active connect session."""
-        integration_id = integration_id.strip()
-        if not integration_id:
-            raise PostizIntegrationClaimError("integration_id is required.")
-
-        snapshot_ids = self._load_linkedin_snapshot(avatar_id)
-        if snapshot_ids is None:
-            raise PostizIntegrationClaimError(
-                "No active LinkedIn connect session. Start Connect LinkedIn again.",
-            )
-
-        connection = self._repository.get_connection(avatar_id)
-        if connection is None:
-            raise PostizServiceError("No Postiz connection found for this avatar.")
-        if str(connection.get("contos_user_id")) != str(contos_user_id):
-            raise PostizServiceError(
-                "Postiz connection for this avatar belongs to a different ContOS user.",
-            )
-
-        access_token = self._decrypt_token(connection["encrypted_access_token"])
-        try:
-            integrations = self._client.list_integrations(access_token)
-        except PostizAuthorizationInvalidError:
-            self._repository.delete_connection(avatar_id)
-            self._clear_status_cache(avatar_id)
-            self._clear_linkedin_snapshot(avatar_id)
-            self._clear_x_snapshot(avatar_id)
-            raise
-
-        matched = self._find_linkedin_by_id(integrations, integration_id)
-        if matched is None:
-            raise PostizIntegrationClaimError(
-                "That LinkedIn account was not found on this avatar's Postiz organization.",
-            )
-
-        owner = self._repository.get_connection_by_integration_id(integration_id)
-        if owner is not None:
-            owner_avatar = owner.get("avatar_id")
-            if owner_avatar is not None and str(owner_avatar) != str(avatar_id):
-                raise PostizIntegrationClaimError(
-                    "This LinkedIn integration is already linked to another ContOS avatar.",
-                )
-            if str(owner.get("contos_user_id")) != str(contos_user_id):
-                raise PostizIntegrationClaimError(
-                    "This LinkedIn integration is already linked to another ContOS account.",
-                )
-
-        self._repository.claim_integration(
-            contos_user_id=contos_user_id,
-            avatar_id=avatar_id,
-            postiz_integration_id=integration_id,
+        """Refuse list selection. A project binds only the LinkedIn created by its own OAuth."""
+        logger.info(
+            "Rejected LinkedIn account list selection",
+            extra={
+                "contos_user_id": str(contos_user_id),
+                "avatar_id": str(avatar_id),
+                "has_integration_id": bool(integration_id and integration_id.strip()),
+            },
         )
-        self._clear_linkedin_snapshot(avatar_id)
-        self._clear_status_cache(avatar_id)
-
-        return PostizStatus(connected=True, integration=matched)
+        raise PostizIntegrationClaimError(
+            "This project cannot select a LinkedIn account from a list. "
+            "Connect LinkedIn for this project only.",
+        )
 
     def _try_claim_from_snapshot(
         self,
@@ -453,17 +399,6 @@ class PostizOAuthService:
             return None
         self._clear_linkedin_snapshot(avatar_id)
         return matched
-
-    def _unclaimed_linkedin_integrations(
-        self,
-        integrations: list[dict[str, Any]],
-    ) -> tuple[SafeIntegration, ...]:
-        candidates: list[SafeIntegration] = []
-        for item in self._map_linkedin_integrations(integrations):
-            owner = self._repository.get_connection_by_integration_id(item.id)
-            if owner is None:
-                candidates.append(item)
-        return tuple(candidates)
 
     def _map_linkedin_integrations(
         self,
