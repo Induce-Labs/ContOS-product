@@ -2,12 +2,32 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/png" href="./src/assets/image.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script>
+      (function () {
+        try {
+          var path = location.pathname || '/'
+          var allowsDark =
+            path.indexOf('/dashboard') === 0 ||
+            path === '/projects/new' ||
+            path.indexOf('/projects/new/') === 0 ||
+            path === '/avatars/new' ||
+            path.indexOf('/avatars/new/') === 0
+          // Last-applied hint only; ThemeProvider overwrites with per-user preference.
+          var theme = localStorage.getItem('contos_theme')
+          if (theme === 'dark' && allowsDark) {
+            document.documentElement.classList.add('dark')
+          } else {
+            document.documentElement.classList.remove('dark')
+          }
+        } catch (e) {}
+      })()
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
     <title>contos-product</title>

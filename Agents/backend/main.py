@@ -38,6 +38,7 @@ from chat_history import ChatHistoryTurn, normalize_chat_history  # noqa: E402
 from embeddings.embed import (  # noqa: E402
     backfill_content_summary_embeddings,
     backfill_linkedin_summary_embeddings,
+    backfill_twitter_summary_embeddings,
     store_playbooks_from_mock,
 )
 
@@ -46,6 +47,10 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
 )
 logger = logging.getLogger("contos.api")
+
+from monitoring import capture_server_exception, init_glitchtip  # noqa: E402
+
+init_glitchtip()
 
 app = FastAPI(
     title="ContOS Agents API",
@@ -61,6 +66,11 @@ cors_origins = [
     ).split(",")
     if o.strip()
 ]
+if any(origin == "*" for origin in cors_origins):
+    raise RuntimeError(
+        "CORS_ORIGINS must list explicit origins. Wildcard '*' is not allowed "
+        "because credentialed browser requests are enabled.",
+    )
 # Always allow local Vite on both localhost and 127.0.0.1 (browsers treat them as different origins).
 for _origin in (
     "http://localhost:5173",
@@ -72,7 +82,7 @@ for _origin in (
         cors_origins.append(_origin)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=cors_origins or ["*"],
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -499,6 +509,7 @@ def invoke_agent(
 
                     event_q.put(evt)
             except Exception as exc:
+                capture_server_exception(exc)
                 logger.exception(
                     "agent producer failed",
                     extra={"run_id": run_id, "agent": body.agent_type},
@@ -580,6 +591,7 @@ def invoke_agent(
             )
             raise
         except Exception as exc:
+            capture_server_exception(exc)
             logger.exception("SSE consumer failed")
             stop_producer.set()
             yield _sse("error", {"error": str(exc), "agent": body.agent_type, "run_id": run_id})
@@ -686,6 +698,25 @@ def backfill_linkedin_summaries(
         raise HTTPException(
             status_code=500,
             detail=f"Failed to backfill linkedin_content_summaries embeddings: {exc}",
+        ) from exc
+
+
+@app.post("/api/embeddings/backfill-twitter-summaries")
+def backfill_twitter_summaries(
+    only_missing: bool = True,
+    limit: int = 200,
+    user_id: UUID = Depends(get_current_user_id),
+) -> dict[str, Any]:
+    """Embed twitter_content_summaries.summary into embedding for agentic RAG."""
+    require_admin_user(user_id)
+    try:
+        return backfill_twitter_summary_embeddings(
+            only_missing=only_missing, limit=limit
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to backfill twitter_content_summaries embeddings: {exc}",
         ) from exc
 
 

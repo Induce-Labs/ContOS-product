@@ -1,3 +1,4 @@
+import { logDevError, remoteStatusCode } from './devLog'
 import { getAccessToken as getAuthAccessToken } from './auth'
 import { getApiBaseUrl } from './supabase'
 
@@ -28,6 +29,16 @@ export function isConcurrentLimitError(error: unknown): boolean {
 }
 
 export type AgentType = 'chatbot' | 'linkedin' | 'instagram' | 'playbook' | 'twitter'
+
+/** Agent chips shown in the ContOS Agents UI (excludes playbook). */
+export function isUiAgentType(value: string | null | undefined): value is AgentType {
+  return (
+    value === 'chatbot' ||
+    value === 'linkedin' ||
+    value === 'instagram' ||
+    value === 'twitter'
+  )
+}
 
 export type AgentsInvokeRequest = {
   avatar_id: string
@@ -88,6 +99,7 @@ async function getAccessToken(): Promise<string> {
   } catch (error: unknown) {
     throw new AgentsApiError(
       error instanceof Error ? error.message : 'You must be signed in to use ContOS Agents.',
+      error instanceof Error ? remoteStatusCode(error) : null,
     )
   }
 }
@@ -202,6 +214,12 @@ export async function invokeAgentStream(
     } catch {
       // keep fallback message from status + raw body
     }
+    logDevError('POST /api/agents/invoke', {
+      method: 'POST',
+      path: '/api/agents/invoke',
+      status: response.status,
+      error: message,
+    })
     throw new AgentsApiError(message, response.status, errorCode)
   }
 
@@ -344,10 +362,14 @@ export async function translateTexts(
     } catch {
       detail = ''
     }
-    throw new AgentsApiError(
-      detail || `Translation request failed (${response.status}).`,
-      response.status,
-    )
+    const message = detail || `Translation request failed (${response.status}).`
+    logDevError('POST /api/translate', {
+      method: 'POST',
+      path: '/api/translate',
+      status: response.status,
+      error: message,
+    })
+    throw new AgentsApiError(message, response.status)
   }
 
   const payload = (await response.json()) as TranslateTextsResponse
@@ -397,10 +419,14 @@ export async function fetchAgentRun(runId: string): Promise<AgentRunResult> {
     } catch {
       detail = ''
     }
-    throw new AgentsApiError(
-      detail || `Agent run fetch failed (${response.status}).`,
-      response.status,
-    )
+    const message = detail || `Agent run fetch failed (${response.status}).`
+    logDevError('GET /api/agents/runs', {
+      method: 'GET',
+      path: '/api/agents/runs',
+      status: response.status,
+      error: message,
+    })
+    throw new AgentsApiError(message, response.status)
   }
   const payload = (await response.json()) as AgentRunResult
   return payload

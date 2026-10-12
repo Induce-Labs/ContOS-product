@@ -15,7 +15,7 @@ def fetch_summaries(
     platform: str | None = None,
     user_id: str | None = None,
 ) -> list[dict[str, Any]]:
-    """Query instagram_content_summaries / linkedin_content_summaries for one avatar."""
+    """Query instagram_content_summaries / linkedin_content_summaries / twitter_content_summaries for one avatar."""
     from db import supabase_client as db
 
     if not avatar_id:

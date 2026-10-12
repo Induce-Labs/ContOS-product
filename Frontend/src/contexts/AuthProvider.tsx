@@ -9,6 +9,8 @@ import {
   clearAgentChatsForUser,
 } from '../lib/agentChatStorage'
 import { flushLocalAgentChatsToRemote } from '../lib/agentChatRemote'
+import { validateStoredSessionOrRedirectToSignUp } from '../lib/auth'
+import { logDevError, remoteStatusCode } from '../lib/devLog'
 import { supabase } from '../lib/supabase'
 import { AuthContext, type AuthContextValue } from './auth-context'
 
@@ -22,20 +24,60 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   useEffect(() => {
     let isMounted = true
+    const pathname = window.location.pathname
+    const isAuthCallbackRoute =
+      pathname === '/auth/callback' || pathname === '/auth/postiz/callback'
 
     async function initializeSession() {
-      const { data, error } = await supabase.auth.getSession()
+      try {
+        // Avoid getUser() racing OAuth PKCE exchange on callback routes.
+        if (isAuthCallbackRoute) {
+          const {
+            data: { session: nextSession },
+            error,
+          } = await supabase.auth.getSession()
 
-      if (!isMounted) {
-        return
+          if (!isMounted) {
+            return
+          }
+
+          if (error) {
+            setSession(null)
+            setIsLoading(false)
+            return
+          }
+
+          setSession(nextSession)
+          setIsLoading(false)
+          return
+        }
+
+        const nextSession = await validateStoredSessionOrRedirectToSignUp()
+
+        if (!isMounted) {
+          return
+        }
+
+        setSession(nextSession)
+        setIsLoading(false)
+      } catch (error) {
+        if (!isMounted) {
+          return
+        }
+
+        // Redirect-to-signup throws AuthServiceError after navigation starts.
+        setSession(null)
+        setIsLoading(false)
+        if (
+          error instanceof Error &&
+          error.name !== 'AuthServiceError'
+        ) {
+          logDevError('auth session init', { error: error.message })
+          const failed = new Error('Failed to initialize auth session.', { cause: error })
+          Object.assign(failed, { statusCode: remoteStatusCode(error) })
+          throw failed
+        }
       }
-
-      if (error) {
-        throw new Error(`Failed to initialize auth session: ${error.message}`)
-      }
-
-      setSession(data.session)
-      setIsLoading(false)
     }
 
     void initializeSession()
@@ -63,11 +105,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
       try {
         await flushLocalAgentChatsToRemote(userId)
       } catch (error) {
+        logDevError('sign out chat flush', {
+          error: error instanceof Error ? error.message : String(error),
+        })
         throw new Error(
-          `Sign out aborted: failed to save chat history (${
-            error instanceof Error ? error.message : String(error)
-          }). Stay signed in and try again.`,
-          { cause: error instanceof Error ? error : undefined },
+          'Sign out aborted: failed to save chat history. Stay signed in and try again.',
+          { cause: error },
         )
       }
     }
@@ -80,7 +123,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
       // Last-resort local clear when the auth server also rejects the session.
       const { error: localError } = await supabase.auth.signOut({ scope: 'local' })
       if (localError) {
-        throw new Error(`Sign out failed: ${error.message}`)
+        logDevError('auth sign out', {
+          error: error.message,
+          status: typeof error.status === 'number' ? error.status : 500,
+        })
+        const failed = new Error('Sign out failed.', { cause: error })
+        Object.assign(failed, {
+          statusCode: typeof error.status === 'number' ? error.status : 500,
+        })
+        throw failed
       }
     }
 

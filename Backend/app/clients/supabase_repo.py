@@ -361,6 +361,90 @@ class SupabaseRepository:
                 f"Failed to insert LinkedIn content summary for competitor {competitor_id}.",
             )
 
+    def upsert_twitter_scraped_content(self, rows: list[dict[str, Any]]) -> None:
+        if not rows:
+            return
+        response = (
+            self._client.table("twitter_scraped_content")
+            .upsert(rows, on_conflict="competitor_id,external_id")
+            .execute()
+        )
+        if response.data is None:
+            raise RepositoryError("Failed to upsert twitter_scraped_content rows in Supabase.")
+        logger.info(
+            "Upserted twitter_scraped_content rows",
+            extra={"row_count": len(rows)},
+        )
+
+    def get_twitter_content_for_summary(self, competitor_id: UUID) -> list[dict[str, Any]]:
+        response = (
+            self._client.table("twitter_scraped_content")
+            .select(
+                "external_id, post_url, caption, posted_at, "
+                "author_name, author_username, author_followers, author_description",
+            )
+            .eq("competitor_id", str(competitor_id))
+            .order("posted_at", desc=True)
+            .execute()
+        )
+        if response.data is None:
+            raise RepositoryError(
+                f"Failed to load Twitter content for summary for competitor {competitor_id}.",
+            )
+        return response.data
+
+    def replace_twitter_content_summary(
+        self,
+        *,
+        competitor_id: UUID,
+        avatar_id: UUID,
+        summary: dict[str, Any],
+        model_used: str,
+    ) -> None:
+        delete_response = (
+            self._client.table("twitter_content_summaries")
+            .delete()
+            .eq("competitor_id", str(competitor_id))
+            .execute()
+        )
+        if delete_response.data is None:
+            raise RepositoryError(
+                f"Failed to clear existing Twitter summaries for competitor {competitor_id}.",
+            )
+        insert_response = (
+            self._client.table("twitter_content_summaries")
+            .insert(
+                {
+                    "competitor_id": str(competitor_id),
+                    "avatar_id": str(avatar_id),
+                    "summary": summary,
+                    "model_used": model_used,
+                },
+            )
+            .execute()
+        )
+        if insert_response.data is None:
+            raise RepositoryError(
+                f"Failed to insert Twitter content summary for competitor {competitor_id}.",
+            )
+
+    def update_twitter_content_summary_embedding(
+        self,
+        *,
+        competitor_id: UUID,
+        embedding: list[float],
+    ) -> None:
+        response = (
+            self._client.table("twitter_content_summaries")
+            .update({"embedding": embedding})
+            .eq("competitor_id", str(competitor_id))
+            .execute()
+        )
+        if response.data is None:
+            raise RepositoryError(
+                f"Failed to update Twitter summary embedding for competitor {competitor_id}.",
+            )
+
     def refresh_avatar_status(self, avatar_id: UUID) -> None:
         response = (
             self._client.table("competitors")

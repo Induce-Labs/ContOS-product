@@ -10,21 +10,24 @@ Agents and MCP tools read production Supabase rows — especially LinkedIn compe
 - Summary RAG always filters by `project_id` / resolved avatar ids (no cross-project reads)
 - `fetch_profile` reads `avatars.profiling_data` for the avatar
 
-## LinkedIn + Instagram agentic RAG
+## LinkedIn + Instagram + Twitter agentic RAG
 1. Embed summary JSON → row `embedding` (1536-dim)
 2. On platform agent / context-ON chat: embed the user query
 3. MCP `similarity_search` returns top-k matches for **this project**:
    - LinkedIn → `linkedin_content_summaries`
    - Instagram → `instagram_content_summaries` (platform=instagram)
+   - Twitter/X → `twitter_content_summaries`
 4. Those summaries + brand profile + playbooks are assembled into CONTEXT
 5. The LLM reasons only over retrieved chunks
 
 Backfill (JWT + admin allowlist when `LLM_ENV=prod`):
 - `POST /api/embeddings/backfill-linkedin-summaries`
+- `POST /api/embeddings/backfill-twitter-summaries`
 - `POST /api/embeddings/backfill-summaries`
 
 Optional SQL:
 - `sql/004_linkedin_summary_embeddings.sql`
+- `sql/005_twitter_summary_embeddings.sql`
 - `sql/003_content_summary_embeddings.sql`
 
 ## Known limitations

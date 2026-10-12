@@ -27,22 +27,26 @@ type SingleSelectQuestion = ProfilingQuestionDef & {
   }
 }
 
-const minimalInputClassName =
-  'w-full border-0 bg-transparent px-0 py-1.5 text-base text-neutral-900 outline-none placeholder:text-neutral-300 focus:outline-none disabled:opacity-60 sm:text-[17px]'
+/** Shared chrome for text / url / textarea / competitor / other fields (light + dark). */
+const typedFieldClassName =
+  'w-full rounded-xl border border-border-hairline bg-white px-3.5 py-3 text-sm leading-snug text-ink caret-ink outline-none transition-[border-color,box-shadow] placeholder:text-ink-muted/70 focus:border-accent-primary focus:ring-2 focus:ring-accent-primary/25 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-canvas'
 
-function CheckIcon({ className }: { className?: string }) {
+function LinkFieldIcon() {
   return (
-    <svg
-      aria-hidden="true"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="3"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-    >
-      <path d="M5 13l4 4L19 7" />
+    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" className="h-4 w-4">
+      <path d="M10 13a5 5 0 0 0 7.07 0l1.41-1.41a5 5 0 0 0-7.07-7.07L10 5.93" />
+      <path d="M14 11a5 5 0 0 0-7.07 0L5.5 12.43a5 5 0 0 0 7.07 7.07L14 18.07" />
+    </svg>
+  )
+}
+
+function TextFieldIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" className="h-4 w-4">
+      <circle cx="9" cy="8" r="3" />
+      <path d="M3.5 19c.8-2.8 3-4.5 5.5-4.5S13.7 16.2 14.5 19" />
+      <circle cx="17" cy="9" r="2" />
+      <path d="M16 14.5c2 .4 3.4 1.6 4 3.5" />
     </svg>
   )
 }
@@ -103,8 +107,8 @@ function SingleSelectControls({
   }
 
   return (
-    <div className="space-y-2.5">
-      <div className="space-y-2.5">
+    <div className="space-y-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {question.input.options.map((option, index) => {
           const selected = selectedOption === option
           const isOther = isOtherSelectOptionAt(
@@ -117,6 +121,7 @@ function SingleSelectControls({
               key={option}
               type="button"
               disabled={disabled}
+              aria-pressed={selected}
               onClick={() => {
                 setSelectedOption(option)
                 if (isOther) {
@@ -129,24 +134,27 @@ function SingleSelectControls({
                   onSubmit?.(option)
                 }
               }}
-              className={`flex w-full cursor-pointer items-center justify-between rounded-xl p-3 text-left transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-60 sm:rounded-2xl sm:p-3.5 ${
+              className={`flex cursor-pointer items-start gap-3 rounded-2xl border p-3 text-left transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-60 ${
                 selected
-                  ? 'border-2 border-[#9353ea] bg-purple-50/50 text-neutral-900 shadow-sm'
-                  : 'border border-neutral-200/70 bg-[#faf9fd] text-neutral-700 hover:border-neutral-300 hover:text-neutral-900'
+                  ? 'border-[#c4b5fd] bg-[#f6f1ff] ring-1 ring-[#c4b5fd] dark:bg-[#2a2238]'
+                  : 'border-border-hairline bg-white hover:border-[#d9d0ea] dark:bg-canvas'
               }`}
             >
-              <span className="pr-3 text-xs font-medium leading-snug sm:text-sm sm:leading-relaxed">
+              <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#ece4fb] text-[#5b3d8a] dark:bg-accent-primary-soft dark:text-accent-primary-deep">
+                <span aria-hidden="true" className="text-sm font-semibold">
+                  {option.trim().charAt(0).toUpperCase() || '•'}
+                </span>
+              </span>
+              <span className="min-w-0 flex-1 break-words pt-1 text-sm font-medium leading-snug text-ink">
                 {option}
               </span>
               <span
-                className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-all ${
-                  selected
-                    ? 'border-[#9353ea] bg-[#9353ea] text-white'
-                    : 'border-neutral-300 bg-transparent'
+                className={`mt-1.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${
+                  selected ? 'border-[#7c5cbf]' : 'border-[#cfcfd6] dark:border-border-hairline'
                 }`}
                 aria-hidden="true"
               >
-                {selected ? <CheckIcon className="h-3 w-3" /> : null}
+                {selected ? <span className="h-2 w-2 rounded-full bg-[#7c5cbf]" /> : null}
               </span>
             </button>
           )
@@ -164,7 +172,7 @@ function SingleSelectControls({
           }}
           onKeyDown={handleKeyDown}
           placeholder={t('profiling.field.describeOwnWords')}
-          className={minimalInputClassName}
+          className={typedFieldClassName}
           autoFocus
         />
       ) : null}
@@ -207,7 +215,7 @@ export function ProfilingQuestionField({
     const max = question.input.max
 
     return (
-      <div className="space-y-4">
+      <div className="space-y-3">
         {Array.from({ length: max }, (_, index) => (
           <input
             key={`competitor-${index}`}
@@ -221,10 +229,12 @@ export function ProfilingQuestionField({
             }}
             onKeyDown={handleKeyDown}
             placeholder={`${question.placeholder ?? t('profiling.field.competitorPlaceholder')} ${index + 1}`}
-            className={minimalInputClassName}
+            className={typedFieldClassName}
+            autoComplete="off"
+            spellCheck={false}
           />
         ))}
-        <p className="text-xs text-neutral-400">
+        <p className="text-xs text-ink-muted">
           {t('profiling.field.enterUpToNames', { max })}
         </p>
       </div>
@@ -233,26 +243,39 @@ export function ProfilingQuestionField({
 
   if (question.input.kind === 'textarea') {
     return (
-      <textarea
-        value={value}
-        disabled={disabled}
-        onChange={(event) => onChange(event.target.value)}
-        placeholder={question.placeholder}
-        rows={3}
-        className={`${minimalInputClassName} resize-none`}
-      />
+      <div className="relative">
+        <textarea
+          value={value}
+          disabled={disabled}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder={question.placeholder ?? t('profiling.field.describeOwnWords')}
+          rows={3}
+          className={`${typedFieldClassName} min-h-[5.5rem] resize-y pb-8`}
+        />
+        <span className="pointer-events-none absolute bottom-2.5 right-3 text-xs tabular-nums text-ink-muted">
+          {value.length}
+        </span>
+      </div>
     )
   }
 
+  const isUrl = question.input.kind === 'url'
+
   return (
-    <input
-      type={question.input.kind === 'url' ? 'url' : 'text'}
-      value={value}
-      disabled={disabled}
-      onChange={(event) => onChange(event.target.value)}
-      onKeyDown={handleKeyDown}
-      placeholder={question.placeholder}
-      className={minimalInputClassName}
-    />
+    <div className="relative">
+      <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted">
+        {isUrl ? <LinkFieldIcon /> : <TextFieldIcon />}
+      </span>
+      <input
+        type={isUrl ? 'url' : 'text'}
+        value={value}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.value)}
+        onKeyDown={handleKeyDown}
+        placeholder={question.placeholder ?? t('profiling.field.describeOwnWords')}
+        className={`${typedFieldClassName} pl-10`}
+        autoComplete={isUrl ? 'url' : 'off'}
+      />
+    </div>
   )
 }

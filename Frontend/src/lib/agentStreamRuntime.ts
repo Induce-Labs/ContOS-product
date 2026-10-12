@@ -15,6 +15,7 @@ import {
   type AgentsInvokeRequest,
   type AgentsSseHandlers,
 } from './agentsApi'
+import { logDevError, userFacingMessage } from './devLog'
 import {
   formatStructuredAgentOutput,
   isStructuredAgentOutput,
@@ -116,6 +117,14 @@ function setPending(pending: PendingCatchUp | null) {
   ensurePollTimer()
 }
 
+function safeAgentStreamError(message: string): string {
+  logDevError('agents stream', { error: message, status: 500 })
+  return userFacingMessage(
+    new AgentsApiError(message, 500),
+    'Agent stream failed unexpectedly.',
+  )
+}
+
 function displayContentForOutput(output: unknown): string {
   if (typeof output === 'string') return output
   if (isStructuredAgentOutput(output)) {
@@ -195,7 +204,7 @@ async function fetchAndApplyRun(target: PendingCatchUp): Promise<boolean> {
       agentType: target.agentType,
       content: '',
       streaming: false,
-      error: result.error,
+      error: safeAgentStreamError(result.error),
       runId: target.runId,
       output: result.output ?? null,
     })
@@ -334,11 +343,12 @@ export async function runAgentStream(params: {
       handlers?.onComplete?.(data)
     },
     onError: (message) => {
+      const safe = safeAgentStreamError(message)
       if (active && active.assistantId === assistantId) {
-        active.error = message
+        active.error = safe
         emit()
       }
-      handlers?.onError?.(message)
+      handlers?.onError?.(safe)
     },
   }
 

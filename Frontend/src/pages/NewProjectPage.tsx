@@ -8,7 +8,6 @@ import {
   ProfilingStepLoading,
   ProfilingStepUnavailable,
 } from '../components/project-setup/ProfilingStep'
-import { useAuth } from '../hooks/useAuth'
 import { useCompetitorIntake } from '../hooks/useCompetitorIntake'
 import { useProfilingQuestionnaire } from '../hooks/useProfilingQuestionnaire'
 import {
@@ -17,6 +16,7 @@ import {
   defaultAvatarNameForType,
   type Avatar,
 } from '../lib/avatars'
+import { logDevError, userFacingMessage } from '../lib/devLog'
 import { setLastUsedProjectId } from '../lib/projects'
 import type { ProjectType } from '../types/contos'
 
@@ -31,12 +31,15 @@ function NewProjectProfiling({
   onBackToType: () => void
   onFinished: () => void
 }) {
+  const navigate = useNavigate()
+  const [isSavingDraft, setIsSavingDraft] = useState(false)
   const {
     avatar,
     questions,
     questionIndex,
     answers,
     errorMessage,
+    translationError,
     fieldError,
     isLoading,
     isSaving,
@@ -46,6 +49,7 @@ function NewProjectProfiling({
     setAnswer,
     goNext,
     goBack,
+    saveDraftCurrentAnswer,
   } = useProfilingQuestionnaire({ avatarId, startAtBeginning: true })
 
   async function handleNext(answerOverride?: string) {
@@ -59,6 +63,19 @@ function NewProjectProfiling({
     const result = goBack()
     if (result === 'exit') {
       onBackToType()
+    }
+  }
+
+  async function handleSaveDraft() {
+    setIsSavingDraft(true)
+    try {
+      const result = await saveDraftCurrentAnswer()
+      if (result === 'blocked') {
+        return
+      }
+      navigate(`/dashboard/${avatarId}`, { replace: true })
+    } finally {
+      setIsSavingDraft(false)
     }
   }
 
@@ -81,34 +98,35 @@ function NewProjectProfiling({
       questionIndex={questionIndex}
       answers={answers}
       errorMessage={errorMessage}
+      translationError={translationError}
       fieldError={fieldError}
       isSaving={isSaving}
       isSummarizing={isSummarizing}
       isTranslating={isTranslatingQuestions || isLocalizingAnswers}
+      isSavingDraft={isSavingDraft}
+      showSaveDraft
       onAnswerChange={setAnswer}
       onNext={(answerOverride) => void handleNext(answerOverride)}
       onBack={handleBack}
+      onSaveDraft={() => void handleSaveDraft()}
     />
   )
 }
 
 export function NewProjectPage() {
   const navigate = useNavigate()
-  const { signOut } = useAuth()
   const [step, setStep] = useState<WizardStep>('type')
   const [selectedType, setSelectedType] = useState<ProjectType | null>(null)
   const [avatar, setAvatar] = useState<Avatar | null>(null)
   const [fieldError, setFieldError] = useState<string | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isCreatingAvatar, setIsCreatingAvatar] = useState(false)
-  const [isSigningOut, setIsSigningOut] = useState(false)
 
   const {
     competitorInputs,
     fieldErrors: competitorFieldErrors,
     errorMessage: competitorErrorMessage,
     isSubmitting,
-    setErrorMessage: setCompetitorErrorMessage,
     updateCompetitorInput,
     updateCompetitorPlatform,
     addCompetitorField,
@@ -117,20 +135,6 @@ export function NewProjectPage() {
     minCompetitors,
     maxCompetitors,
   } = useCompetitorIntake()
-
-  async function handleSignOut() {
-    setIsSigningOut(true)
-    setCompetitorErrorMessage(null)
-    try {
-      await signOut({ force: true })
-      navigate('/login', { replace: true })
-    } catch (error) {
-      setIsSigningOut(false)
-      setCompetitorErrorMessage(
-        error instanceof Error ? error.message : 'Sign out failed.',
-      )
-    }
-  }
 
   async function handleTypeContinue() {
     setErrorMessage(null)
@@ -152,10 +156,14 @@ export function NewProjectPage() {
       setAvatar(created)
       setStep('profiling')
     } catch (error) {
+      logDevError('new project create avatar', {
+        error: error instanceof Error ? error.message : String(error),
+      })
       setErrorMessage(
-        error instanceof Error
-          ? error.message
-          : `Failed to create avatar (max ${MAX_AVATARS} on Basic plan).`,
+        userFacingMessage(
+          error,
+          `Failed to create avatar (max ${MAX_AVATARS} on Basic plan).`,
+        ),
       )
     } finally {
       setIsCreatingAvatar(false)
@@ -194,7 +202,7 @@ export function NewProjectPage() {
         backControl={
           <Link
             to="/dashboard"
-            className="inline-flex items-center gap-1.5 text-sm font-medium text-neutral-500 transition-colors hover:text-neutral-900"
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-ink-muted transition-colors hover:text-ink"
           >
             ← Cancel
           </Link>
@@ -233,8 +241,6 @@ export function NewProjectPage() {
       onRemoveField={removeCompetitorField}
       onSubmit={(event) => void handleCompetitorsSubmit(event)}
       onBack={() => setStep('profiling')}
-      onSignOut={() => void handleSignOut()}
-      isSigningOut={isSigningOut}
     />
   )
 }

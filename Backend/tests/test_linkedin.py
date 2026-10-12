@@ -238,3 +238,37 @@ class TestLinkedInPipelineBranch:
         llm_client.summarize_competitor_content.assert_called_once()
         call_kwargs = llm_client.summarize_competitor_content.call_args.kwargs
         assert call_kwargs["platform"] == "linkedin"
+
+
+class TestReplaceLinkedInContentSummary:
+    def test_checks_insert_response_not_undefined_response(self) -> None:
+        """Regression: LinkedIn analyze crashed with NameError on `response` after a successful insert."""
+        from app.clients.supabase_repo import SupabaseRepository
+
+        repository = object.__new__(SupabaseRepository)
+        delete_result = MagicMock()
+        delete_result.data = []
+        insert_result = MagicMock()
+        insert_result.data = [{"id": "summary-1"}]
+
+        table = MagicMock()
+        table.delete.return_value.eq.return_value.execute.return_value = delete_result
+        table.insert.return_value.execute.return_value = insert_result
+        client = MagicMock()
+        client.table.return_value = table
+        repository._client = client
+
+        competitor_id = uuid4()
+        avatar_id = uuid4()
+        repository.replace_linkedin_content_summary(
+            competitor_id=competitor_id,
+            avatar_id=avatar_id,
+            summary={"tone": "direct"},
+            model_used="test-model",
+        )
+
+        table.insert.assert_called_once()
+        inserted = table.insert.call_args.args[0]
+        assert inserted["competitor_id"] == str(competitor_id)
+        assert inserted["avatar_id"] == str(avatar_id)
+        assert inserted["model_used"] == "test-model"

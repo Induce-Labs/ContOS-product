@@ -15,6 +15,13 @@ export const LINKEDIN_PIPELINE_STEPS: PipelineStep[] = [
   'done',
 ]
 
+export const TWITTER_PIPELINE_STEPS: PipelineStep[] = [
+  'queued',
+  'scraping',
+  'analyzing',
+  'done',
+]
+
 /** @deprecated Prefer platform-aware helpers; kept for Instagram default. */
 export const PIPELINE_STEPS = INSTAGRAM_PIPELINE_STEPS
 
@@ -47,8 +54,18 @@ export const PIPELINE_STEP_DESCRIPTIONS: Record<PipelineStep, string> = {
   failed: 'Something went wrong during research',
 }
 
+function isScrapeAnalyzeOnlyPlatform(platform?: string): boolean {
+  return platform === 'linkedin' || platform === 'twitter'
+}
+
 export function getPipelineStepsForPlatform(platform?: string): PipelineStep[] {
-  return platform === 'linkedin' ? LINKEDIN_PIPELINE_STEPS : INSTAGRAM_PIPELINE_STEPS
+  if (platform === 'linkedin') {
+    return LINKEDIN_PIPELINE_STEPS
+  }
+  if (platform === 'twitter') {
+    return TWITTER_PIPELINE_STEPS
+  }
+  return INSTAGRAM_PIPELINE_STEPS
 }
 
 export function pipelineStepIndex(step: PipelineStep, platform?: string): number {
@@ -74,8 +91,8 @@ export function isPipelineStepComplete(
     return true
   }
 
-  // LinkedIn never uses transcribing; treat it as already passed when further along.
-  if (platform === 'linkedin' && targetStep === 'transcribing') {
+  // LinkedIn/Twitter never use transcribing; treat it as already passed when further along.
+  if (isScrapeAnalyzeOnlyPlatform(platform) && targetStep === 'transcribing') {
     return currentStep === 'analyzing' || currentStep === 'scraping'
   }
 
@@ -91,7 +108,7 @@ export function isPipelineStepActive(
     return false
   }
 
-  if (platform === 'linkedin' && targetStep === 'transcribing') {
+  if (isScrapeAnalyzeOnlyPlatform(platform) && targetStep === 'transcribing') {
     return false
   }
 

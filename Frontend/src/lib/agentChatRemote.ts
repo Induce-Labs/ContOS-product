@@ -1,3 +1,4 @@
+import { remoteStatusCode } from './devLog'
 import { supabase } from './supabase'
 import type { Json } from '../types/database'
 import {
@@ -10,9 +11,12 @@ import {
 } from './agentChatStorage'
 
 export class AgentChatRemoteError extends Error {
-  constructor(message: string, cause?: unknown) {
+  readonly statusCode: number | null
+
+  constructor(message: string, cause?: unknown, statusCode?: number | null) {
     super(message)
     this.name = 'AgentChatRemoteError'
+    this.statusCode = remoteStatusCode(cause, statusCode)
     if (cause instanceof Error) {
       this.cause = cause
     }

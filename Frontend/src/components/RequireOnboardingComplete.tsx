@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Navigate, Outlet } from 'react-router-dom'
+import { logDevError, userFacingMessage } from '../lib/devLog'
 import { isOnboardingComplete, resolveCurrentOnboardingPath } from '../lib/onboarding'
 
 export function RequireOnboardingComplete() {
@@ -31,10 +32,11 @@ export function RequireOnboardingComplete() {
       } catch (error) {
         if (isMounted) {
           setStatus('error')
+          logDevError('onboarding complete check', {
+            error: error instanceof Error ? error.message : String(error),
+          })
           setErrorMessage(
-            error instanceof Error
-              ? error.message
-              : 'Failed to verify onboarding status unexpectedly',
+            userFacingMessage(error, 'Failed to verify onboarding status unexpectedly'),
           )
         }
       }

@@ -93,8 +93,9 @@ class MCPServer:
             description=(
                 "Agentic RAG retrieve: embed a query and return top-k similar playbooks, "
                 "source-grounded marketing knowledge chunks, "
-                "LinkedIn summaries (linkedin_content_summaries), or Instagram summaries "
-                "(instagram_content_summaries)."
+                "LinkedIn summaries (linkedin_content_summaries), Instagram summaries "
+                "(instagram_content_summaries), or Twitter/X summaries "
+                "(twitter_content_summaries)."
             ),
             parameters={
                 "type": "object",
@@ -107,6 +108,7 @@ class MCPServer:
                             "marketing_knowledge_chunks",
                             "linkedin_content_summaries",
                             "instagram_content_summaries",
+                            "twitter_content_summaries",
                         ],
                         "default": "playbooks",
                     },
@@ -121,8 +123,8 @@ class MCPServer:
                     },
                     "platform": {
                         "type": "string",
-                        "enum": ["instagram", "linkedin"],
-                        "description": "Platform filter for instagram_content_summaries (default instagram)",
+                        "enum": ["instagram", "linkedin", "twitter"],
+                        "description": "Platform filter for summary tables (default instagram)",
                     },
                     "fast": {
                         "type": "boolean",
@@ -442,6 +444,70 @@ class MCPServer:
                 if scrape_result.get("summary"):
                     summaries = [scrape_result["summary"], *summaries]
 
+        elif agent_type == "twitter":
+            profile = self.call_tool(
+                "fetch_profile", {"user_id": user_id, "avatar_id": avatar_id}
+            )
+            tools_used.append("fetch_profile")
+            similar_tw = self.call_tool(
+                "similarity_search",
+                {
+                    "query_text": user_input[:500],
+                    "table": "twitter_content_summaries",
+                    "platform": "twitter",
+                    "top_k": 3,
+                    "avatar_id": avatar_id,
+                    "user_id": user_id,
+                },
+            )
+            tools_used.append("similarity_search:twitter_content_summaries")
+            summaries = [
+                s.get("content")
+                for s in similar_tw
+                if isinstance(s.get("content"), dict)
+            ]
+            if not summaries:
+                summaries = self.call_tool(
+                    "fetch_summaries",
+                    {
+                        "avatar_id": avatar_id,
+                        "platform": "twitter",
+                        "user_id": user_id,
+                    },
+                )
+                tools_used.append("fetch_summaries")
+            platform_ingested = [
+                s
+                for s in ingested
+                if (s.get("platform") or "").lower() in {"twitter", "x"}
+            ]
+            if platform_ingested:
+                summaries = platform_ingested + list(summaries)
+            similar = self.call_tool(
+                "similarity_search",
+                {
+                    "query_text": user_input[:500],
+                    "table": "playbooks",
+                    "top_k": 3,
+                    "avatar_id": avatar_id,
+                },
+            )
+            tools_used.append("similarity_search:playbooks")
+            playbooks = [s.get("content") for s in similar if s.get("content")]
+            if live_mode and competitor_url:
+                scrape_result = self.call_tool(
+                    "scrape_competitor",
+                    {
+                        "competitor_url": competitor_url,
+                        "platform": "twitter",
+                        "avatar_id": avatar_id,
+                        "user_id": user_id,
+                    },
+                )
+                tools_used.append("scrape_competitor")
+                if scrape_result.get("summary"):
+                    summaries = [scrape_result["summary"], *summaries]
+
         elif agent_type == "chatbot" and (chatbot_context_on or ingested):
             profile = self.call_tool(
                 "fetch_profile", {"user_id": user_id, "avatar_id": avatar_id}
@@ -451,7 +517,7 @@ class MCPServer:
                 summaries = list(ingested)
                 tools_used.append("competitor_knowledge_base")
             else:
-                # Chat context ON → LinkedIn + Instagram RAG for this project
+                # Chat context ON → LinkedIn + Instagram + Twitter/X RAG for this project
                 similar_li = self.call_tool(
                     "similarity_search",
                     {
@@ -475,9 +541,21 @@ class MCPServer:
                     },
                 )
                 tools_used.append("similarity_search:instagram_content_summaries")
+                similar_tw = self.call_tool(
+                    "similarity_search",
+                    {
+                        "query_text": user_input[:500],
+                        "table": "twitter_content_summaries",
+                        "platform": "twitter",
+                        "top_k": 2,
+                        "avatar_id": avatar_id,
+                        "user_id": user_id,
+                    },
+                )
+                tools_used.append("similarity_search:twitter_content_summaries")
                 summaries = [
                     s.get("content")
-                    for s in (similar_li + similar_ig)
+                    for s in (similar_li + similar_ig + similar_tw)
                     if isinstance(s.get("content"), dict)
                 ]
                 if not summaries:

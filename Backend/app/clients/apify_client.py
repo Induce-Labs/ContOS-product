@@ -23,6 +23,8 @@ class ApifyClient:
         self._transcriber_actor_id = settings.apify_transcriber_actor_id
         self._linkedin_actor_id = settings.apify_linkedin_actor_id
         self._linkedin_max_posts = max(10, settings.linkedin_max_posts)
+        self._twitter_actor_id = settings.apify_twitter_actor_id
+        self._twitter_max_items = max(1, settings.twitter_max_items)
         self._wait_secs = settings.apify_wait_secs
         self._lookback_days = settings.scrape_lookback_days
         self._instagram_session_id = settings.apify_instagram_session_id.strip()
@@ -93,6 +95,68 @@ class ApifyClient:
         )
 
         return items
+
+    def scrape_twitter_profile(self, handle_or_url: str) -> list[dict[str, Any]]:
+        from app.services.twitter_parser import extract_twitter_handle
+
+        lowered = handle_or_url.lower()
+        if "linkedin.com" in lowered:
+            raise ApifyServiceError(
+                "Refusing to scrape a LinkedIn URL with the Twitter actor. "
+                f"Use scrape_linkedin_profile instead. Got: {handle_or_url}",
+            )
+        if "instagram.com" in lowered:
+            raise ApifyServiceError(
+                "Refusing to scrape an Instagram URL with the Twitter actor. "
+                f"Use scrape_instagram_profile instead. Got: {handle_or_url}",
+            )
+
+        try:
+            handle = extract_twitter_handle(handle_or_url)
+        except ValueError as error:
+            raise ApifyServiceError(str(error)) from error
+
+        lookback_days = max(1, self._lookback_days)
+        actor_input: dict[str, Any] = {
+            "twitterHandles": [handle],
+            "maxItems": self._twitter_max_items,
+            "within_time": f"{lookback_days}d",
+            "outputVariant": "rich",
+            "fieldStyle": "camelCase",
+            "filter:replies": False,
+        }
+
+        logger.info(
+            "Starting Twitter profile scrape",
+            extra={
+                "handle": handle,
+                "handle_or_url": handle_or_url,
+                "actor_id": self._twitter_actor_id,
+                "max_items": self._twitter_max_items,
+                "lookback_days": lookback_days,
+            },
+        )
+
+        items = self._run_actor_sync_get_dataset_items(self._twitter_actor_id, actor_input)
+        filtered = [
+            item
+            for item in items
+            if not (
+                isinstance(item, dict)
+                and str(item.get("resultType") or "").strip().lower() == "diagnostic"
+            )
+        ]
+
+        logger.info(
+            "Twitter profile scrape returned items",
+            extra={
+                "handle": handle,
+                "raw_item_count": len(items),
+                "item_count": len(filtered),
+            },
+        )
+
+        return filtered
 
     def transcribe_reel_urls(self, reel_urls: list[str]) -> dict[str, ReelTranscriptionResult]:
         if not reel_urls:

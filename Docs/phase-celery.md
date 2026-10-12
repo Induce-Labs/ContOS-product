@@ -178,7 +178,57 @@ cd Frontend && npm run dev
 - Celery does not raise Apify/OpenRouter quotas — tune concurrency and rate limits
 - Eager Celery mode is pytest-only; never set in `.env`
 
+## GlitchTip error monitoring
+
+ContOS reports unexpected application errors to GlitchTip. The clients are the official Sentry-compatible SDKs (`sentry-sdk` on Python, `@sentry/react` in the browser). The DSNs point at GlitchTip projects. No Sentry hosted account is required, and no GlitchTip or Sentry auth token is read at runtime.
+
+| Process | Project | Variable |
+| --- | --- | --- |
+| Frontend | contos-frontend | `VITE_SENTRY_DSN`, `VITE_SENTRY_ENVIRONMENT` |
+| Backend web and scrape worker | contos-backend | `SENTRY_DSN`, `SENTRY_ENVIRONMENT` |
+| Agents web and website worker | contos-agents | `SENTRY_DSN`, `SENTRY_ENVIRONMENT` |
+
+- Init runs only when the DSN is set. An empty DSN leaves the process running with monitoring off.
+- `SENTRY_ENVIRONMENT` / `VITE_SENTRY_ENVIRONMENT` is `production` or `development`.
+- Set each service's own DSN. Agents loads `Backend/.env` when that file is present, and a blank Agents `SENTRY_DSN` does not override it, so a local Agents process can otherwise publish into the backend GlitchTip project.
+- Sessions are disabled because GlitchTip does not support them (`auto_session_tracking=False` on Python; the browser SDK omits the session integration). Transaction sample rate is `0.01`. Log ingestion is off.
+- Expected client statuses 400, 401, 403, 404, 409, 410, and 429 are not sent. Unexpected 500, 502, 503, and 504 responses are.
+- Celery task failures on `pipeline.run_competitor`, `profiling.run_summarize`, and `translate.translate_content` are captured. Task args and kwargs are removed before send. Safe tags are limited to ids already on the task (`avatar_id`, `competitor_id`, `user_id`).
+- Request headers, cookies, and bodies are removed. Secret patterns (Bearer, `pos_` tokens, OAuth values, credential URLs, provision and encryption key names) are redacted.
+- Postiz itself is not monitored. GlitchTip only sees ContOS failures while talking to Postiz.
+- Host and VPS monitoring remain a future phase. Health endpoints are unchanged.
+
+## Local Flower (development only)
+
+Flower watches both workers from one process because they share `redis://localhost:6379/0`. It is not part of the Railway deploy: it is not in `requirements.txt` or either Procfile, and it is not bound to a public interface.
+
+- Package: Flower 2.2.0, installed only in `Backend/.venv`.
+- Local workers add `-E` on the process command so task events are on. `celery_app.py` is unchanged (`worker_send_task_events` is not set there).
+- One Flower process uses the Backend Celery app and the shared broker.
+- Listen address is `127.0.0.1:5555` only.
+- Basic auth comes from `FLOWER_BASIC_AUTH` in gitignored `Backend/.env` (`username:password`). Flower reads `FLOWER_*` environment variables. Do not commit the password or pass it on the command line.
+- `task_ignore_result` stays `True`, so Flower has no stored return value. With events enabled it still shows state, runtime, worker, and retries while Flower is running.
+- Redis task events leave `routing_key` empty. The queue is the worker's queue: `scrape@…` consumes `scrape`, `website@…` consumes `website`.
+
+Start the local workers with the existing flags plus `-E`, then start Flower from `Backend` after loading `FLOWER_BASIC_AUTH` into the process environment:
+
+```powershell
+.\.venv\Scripts\python.exe -m celery -A app.celery_app worker --loglevel=info -Q scrape --pool=threads --concurrency=2 -n scrape@%h -E
+```
+
+```powershell
+.\.venv\Scripts\python.exe -m celery -A celery_app worker --loglevel=info -Q website --pool=threads --concurrency=2 -n website@%h -E
+```
+
+```powershell
+$env:FLOWER_BASIC_AUTH = ((Get-Content .env | Where-Object { $_ -like 'FLOWER_BASIC_AUTH=*' }) -replace '^FLOWER_BASIC_AUTH=','').Trim()
+.\.venv\Scripts\python.exe -m celery -A app.celery_app flower --address=127.0.0.1 --port=5555
+```
+
+Open `http://127.0.0.1:5555` on this machine. Unauthenticated requests receive 401.
+
 ## Future improvements
 
 - Embedding backfill on `website` queue
-- Flower / metrics dashboards
+- Production metrics dashboards (local Flower is development-only)
+- Host and VPS monitoring

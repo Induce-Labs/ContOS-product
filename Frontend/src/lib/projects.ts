@@ -1,5 +1,11 @@
+import { remoteStatusCode } from './devLog'
 import { supabase } from './supabase'
-import { isOnboardingComplete, resolveCurrentOnboardingPath } from './onboarding'
+import { requireAuthenticatedUserId } from './auth'
+import {
+  ensureUserProfile,
+  hydrateAppLanguageFromProfile,
+  resolveCurrentOnboardingPath,
+} from './onboarding'
 import type { Tables, TablesInsert } from '../types/database'
 import type { ProjectType } from '../types/contos'
 
@@ -10,9 +16,12 @@ const LAST_AVATAR_STORAGE_KEY = 'contos_last_avatar_id'
 const LEGACY_LAST_PROJECT_STORAGE_KEY = 'contos_last_project_id'
 
 export class ProjectsServiceError extends Error {
-  constructor(message: string, cause?: unknown) {
+  readonly statusCode: number | null
+
+  constructor(message: string, cause?: unknown, statusCode?: number | null) {
     super(message)
     this.name = 'ProjectsServiceError'
+    this.statusCode = remoteStatusCode(cause, statusCode)
     if (cause instanceof Error) {
       this.cause = cause
     }
@@ -45,26 +54,22 @@ export async function createProject(
     throw new ProjectsServiceError('Avatar name is required.')
   }
 
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser()
-
-  if (userError) {
+  let userId: string
+  try {
+    userId = await requireAuthenticatedUserId()
+  } catch (error) {
     throw new ProjectsServiceError(
-      `Failed to read authenticated user: ${userError.message}`,
-      userError,
+      error instanceof Error
+        ? error.message
+        : 'You must be signed in to create an avatar.',
+      error,
     )
-  }
-
-  if (!user) {
-    throw new ProjectsServiceError('You must be signed in to create an avatar.')
   }
 
   const row: TablesInsert<'avatars'> = {
     name: trimmedName,
     type,
-    user_id: user.id,
+    user_id: userId,
     status: 'onboarding',
   }
 
@@ -75,6 +80,7 @@ export async function createProject(
       throw new ProjectsServiceError(
         "You've reached the maximum number of avatars on your current plan.",
         error,
+        null,
       )
     }
     throw new ProjectsServiceError(`Failed to create avatar: ${error.message}`, error)
@@ -150,10 +156,17 @@ export async function resolveDashboardPath(): Promise<string> {
   return `/dashboard/${activeProject.id}`
 }
 
-export async function resolvePostAuthPath(): Promise<string> {
-  const completed = await isOnboardingComplete()
+export async function resolvePostAuthPath(options?: {
+  hydrateLanguage?: boolean
+}): Promise<string> {
+  const hydrateLanguage = options?.hydrateLanguage !== false
+  const profile = await ensureUserProfile()
 
-  if (!completed) {
+  if (hydrateLanguage) {
+    await hydrateAppLanguageFromProfile(profile)
+  }
+
+  if (profile.onboarding_completed_at === null) {
     return resolveCurrentOnboardingPath()
   }
 

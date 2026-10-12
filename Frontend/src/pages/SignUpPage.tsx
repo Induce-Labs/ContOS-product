@@ -1,16 +1,19 @@
 import type { FormEvent } from 'react'
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { AuthLayout, AuthLink } from '../components/auth/AuthLayout'
 import { AuthAlert, GoogleSignInButton, PrimaryButton } from '../components/auth/AuthButtons'
 import { AuthFormField } from '../components/auth/AuthFormField'
 import { signInWithOAuthProvider, signUpWithEmail } from '../lib/auth'
+import { logDevError, userFacingMessage } from '../lib/devLog'
 import { resolvePostAuthPath } from '../lib/projects'
 
 export function SignUpPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const sessionInvalid = searchParams.get('session') === 'invalid'
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
@@ -34,9 +37,10 @@ export function SignUpPage() {
 
       setSuccessMessage(t('auth.signup.checkEmail'))
     } catch (error) {
-      setErrorMessage(
-        error instanceof Error ? error.message : t('auth.signup.failedUnexpected'),
-      )
+      logDevError('auth email sign up', {
+        error: error instanceof Error ? error.message : String(error),
+      })
+      setErrorMessage(userFacingMessage(error, t('auth.signup.failedUnexpected')))
     } finally {
       setIsSubmitting(false)
     }
@@ -50,9 +54,10 @@ export function SignUpPage() {
     try {
       await signInWithOAuthProvider('google')
     } catch (error) {
-      setErrorMessage(
-        error instanceof Error ? error.message : t('auth.signup.googleFailedUnexpected'),
-      )
+      logDevError('auth google sign up', {
+        error: error instanceof Error ? error.message : String(error),
+      })
+      setErrorMessage(userFacingMessage(error, t('auth.signup.googleFailedUnexpected')))
       setIsSubmitting(false)
     }
   }
@@ -69,6 +74,9 @@ export function SignUpPage() {
       }
     >
       <form className="space-y-4" onSubmit={handleSubmit}>
+        {sessionInvalid && !errorMessage ? (
+          <AuthAlert message={t('auth.signup.sessionInvalid')} />
+        ) : null}
         {errorMessage ? <AuthAlert message={errorMessage} /> : null}
         {successMessage ? <AuthAlert message={successMessage} tone="success" /> : null}
 

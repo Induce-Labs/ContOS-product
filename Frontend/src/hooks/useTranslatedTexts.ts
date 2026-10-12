@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { logDevError, userFacingMessage } from '../lib/devLog'
 import { isSupportedLanguage, type SupportedLanguage } from '../i18n'
 import { translateTextsChunkedWithRetry } from '../lib/profilingLocale'
 
@@ -108,11 +109,10 @@ export function useTranslatedTexts(
           return
         }
         setTexts(stableInputs)
-        setError(
-          err instanceof Error
-            ? err.message
-            : t('agents.translationFailed'),
-        )
+        logDevError('translate texts', {
+          error: err instanceof Error ? err.message : String(err),
+        })
+        setError(userFacingMessage(err, t('agents.translationFailed')))
       } finally {
         if (requestId === requestIdRef.current) {
           setIsTranslating(false)

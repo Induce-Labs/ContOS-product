@@ -1,4 +1,5 @@
 import i18n from '../i18n'
+import { remoteStatusCode } from './devLog'
 import { supabase } from './supabase'
 import type { Tables } from '../types/database'
 import type { ProjectType } from '../types/contos'
@@ -15,11 +16,18 @@ export const MAX_AVATARS = 3
 
 export class AvatarsServiceError extends Error {
   readonly code?: string
+  readonly statusCode: number | null
 
-  constructor(message: string, cause?: unknown, code?: string) {
+  constructor(
+    message: string,
+    cause?: unknown,
+    code?: string,
+    statusCode?: number | null,
+  ) {
     super(message)
     this.name = 'AvatarsServiceError'
     this.code = code
+    this.statusCode = remoteStatusCode(cause, statusCode)
     if (cause instanceof Error) {
       this.cause = cause
     }
@@ -33,6 +41,7 @@ function mapAvatarError(error: { message: string; code?: string }): AvatarsServi
       "You've reached the maximum number of avatars on your current plan.",
       error,
       'AVATAR_LIMIT_REACHED',
+      null,
     )
   }
   return new AvatarsServiceError(message, error)
@@ -80,7 +89,12 @@ export async function createAvatar(name: string, type: ProjectType): Promise<Ava
     return await createProject(name, type)
   } catch (error) {
     if (error instanceof ProjectsServiceError) {
-      throw mapAvatarError({ message: error.message })
+      throw new AvatarsServiceError(
+        error.message,
+        error,
+        undefined,
+        error.statusCode,
+      )
     }
     throw error
   }

@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { AgentType } from '../../lib/agentsApi'
 import type { ChatStore } from '../../lib/agentChatStorage'
@@ -49,13 +50,15 @@ export function AgentChatHistoryPanel({
                   type="button"
                   onClick={() => onSelectSession(session.id)}
                   className={`w-full rounded-xl px-3 py-2.5 text-left transition ${
-                    isActive ? 'bg-accent-primary text-white' : 'hover:bg-accent-primary-soft'
+                    isActive
+                      ? 'bg-accent-primary text-btn-primary-fg'
+                      : 'hover:bg-accent-primary-soft'
                   }`}
                 >
                   <span className="block truncate text-sm font-medium">{session.title}</span>
                   <span
                     className={`mt-0.5 block text-xs ${
-                      isActive ? 'text-white/80' : 'text-ink-muted'
+                      isActive ? 'text-btn-primary-fg/70' : 'text-ink-muted'
                     }`}
                   >
                     {formatSessionTime(session.updatedAt)}
@@ -88,22 +91,125 @@ export function AgentTypePills({
   onChange,
 }: AgentTypePillsProps) {
   void _streaming
+  const [open, setOpen] = useState(false)
+  const containerRef = useRef<HTMLDivElement | null>(null)
+  const triggerRef = useRef<HTMLButtonElement | null>(null)
+  const [menuBox, setMenuBox] = useState<{ top: number; left: number; minWidth: number } | null>(
+    null,
+  )
+  const selected = options.find((option) => option.value === agentType) ?? options[0]
+
+  function placeMenu() {
+    const rect = triggerRef.current?.getBoundingClientRect()
+    if (!rect) return
+    setMenuBox({ top: rect.bottom + 8, left: rect.left, minWidth: rect.width })
+  }
+
+  useEffect(() => {
+    if (!open) return
+
+    function handlePointerDown(event: MouseEvent) {
+      const target = event.target as Node
+      if (
+        containerRef.current?.contains(target) ||
+        document.getElementById('agent-type-menu')?.contains(target)
+      ) {
+        return
+      }
+      setOpen(false)
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setOpen(false)
+      }
+    }
+
+    function handleReposition() {
+      placeMenu()
+    }
+
+    document.addEventListener('mousedown', handlePointerDown)
+    document.addEventListener('keydown', handleKeyDown)
+    window.addEventListener('resize', handleReposition)
+    window.addEventListener('scroll', handleReposition, true)
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown)
+      document.removeEventListener('keydown', handleKeyDown)
+      window.removeEventListener('resize', handleReposition)
+      window.removeEventListener('scroll', handleReposition, true)
+    }
+  }, [open])
+
+  if (!selected) return null
+
   return (
-    <div className="flex flex-wrap gap-2">
-      {options.map((option) => (
-        <button
-          key={option.value}
-          type="button"
-          onClick={() => onChange(option.value)}
-          className={`rounded-full px-3 py-1.5 text-sm transition ${
-            agentType === option.value
-              ? 'bg-accent-primary text-white'
-              : 'border border-border-hairline bg-white text-ink-muted hover:bg-accent-primary-soft'
-          }`}
+    <div ref={containerRef} className="relative inline-flex">
+      <button
+        ref={triggerRef}
+        type="button"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => {
+          if (open) {
+            setOpen(false)
+            return
+          }
+          placeMenu()
+          setOpen(true)
+        }}
+        className="contos-btn contos-btn--pill contos-btn--secondary inline-flex items-center gap-2"
+      >
+        <span>{selected.label}</span>
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.75"
+          className={`h-3.5 w-3.5 shrink-0 text-ink-muted transition ${open ? 'rotate-180' : ''}`}
+          aria-hidden
         >
-          {option.label}
-        </button>
-      ))}
+          <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
+      {open && menuBox ? (
+        <ul
+          id="agent-type-menu"
+          role="listbox"
+          aria-label={selected.label}
+          style={{
+            position: 'fixed',
+            top: menuBox.top,
+            left: menuBox.left,
+            minWidth: menuBox.minWidth,
+          }}
+          className="z-[80] rounded-2xl border border-[#ece8f4] bg-white p-1.5 shadow-[0_12px_28px_rgba(90,70,130,0.10)] dark:border-border-hairline dark:bg-canvas-raised"
+        >
+          {options.map((option) => {
+            const isActive = agentType === option.value
+            return (
+              <li key={option.value} role="presentation">
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={isActive}
+                  onClick={() => {
+                    onChange(option.value)
+                    setOpen(false)
+                  }}
+                  className={`flex w-full items-center whitespace-nowrap rounded-xl px-3 py-2 text-left text-sm font-medium transition ${
+                    isActive
+                      ? 'bg-[#e8e0fe] text-ink dark:bg-accent-primary dark:text-btn-primary-fg'
+                      : 'text-ink-muted hover:bg-accent-primary-soft/60 hover:text-ink'
+                  }`}
+                >
+                  {option.label}
+                </button>
+              </li>
+            )
+          })}
+        </ul>
+      ) : null}
     </div>
   )
 }

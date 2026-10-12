@@ -11,6 +11,9 @@ node_modules
 dist
 dist-ssr
 
+# Local Postiz v2.23.0 worktree (patch source; do not commit full clone)
+_postiz-v2.23.0/
+
 # Monorepo build outputs
 Frontend/dist
 Backend/dist

@@ -1,4 +1,5 @@
 import { getAccessToken } from './auth'
+import { logDevError, remoteStatusCode } from './devLog'
 import { getApiBaseUrl } from './supabase'
 
 export class ApiServiceError extends Error {
@@ -22,6 +23,7 @@ async function requireAccessToken(): Promise<string> {
   } catch (error: unknown) {
     throw new ApiServiceError(
       error instanceof Error ? error.message : 'You must be signed in to continue.',
+      error instanceof Error ? remoteStatusCode(error) : null,
     )
   }
 }
@@ -50,10 +52,14 @@ export async function enqueueCompetitorScrapeJobs(
 
   if (!response.ok) {
     const responseBody = await response.text()
-    throw new ApiServiceError(
-      `Failed to enqueue scrape jobs (status ${response.status}): ${responseBody || 'no response body'}`,
-      response.status,
-    )
+    const detail = `Failed to enqueue scrape jobs (status ${response.status}): ${responseBody || 'no response body'}`
+    logDevError('POST /avatars/competitors/scrape', {
+      method: 'POST',
+      path: '/avatars/competitors/scrape',
+      status: response.status,
+      error: detail,
+    })
+    throw new ApiServiceError(detail, response.status)
   }
 
   const data: unknown = await response.json()
@@ -72,12 +78,8 @@ export function enqueueCompetitorScrapeJobsInBackground(
   avatarId: string,
   competitorIds: string[],
 ): void {
-  void enqueueCompetitorScrapeJobs(avatarId, competitorIds).catch((error: unknown) => {
-    console.warn('Failed to enqueue competitor scrape jobs in background', {
-      avatarId,
-      competitorIds,
-      error: error instanceof Error ? error.message : String(error),
-    })
+  void enqueueCompetitorScrapeJobs(avatarId, competitorIds).catch(() => {
+    // enqueueCompetitorScrapeJobs already recorded the sanitized dev log.
   })
 }
 
@@ -107,9 +109,13 @@ export async function stopCompetitorPipeline(
 
   if (!response.ok) {
     const responseBody = await response.text()
-    throw new ApiServiceError(
-      `Failed to stop research (status ${response.status}): ${responseBody || 'no response body'}`,
-      response.status,
-    )
+    const detail = `Failed to stop research (status ${response.status}): ${responseBody || 'no response body'}`
+    logDevError('POST /avatars/competitors/stop', {
+      method: 'POST',
+      path: '/avatars/competitors/stop',
+      status: response.status,
+      error: detail,
+    })
+    throw new ApiServiceError(detail, response.status)
   }
 }

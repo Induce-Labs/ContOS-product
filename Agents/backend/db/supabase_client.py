@@ -168,7 +168,7 @@ def fetch_summaries_rows(
     avatar_id: str | None = None,
     platform: str | None = None,
 ) -> list[dict[str, Any]]:
-    """Return summary payloads from instagram_content_summaries (+ LinkedIn) for one avatar."""
+    """Return summary payloads from Instagram / LinkedIn / Twitter tables for one avatar."""
     if not avatar_id:
         raise ValueError("avatar_id is required for fetch_summaries_rows")
 
@@ -218,6 +218,33 @@ def fetch_summaries_rows(
                     "linkedin_content_summaries skip avatar_id=%s: %s",
                     avatar_id,
                     li_exc,
+                )
+
+        # Twitter/X intel may live in twitter_content_summaries
+        if platform is None or platform.lower() in {"twitter", "x"}:
+            try:
+                tw_query = (
+                    client.table("twitter_content_summaries")
+                    .select(
+                        "id, competitor_id, avatar_id, summary, model_used, generated_at, competitors(platform, handle_or_url)"
+                    )
+                    .eq("avatar_id", avatar_id)
+                )
+                tw = tw_query.execute()
+                for row in tw.data or []:
+                    competitor = row.get("competitors") or {}
+                    if isinstance(competitor, list):
+                        competitor = competitor[0] if competitor else {}
+                    flat = _flatten_summary_row(
+                        row, platform=competitor.get("platform") or "twitter"
+                    )
+                    flat["source"] = "supabase.twitter_content_summaries"
+                    filtered.append(flat)
+            except Exception as tw_exc:
+                logger.info(
+                    "twitter_content_summaries skip avatar_id=%s: %s",
+                    avatar_id,
+                    tw_exc,
                 )
 
         return filtered
@@ -284,9 +311,9 @@ def fetch_summary_by_competitor_url(
         rows = summary_rows.data or []
         if not rows:
             # LinkedIn summaries live in a dedicated table
-            if (match.get("platform") or "").lower() == "linkedin" or (
-                platform or ""
-            ).lower() == "linkedin":
+            match_platform = (match.get("platform") or "").lower()
+            requested_platform = (platform or "").lower()
+            if match_platform == "linkedin" or requested_platform == "linkedin":
                 li_rows = (
                     client.table("linkedin_content_summaries")
                     .select(
@@ -298,15 +325,35 @@ def fetch_summary_by_competitor_url(
                     .execute()
                 )
                 rows = li_rows.data or []
+            elif match_platform in {"twitter", "x"} or requested_platform in {
+                "twitter",
+                "x",
+            }:
+                tw_rows = (
+                    client.table("twitter_content_summaries")
+                    .select(
+                        "id, competitor_id, avatar_id, summary, model_used, generated_at, competitors(platform, handle_or_url)"
+                    )
+                    .eq("competitor_id", match["id"])
+                    .order("generated_at", desc=True)
+                    .limit(1)
+                    .execute()
+                )
+                rows = tw_rows.data or []
         if not rows:
             return {
                 "competitor": match,
                 "summary": None,
-                "note": "Competitor found but no instagram_content_summaries / linkedin_content_summaries row yet",
+                "note": (
+                    "Competitor found but no instagram_content_summaries / "
+                    "linkedin_content_summaries / twitter_content_summaries row yet"
+                ),
             }
         flat = _flatten_summary_row(rows[0], platform=match.get("platform"))
         if (match.get("platform") or "").lower() == "linkedin":
             flat["source"] = "supabase.linkedin_content_summaries"
+        elif (match.get("platform") or "").lower() in {"twitter", "x"}:
+            flat["source"] = "supabase.twitter_content_summaries"
         return {"competitor": match, "summary": flat, "note": None}
     except Exception as exc:
         logger.warning(
@@ -576,6 +623,98 @@ def similarity_search_linkedin_summaries(
             "competitor_handle": competitor.get("handle_or_url"),
             "platform": competitor.get("platform") or "linkedin",
             "source": "supabase.linkedin_content_summaries",
+        }
+        scored.append(
+            {
+                "id": row.get("id"),
+                "competitor_id": row.get("competitor_id"),
+                "avatar_id": row.get("avatar_id"),
+                "summary": enriched,
+                "model_used": row.get("model_used"),
+                "generated_at": row.get("generated_at"),
+                "similarity": sim,
+            }
+        )
+    scored.sort(key=lambda r: r["similarity"], reverse=True)
+    return scored[:top_k]
+
+
+def list_twitter_summaries_for_embed(
+    only_missing: bool = True, limit: int = 200
+) -> list[dict[str, Any]]:
+    client = _require_client()
+    result = (
+        client.table("twitter_content_summaries")
+        .select("id, competitor_id, avatar_id, summary, embedding")
+        .limit(limit)
+        .execute()
+    )
+    rows = result.data or []
+    if only_missing:
+        rows = [r for r in rows if r.get("embedding") is None]
+    return rows
+
+
+def update_twitter_summary_embedding(
+    summary_id: str, embedding: list[float]
+) -> dict[str, Any] | None:
+    client = _require_client()
+    result = (
+        client.table("twitter_content_summaries")
+        .update({"embedding": embedding})
+        .eq("id", summary_id)
+        .execute()
+    )
+    data = result.data or []
+    return data[0] if data else None
+
+
+def similarity_search_twitter_summaries(
+    query_embedding: list[float],
+    top_k: int = 5,
+    avatar_id: str | None = None,
+) -> list[dict[str, Any]]:
+    """Rank twitter_content_summaries by embedding cosine (RPC or local)."""
+    client = _require_client()
+
+    try:
+        params: dict[str, Any] = {
+            "query_embedding": query_embedding,
+            "match_count": top_k,
+        }
+        if avatar_id:
+            params["filter_avatar_id"] = avatar_id
+        result = client.rpc("match_twitter_content_summaries", params).execute()
+        if result.data:
+            return result.data
+    except Exception as exc:
+        logger.info(
+            "match_twitter_content_summaries RPC unavailable; local cosine: %s",
+            exc,
+        )
+
+    query = client.table("twitter_content_summaries").select(
+        "id, competitor_id, avatar_id, summary, model_used, generated_at, embedding, competitors(platform, handle_or_url)"
+    )
+    if avatar_id:
+        query = query.eq("avatar_id", avatar_id)
+    rows = query.limit(max(top_k * 20, 100)).execute().data or []
+
+    scored: list[dict[str, Any]] = []
+    for row in rows:
+        emb = _parse_embedding(row.get("embedding"))
+        if emb is None:
+            continue
+        sim = _cosine_similarity(query_embedding, emb)
+        summary = row.get("summary") if isinstance(row.get("summary"), dict) else {}
+        competitor = row.get("competitors") or {}
+        if isinstance(competitor, list):
+            competitor = competitor[0] if competitor else {}
+        enriched = {
+            **summary,
+            "competitor_handle": competitor.get("handle_or_url"),
+            "platform": competitor.get("platform") or "twitter",
+            "source": "supabase.twitter_content_summaries",
         }
         scored.append(
             {

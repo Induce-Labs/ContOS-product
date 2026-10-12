@@ -1,30 +1,35 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
+import { ConfirmDialog } from '../ConfirmDialog'
 import {
   MAX_AVATARS,
   avatarTypeLabel,
   deleteAvatar,
   setDefaultAvatar,
 } from '../../lib/avatars'
+import { logDevError, userFacingMessage } from '../../lib/devLog'
 import type { Project } from '../../lib/projects'
 
 type ProjectSwitcherProps = {
   projects: Project[]
   activeProject: Project | null
   onAvatarsChanged: (projects: Project[]) => void
+  collapsed?: boolean
 }
 
 export function ProjectSwitcher({
   projects,
   activeProject,
   onAvatarsChanged,
+  collapsed = false,
 }: ProjectSwitcherProps) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const location = useLocation()
   const [open, setOpen] = useState(false)
   const [busyAvatarId, setBusyAvatarId] = useState<string | null>(null)
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const containerRef = useRef<HTMLDivElement | null>(null)
   const atAvatarCap = projects.length >= MAX_AVATARS
@@ -67,34 +72,45 @@ export function ProjectSwitcher({
         })),
       )
     } catch (error) {
-      setActionError(
-        error instanceof Error ? error.message : t('projectSwitcher.failedSetDefault'),
-      )
+      logDevError('project switcher set default', {
+        error: error instanceof Error ? error.message : String(error),
+      })
+      setActionError(userFacingMessage(error, t('projectSwitcher.failedSetDefault')))
     } finally {
       setBusyAvatarId(null)
     }
   }
 
-  async function handleDelete(avatarId: string) {
-    if (!window.confirm(t('projectSwitcher.deleteConfirm'))) {
+  function requestDelete(avatarId: string) {
+    setActionError(null)
+    setDeleteTargetId(avatarId)
+    setOpen(false)
+  }
+
+  async function confirmDelete() {
+    if (!deleteTargetId) {
       return
     }
 
+    const avatarId = deleteTargetId
     setActionError(null)
     setBusyAvatarId(avatarId)
     try {
       await deleteAvatar(avatarId)
       const next = projects.filter((project) => project.id !== avatarId)
       onAvatarsChanged(next)
+      setDeleteTargetId(null)
       if (activeProject?.id === avatarId) {
         const fallback = next.find((project) => project.is_default) ?? next[0]
-        setOpen(false)
         navigate(fallback ? `/dashboard/${fallback.id}` : '/dashboard')
       }
     } catch (error) {
-      setActionError(
-        error instanceof Error ? error.message : t('projectSwitcher.failedDelete'),
-      )
+      setDeleteTargetId(null)
+      setOpen(true)
+      logDevError('project switcher delete', {
+        error: error instanceof Error ? error.message : String(error),
+      })
+      setActionError(userFacingMessage(error, t('projectSwitcher.failedDelete')))
     } finally {
       setBusyAvatarId(null)
     }
@@ -105,20 +121,36 @@ export function ProjectSwitcher({
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
-        className="inline-flex max-w-[220px] items-center gap-2 rounded-full border border-border-hairline bg-white px-4 py-2 text-sm text-ink shadow-sm transition hover:border-accent-primary/40 sm:max-w-xs"
+        title={t('projectSwitcher.projectPrefix', {
+          name: activeProject?.name ?? t('projectSwitcher.selectProject'),
+        })}
+        aria-label={t('projectSwitcher.selectProject')}
+        className={
+          collapsed
+            ? 'flex h-10 w-10 items-center justify-center rounded-xl bg-[#ebe4fe] text-sm font-semibold text-ink transition dark:border dark:border-border-hairline dark:bg-canvas-raised'
+            : 'inline-flex w-full max-w-full items-center gap-2 rounded-full border border-transparent bg-[#ebe4fe] px-3.5 py-2 text-sm text-ink transition dark:border-border-hairline dark:bg-canvas-raised'
+        }
       >
-        <span className="truncate">
-          {t('projectSwitcher.projectPrefix', {
-            name: activeProject?.name ?? t('projectSwitcher.selectProject'),
-          })}
-        </span>
-        <span aria-hidden="true" className="text-ink-muted">
-          ▾
-        </span>
+        {collapsed ? (
+          <span aria-hidden="true">
+            {(activeProject?.name?.trim()?.[0] ?? 'P').toUpperCase()}
+          </span>
+        ) : (
+          <>
+            <span className="truncate">
+              {t('projectSwitcher.projectPrefix', {
+                name: activeProject?.name ?? t('projectSwitcher.selectProject'),
+              })}
+            </span>
+            <span aria-hidden="true" className="text-ink-muted">
+              ▾
+            </span>
+          </>
+        )}
       </button>
 
       {open ? (
-        <div className="absolute left-0 z-30 mt-2 w-72 rounded-2xl border border-border-hairline bg-white p-2 shadow-[0_18px_40px_rgba(28,27,41,0.12)]">
+        <div className="absolute left-0 z-30 mt-2 w-72 rounded-2xl border border-border-hairline bg-canvas-raised p-2 shadow-[0_18px_40px_rgba(28,27,41,0.12)]">
           {projects.length === 0 ? (
             <p className="px-3 py-4 text-sm text-ink-muted">{t('projectSwitcher.noProjectsYet')}</p>
           ) : (
@@ -145,7 +177,7 @@ export function ProjectSwitcher({
                           type="button"
                           disabled={busyAvatarId === project.id}
                           onClick={() => void handleSetDefault(project.id)}
-                          className="rounded-lg px-2 py-0.5 text-[11px] text-accent-primary hover:bg-accent-primary-soft"
+                          className="rounded-lg px-2 py-0.5 text-[11px] text-accent-primary-deep hover:bg-accent-primary-soft"
                         >
                           {t('projectSwitcher.setDefault')}
                         </button>
@@ -160,7 +192,7 @@ export function ProjectSwitcher({
                       <button
                         type="button"
                         disabled={busyAvatarId === project.id}
-                        onClick={() => void handleDelete(project.id)}
+                        onClick={() => requestDelete(project.id)}
                         className="rounded-lg px-2 py-0.5 text-[11px] text-red-600 hover:bg-red-50"
                       >
                         {t('projectSwitcher.delete')}
@@ -182,13 +214,31 @@ export function ProjectSwitcher({
             <Link
               to="/projects/new"
               onClick={() => setOpen(false)}
-              className="mt-2 block rounded-xl px-3 py-2 text-sm font-medium text-accent-primary hover:bg-accent-primary-soft"
+              className="mt-2 block rounded-xl px-3 py-2 text-sm font-medium text-accent-primary-deep hover:bg-accent-primary-soft"
             >
               {t('projectSwitcher.newProject')}
             </Link>
           )}
         </div>
       ) : null}
+
+      <ConfirmDialog
+        open={deleteTargetId !== null}
+        title={t('projectSwitcher.deleteDialogTitle', {
+          name:
+            projects.find((project) => project.id === deleteTargetId)?.name ??
+            t('projectSwitcher.deleteDialogFallbackName'),
+        })}
+        description={t('projectSwitcher.deleteDialogBody')}
+        confirmLabel={t('projectSwitcher.deleteDialogConfirm')}
+        confirming={deleteTargetId !== null && busyAvatarId === deleteTargetId}
+        onConfirm={() => void confirmDelete()}
+        onCancel={() => {
+          if (busyAvatarId !== deleteTargetId) {
+            setDeleteTargetId(null)
+          }
+        }}
+      />
     </div>
   )
 }

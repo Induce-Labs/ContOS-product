@@ -2,9 +2,12 @@ import { useEffect, useState } from 'react'
 import {
   getOnboardingStep,
   isOnboardingComplete,
+  needsLanguageSelection,
+  ONBOARDING_LANGUAGE_PATH,
   resolveOnboardingPath,
   type OnboardingStep,
 } from '../lib/onboarding'
+import { logDevError, userFacingMessage } from '../lib/devLog'
 import { resolveDashboardPath } from '../lib/projects'
 
 type UseOnboardingStepGuardOptions = {
@@ -39,6 +42,14 @@ export function useOnboardingStepGuard({
           return
         }
 
+        if (await needsLanguageSelection()) {
+          if (!isMounted) {
+            return
+          }
+          setState({ status: 'redirect', path: ONBOARDING_LANGUAGE_PATH })
+          return
+        }
+
         const currentStep = await getOnboardingStep()
 
         if (!isMounted) {
@@ -55,10 +66,15 @@ export function useOnboardingStepGuard({
         if (isMounted) {
           setState({
             status: 'error',
-            message:
-              error instanceof Error
-                ? error.message
-                : 'Failed to verify onboarding step unexpectedly',
+            message: (() => {
+              logDevError('onboarding step guard', {
+                error: error instanceof Error ? error.message : String(error),
+              })
+              return userFacingMessage(
+                error,
+                'Failed to verify onboarding step unexpectedly',
+              )
+            })(),
           })
         }
       }

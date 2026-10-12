@@ -1,6 +1,17 @@
+import { logDevError, remoteStatusCode } from './devLog'
 import { supabase } from './supabase'
+import {
+  clearInvalidSessionAndRedirectToSignUp,
+  isInvalidOrDeletedUserError,
+  requireAuthenticatedUserId,
+} from './auth'
 import type { Tables } from '../types/database'
 import type { ProjectType } from '../types/contos'
+import {
+  changeAppLanguage,
+  isSupportedLanguage,
+  type SupportedLanguage,
+} from '../i18n'
 
 export type UserProfile = Tables<'user_profiles'>
 
@@ -17,14 +28,19 @@ export type AdvanceOnboardingExtras = {
 }
 
 export class OnboardingServiceError extends Error {
-  constructor(message: string, cause?: unknown) {
+  readonly statusCode: number | null
+
+  constructor(message: string, cause?: unknown, statusCode?: number | null) {
     super(message)
     this.name = 'OnboardingServiceError'
+    this.statusCode = remoteStatusCode(cause, statusCode)
     if (cause instanceof Error) {
       this.cause = cause
     }
   }
 }
+
+export const ONBOARDING_LANGUAGE_PATH = '/onboarding/language'
 
 const ONBOARDING_STEP_PATHS: Record<OnboardingStep, string> = {
   welcome: '/welcome',
@@ -35,23 +51,16 @@ const ONBOARDING_STEP_PATHS: Record<OnboardingStep, string> = {
 }
 
 async function getAuthenticatedUserId(): Promise<string> {
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser()
-
-  if (error) {
+  try {
+    return await requireAuthenticatedUserId()
+  } catch (error) {
     throw new OnboardingServiceError(
-      `Failed to read authenticated user: ${error.message}`,
+      error instanceof Error
+        ? error.message
+        : 'You must be signed in to access onboarding.',
       error,
     )
   }
-
-  if (!user) {
-    throw new OnboardingServiceError('You must be signed in to access onboarding.')
-  }
-
-  return user.id
 }
 
 function parseOnboardingStep(value: string | null | undefined): OnboardingStep {
@@ -66,6 +75,12 @@ function parseOnboardingStep(value: string | null | undefined): OnboardingStep {
   }
 
   return 'welcome'
+}
+
+export function parsePreferredLanguage(
+  value: string | null | undefined,
+): SupportedLanguage | null {
+  return isSupportedLanguage(value) ? value : null
 }
 
 export async function fetchUserProfile(): Promise<UserProfile | null> {
@@ -87,14 +102,26 @@ export async function fetchUserProfile(): Promise<UserProfile | null> {
   return data
 }
 
-export async function ensureUserProfile(): Promise<UserProfile> {
-  const existingProfile = await fetchUserProfile()
+function isUniqueConflict(error: { code?: string; message?: string }): boolean {
+  const code = error.code ?? ''
+  const message = (error.message ?? '').toLowerCase()
+  return (
+    code === '23505' ||
+    code === 'PGRST116' ||
+    message.includes('duplicate') ||
+    message.includes('conflict') ||
+    message.includes('unique')
+  )
+}
 
+/** Coalesce parallel ensure calls (e.g. React Strict Mode) for the same user. */
+const ensureProfileInFlight = new Map<string, Promise<UserProfile>>()
+
+async function createOrLoadUserProfile(userId: string): Promise<UserProfile> {
+  const existingProfile = await fetchUserProfile()
   if (existingProfile) {
     return existingProfile
   }
-
-  const userId = await getAuthenticatedUserId()
 
   const { data, error } = await supabase
     .from('user_profiles')
@@ -102,13 +129,87 @@ export async function ensureUserProfile(): Promise<UserProfile> {
     .select()
     .single()
 
+  if (!error && data) {
+    return data
+  }
+
+  // Row already exists (auth trigger or concurrent ensure) — load it.
+  if (error && isUniqueConflict(error)) {
+    const raced = await fetchUserProfile()
+    if (raced) {
+      return raced
+    }
+  }
+
+  // Auth user was deleted in Supabase while a local JWT remained.
+  if (error && isInvalidOrDeletedUserError(error)) {
+    logDevError('create user profile', {
+      error: error.message ?? 'unknown error',
+    })
+    return await clearInvalidSessionAndRedirectToSignUp(
+      'Your account is no longer available. Please sign up again.',
+    )
+  }
+
+  throw new OnboardingServiceError(
+    `Failed to create user profile: ${error?.message ?? 'unknown error'}`,
+    error,
+  )
+}
+
+export async function ensureUserProfile(): Promise<UserProfile> {
+  const userId = await getAuthenticatedUserId()
+  const pending = ensureProfileInFlight.get(userId)
+  if (pending) {
+    return pending
+  }
+
+  const task = createOrLoadUserProfile(userId).finally(() => {
+    ensureProfileInFlight.delete(userId)
+  })
+  ensureProfileInFlight.set(userId, task)
+  return task
+}
+
+export async function hydrateAppLanguageFromProfile(
+  profile?: UserProfile | null,
+): Promise<SupportedLanguage | null> {
+  const resolved = profile ?? (await ensureUserProfile())
+  const preferred = parsePreferredLanguage(resolved.preferred_language)
+  if (!preferred) {
+    return null
+  }
+  await changeAppLanguage(preferred)
+  return preferred
+}
+
+export async function savePreferredLanguage(
+  language: SupportedLanguage,
+): Promise<UserProfile> {
+  if (!isSupportedLanguage(language)) {
+    throw new OnboardingServiceError(
+      `Unsupported preferred language "${language}". Expected one of: en, hi, zh, fr, es.`,
+    )
+  }
+
+  const userId = await getAuthenticatedUserId()
+  await ensureUserProfile()
+
+  const { data, error } = await supabase
+    .from('user_profiles')
+    .update({ preferred_language: language })
+    .eq('user_id', userId)
+    .select()
+    .single()
+
   if (error) {
     throw new OnboardingServiceError(
-      `Failed to create user profile: ${error.message}`,
+      `Failed to save preferred language: ${error.message}`,
       error,
     )
   }
 
+  await changeAppLanguage(language)
   return data
 }
 
@@ -127,13 +228,30 @@ export function resolveOnboardingPath(step: OnboardingStep): string {
 }
 
 export async function resolveCurrentOnboardingPath(): Promise<string> {
-  const step = await getOnboardingStep()
-  return resolveOnboardingPath(step)
+  const profile = await ensureUserProfile()
+
+  if (profile.onboarding_completed_at !== null) {
+    return resolveOnboardingPath('completed')
+  }
+
+  if (!parsePreferredLanguage(profile.preferred_language)) {
+    return ONBOARDING_LANGUAGE_PATH
+  }
+
+  return resolveOnboardingPath(parseOnboardingStep(profile.onboarding_step))
 }
 
 export async function isOnboardingComplete(): Promise<boolean> {
   const profile = await ensureUserProfile()
   return profile.onboarding_completed_at !== null
+}
+
+export async function needsLanguageSelection(): Promise<boolean> {
+  const profile = await ensureUserProfile()
+  if (profile.onboarding_completed_at !== null) {
+    return false
+  }
+  return !parsePreferredLanguage(profile.preferred_language)
 }
 
 export async function advanceOnboardingStep(

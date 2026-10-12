@@ -1,0 +1,807 @@
+"""HTTP client for Postiz public API and ContOS Approach B provisioning."""
+
+from __future__ import annotations
+
+import logging
+import re
+import time
+from typing import Any
+from urllib.parse import parse_qsl, quote, urlencode, urlparse, urlunparse
+from uuid import UUID
+
+import httpx
+
+from app.config import Settings
+from app.errors import (
+    ConfigurationError,
+    PostizAuthorizationInvalidError,
+    PostizServiceError,
+)
+
+logger = logging.getLogger(__name__)
+
+_MAX_RETRIES = 2
+_RETRYABLE_STATUS_CODES = {408, 429, 500, 502, 503, 504}
+_LINKEDIN_AUTH_HOSTS = frozenset({"www.linkedin.com", "linkedin.com"})
+_X_AUTH_HOSTS = frozenset(
+    {
+        "api.twitter.com",
+        "twitter.com",
+        "www.twitter.com",
+        "api.x.com",
+        "x.com",
+        "www.x.com",
+    },
+)
+
+# Postiz ContosProvisionService 409 bodies that mean "call rotate-avatar-token".
+_ROTATE_REQUIRED_MSG_MARKERS = (
+    "call post /internal/contos/rotate-avatar-token",
+    "no valid access token",
+    "could not be recovered",
+)
+
+
+def _redact_url(url: str) -> str:
+    """Strip query/fragment so logs never include codes, state, or secrets."""
+    parsed = urlparse(url)
+    return f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
+
+
+_POS_TOKEN_RE = re.compile(r"pos_[A-Za-z0-9]+")
+_BEARER_RE = re.compile(r"(?i)\bbearer\s+[A-Za-z0-9\-._~+/]+=*")
+_SENSITIVE_JSON_FIELD_RE = re.compile(
+    r'(?i)("(?:authorization|access_token|accessToken|refresh_token|refreshToken|'
+    r'api_secret|apiSecret|api_key|apiKey|oauth_token|oauth_token_secret|'
+    r'client_secret|clientSecret|encrypted_access_token|password|secret)"\s*:\s*)"(.*?)"'
+)
+_CREDENTIAL_URL_RE = re.compile(
+    r"(?i)\b[a-z][a-z0-9+.-]*://[^\s/@]+:[^\s/@]+@\S+"
+)
+_DATASTORE_URL_RE = re.compile(
+    r"(?i)\b(?:redis|rediss|postgres|postgresql|mysql|mongodb(?:\+srv)?)://\S+"
+)
+_ASSIGNMENT_SECRET_RE = re.compile(
+    r"(?i)\b(access_token|refresh_token|client_secret|api_key|api_secret|"
+    r"oauth_token|oauth_token_secret|token|password|secret|"
+    r"CONTOS_PROVISION_SECRET|POSTIZ_TOKEN_ENCRYPTION_KEY)"
+    r"(\s*[=:]\s*)([^\s&\"']+)"
+)
+
+
+def _is_create_posts_request(method: str, url: str) -> bool:
+    if method.upper() != "POST":
+        return False
+    return urlparse(url).path.rstrip("/").endswith("/posts")
+
+
+def _sanitize_postiz_error_body(body_text: str) -> str:
+    """Remove credential-shaped values from a Postiz error body before logging."""
+    cleaned = body_text or ""
+    cleaned = _CREDENTIAL_URL_RE.sub("[redacted]", cleaned)
+    cleaned = _DATASTORE_URL_RE.sub("[redacted]", cleaned)
+    cleaned = _POS_TOKEN_RE.sub("[redacted]", cleaned)
+    cleaned = _BEARER_RE.sub("Bearer [redacted]", cleaned)
+    cleaned = _SENSITIVE_JSON_FIELD_RE.sub(r'\1"[redacted]"', cleaned)
+    cleaned = _ASSIGNMENT_SECRET_RE.sub(r"\1\2[redacted]", cleaned)
+    return cleaned
+
+
+def _sanitize_upstream_body_preview(body_text: str, *, status_code: int) -> str:
+    """Keep error messages actionable without dumping HTML gateway pages or secrets."""
+    cleaned = (body_text or "").strip()
+    lowered = cleaned.lower()
+    if (
+        status_code in {502, 503, 504}
+        or "<html" in lowered
+        or "gateway time-out" in lowered
+        or "bad gateway" in lowered
+    ):
+        return (
+            f"Postiz upstream returned HTTP {status_code} "
+            "(gateway timeout or bad gateway). The Postiz /upload handler did not "
+            "finish before the reverse proxy gave up — check Postiz storage "
+            "(STORAGE_PROVIDER / R2 / UPLOAD_DIRECTORY) and container logs."
+        )
+    redacted = _sanitize_postiz_error_body(cleaned).strip()
+    if not redacted:
+        return f"Postiz request failed with status {status_code}."
+    return redacted[:200]
+
+
+def _extract_postiz_error_message(body: Any) -> str:
+    if isinstance(body, dict):
+        for key in ("msg", "message", "detail", "error"):
+            value = body.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+            if isinstance(value, dict):
+                nested = value.get("msg") or value.get("message")
+                if isinstance(nested, str) and nested.strip():
+                    return nested.strip()
+    if isinstance(body, str) and body.strip():
+        return body.strip()
+    return ""
+
+
+def is_provision_rotate_required_conflict(status_code: int, body: Any) -> bool:
+    """True only for the expected Postiz 409 token-conflict that needs rotate."""
+    if status_code != 409:
+        return False
+    message = _extract_postiz_error_message(body).lower()
+    if not message:
+        return False
+    return any(marker in message for marker in _ROTATE_REQUIRED_MSG_MARKERS)
+
+
+def strip_unsupported_linkedin_prompt(url: str) -> str:
+    """Remove LinkedIn authorize `prompt` query params ContOS does not rely on.
+
+    Postiz historically appended undocumented `prompt=none`, which silently reuses
+    the browser LinkedIn session on ContOS reconnect. Official LinkedIn 3-legged
+    docs do not list `prompt`; ContOS strips it from URLs returned to the browser
+    even if a stale Postiz build still emits it.
+    """
+    parsed = urlparse(url)
+    if "linkedin.com" not in parsed.netloc.lower():
+        return url
+    if not parsed.path.startswith("/oauth/"):
+        return url
+    pairs = parse_qsl(parsed.query, keep_blank_values=True)
+    filtered = [(key, value) for key, value in pairs if key.lower() != "prompt"]
+    if len(filtered) == len(pairs):
+        return url
+    return urlunparse(parsed._replace(query=urlencode(filtered, quote_via=quote)))
+
+
+class PostizClient:
+    def __init__(self, settings: Settings) -> None:
+        if not settings.postiz_base_url:
+            raise ConfigurationError("POSTIZ_URL is required for Postiz.")
+
+        self._settings = settings
+        self._timeout = httpx.Timeout(connect=10.0, read=30.0, write=30.0, pool=10.0)
+        # POST /posts waits while Postiz publishes to LinkedIn or X. A 30s read
+        # budget aborts that call before Postiz returns.
+        self._publish_timeout = httpx.Timeout(connect=10.0, read=120.0, write=60.0, pool=10.0)
+
+    def provision_avatar(self, avatar_id: UUID) -> dict[str, Any]:
+        """Ensure a dedicated Postiz org+token for this avatar.
+
+        Rotates only when Postiz returns the specific 409 token-conflict responses
+        that instruct ContOS to call rotate-avatar-token. Other 409s propagate.
+        """
+        secret = self._settings.contos_provision_secret.strip()
+        if not secret:
+            raise ConfigurationError(
+                "CONTOS_PROVISION_SECRET is required for Postiz avatar provisioning.",
+            )
+
+        try:
+            return self._call_provision_endpoint(
+                url=self._settings.postiz_provision_avatar_url,
+                avatar_id=avatar_id,
+                secret=secret,
+            )
+        except PostizServiceError as error:
+            if not getattr(error, "rotate_required", False):
+                raise
+            logger.warning(
+                "Postiz provision requires token rotate",
+                extra={"avatar_id": str(avatar_id)},
+            )
+            return self.rotate_avatar_token(avatar_id)
+
+    def rotate_avatar_token(self, avatar_id: UUID) -> dict[str, Any]:
+        secret = self._settings.contos_provision_secret.strip()
+        if not secret:
+            raise ConfigurationError(
+                "CONTOS_PROVISION_SECRET is required for Postiz avatar token rotation.",
+            )
+        return self._call_provision_endpoint(
+            url=self._settings.postiz_rotate_avatar_token_url,
+            avatar_id=avatar_id,
+            secret=secret,
+        )
+
+    def list_integrations(self, access_token: str) -> list[dict[str, Any]]:
+        if not access_token.startswith("pos_"):
+            raise PostizServiceError("Postiz access token has an unexpected format.")
+
+        data = self._request_json(
+            method="GET",
+            url=f"{self._settings.postiz_public_api_base_url}/integrations",
+            headers={"Authorization": access_token},
+            allow_retries=True,
+        )
+        if not isinstance(data, list):
+            raise PostizServiceError(
+                "Postiz integrations response must be a JSON array.",
+            )
+        return data
+
+    def list_posts(
+        self,
+        access_token: str,
+        *,
+        start_date: str,
+        end_date: str,
+    ) -> list[dict[str, Any]]:
+        """GET /posts?startDate=&endDate= — dates are ISO strings passed through unchanged."""
+        if not access_token.startswith("pos_"):
+            raise PostizServiceError("Postiz access token has an unexpected format.")
+        if not start_date.strip() or not end_date.strip():
+            raise PostizServiceError("startDate and endDate are required for list_posts.")
+
+        data = self._request_json(
+            method="GET",
+            url=f"{self._settings.postiz_public_api_base_url}/posts",
+            headers={"Authorization": access_token},
+            params={"startDate": start_date.strip(), "endDate": end_date.strip()},
+            allow_retries=True,
+        )
+        if isinstance(data, dict) and isinstance(data.get("posts"), list):
+            return data["posts"]
+        if isinstance(data, list):
+            return data
+        raise PostizServiceError(
+            "Postiz posts response must be a JSON object with a posts array.",
+        )
+
+    def create_post(self, access_token: str, payload: dict[str, Any]) -> Any:
+        """POST /posts — type: now | schedule | draft | update."""
+        if not access_token.startswith("pos_"):
+            raise PostizServiceError("Postiz access token has an unexpected format.")
+        if not isinstance(payload, dict):
+            raise PostizServiceError("Postiz create_post payload must be a JSON object.")
+
+        return self._request_json(
+            method="POST",
+            url=f"{self._settings.postiz_public_api_base_url}/posts",
+            headers={"Authorization": access_token},
+            json_body=payload,
+            allow_retries=False,
+            timeout=self._publish_timeout,
+        )
+
+    def delete_post(self, access_token: str, post_id: str) -> Any:
+        if not access_token.startswith("pos_"):
+            raise PostizServiceError("Postiz access token has an unexpected format.")
+        cleaned = post_id.strip()
+        if not cleaned:
+            raise PostizServiceError("post_id is required for delete_post.")
+
+        return self._request_json(
+            method="DELETE",
+            url=f"{self._settings.postiz_public_api_base_url}/posts/{cleaned}",
+            headers={"Authorization": access_token},
+            allow_retries=False,
+            allow_empty_body=True,
+        )
+
+    def change_post_status(
+        self,
+        access_token: str,
+        post_id: str,
+        status: str,
+    ) -> Any:
+        """PUT /posts/:id/status — status: draft | schedule."""
+        if not access_token.startswith("pos_"):
+            raise PostizServiceError("Postiz access token has an unexpected format.")
+        cleaned = post_id.strip()
+        if not cleaned:
+            raise PostizServiceError("post_id is required for change_post_status.")
+        if status not in {"draft", "schedule"}:
+            raise PostizServiceError(
+                "Postiz post status must be 'draft' or 'schedule'.",
+            )
+
+        return self._request_json(
+            method="PUT",
+            url=f"{self._settings.postiz_public_api_base_url}/posts/{cleaned}/status",
+            headers={"Authorization": access_token},
+            json_body={"status": status},
+            allow_retries=False,
+        )
+
+    def delete_integration(self, access_token: str, integration_id: str) -> Any:
+        """DELETE /integrations/:id — soft-deletes channel and cascades its posts."""
+        if not access_token.startswith("pos_"):
+            raise PostizServiceError("Postiz access token has an unexpected format.")
+        cleaned = integration_id.strip()
+        if not cleaned:
+            raise PostizServiceError("integration_id is required for delete_integration.")
+
+        return self._request_json(
+            method="DELETE",
+            url=f"{self._settings.postiz_public_api_base_url}/integrations/{cleaned}",
+            headers={"Authorization": access_token},
+            allow_retries=False,
+            allow_empty_body=True,
+        )
+
+    def upload_file(
+        self,
+        access_token: str,
+        *,
+        filename: str,
+        content: bytes,
+        content_type: str,
+    ) -> dict[str, Any]:
+        """POST /upload — multipart field name `file`."""
+        if not access_token.startswith("pos_"):
+            raise PostizServiceError("Postiz access token has an unexpected format.")
+        if not content:
+            raise PostizServiceError("Upload content must not be empty.")
+        cleaned_name = filename.strip() or "upload"
+        mime = content_type.strip() or "application/octet-stream"
+        size_bytes = len(content)
+
+        url = f"{self._settings.postiz_public_api_base_url}/upload"
+        # ContOS waits synchronously for Postiz to finish storage+DB. Keep a
+        # generous client timeout so nginx (often ~60s) is what surfaces first
+        # when Postiz hangs — we then report the upstream status clearly.
+        upload_timeout = httpx.Timeout(connect=10.0, read=120.0, write=120.0, pool=10.0)
+        started = time.perf_counter()
+        logger.info(
+            "Postiz upload starting",
+            extra={
+                "url": _redact_url(url),
+                "upload_filename": cleaned_name,
+                "content_type": mime,
+                "size_bytes": size_bytes,
+            },
+        )
+        try:
+            with httpx.Client(timeout=upload_timeout) as client:
+                response = client.post(
+                    url,
+                    headers={"Authorization": access_token},
+                    files={"file": (cleaned_name, content, mime)},
+                )
+        except httpx.HTTPError as error:
+            elapsed_ms = int((time.perf_counter() - started) * 1000)
+            logger.warning(
+                "Postiz upload transport failed",
+                extra={
+                    "url": _redact_url(url),
+                    "upload_filename": cleaned_name,
+                    "content_type": mime,
+                    "size_bytes": size_bytes,
+                    "elapsed_ms": elapsed_ms,
+                    "error_type": type(error).__name__,
+                },
+            )
+            raise PostizServiceError(
+                f"Postiz upload failed: {type(error).__name__} after {elapsed_ms}ms",
+            ) from error
+
+        elapsed_ms = int((time.perf_counter() - started) * 1000)
+        status_code = response.status_code
+        response_content_type = (response.headers.get("content-type") or "").split(";")[0]
+        # Nest POST /upload returns 201 Created on success (not only 200).
+        if status_code == 401:
+            logger.warning(
+                "Postiz upload unauthorized",
+                extra={
+                    "url": _redact_url(url),
+                    "upload_filename": cleaned_name,
+                    "size_bytes": size_bytes,
+                    "elapsed_ms": elapsed_ms,
+                    "status_code": 401,
+                    "content_type_response": response_content_type,
+                },
+            )
+            raise PostizAuthorizationInvalidError(
+                "Postiz authorization is no longer valid; reconnect required.",
+            )
+        if status_code >= 400:
+            body_preview = _sanitize_upstream_body_preview(
+                response.text or "",
+                status_code=status_code,
+            )
+            logger.warning(
+                "Postiz upload failed",
+                extra={
+                    "url": _redact_url(url),
+                    "upload_filename": cleaned_name,
+                    "content_type": mime,
+                    "size_bytes": size_bytes,
+                    "elapsed_ms": elapsed_ms,
+                    "status_code": status_code,
+                    "content_type_response": response_content_type,
+                    "body_preview": body_preview[:200],
+                },
+            )
+            raise PostizServiceError(
+                f"Postiz upload failed with status {status_code}: {body_preview}",
+                status_code=status_code,
+            )
+        try:
+            data = response.json()
+        except ValueError as error:
+            logger.warning(
+                "Postiz upload non-JSON body",
+                extra={
+                    "url": _redact_url(url),
+                    "upload_filename": cleaned_name,
+                    "size_bytes": size_bytes,
+                    "elapsed_ms": elapsed_ms,
+                    "status_code": status_code,
+                    "content_type_response": response_content_type,
+                    "body_length": len(response.text or ""),
+                },
+            )
+            raise PostizServiceError(
+                "Postiz upload returned a non-JSON response body.",
+                status_code=status_code,
+            ) from error
+        if not isinstance(data, dict):
+            raise PostizServiceError("Postiz upload response must be a JSON object.")
+        response_keys = sorted(str(key) for key in data.keys())
+        media_id = data.get("id")
+        path = data.get("path")
+        has_id = isinstance(media_id, str) and bool(media_id.strip())
+        has_path = isinstance(path, str) and bool(path.strip())
+        logger.info(
+            "Postiz upload response shape",
+            extra={
+                "url": _redact_url(url),
+                "upload_filename": cleaned_name,
+                "content_type": mime,
+                "size_bytes": size_bytes,
+                "elapsed_ms": elapsed_ms,
+                "status_code": status_code,
+                "content_type_response": response_content_type,
+                "response_keys": ",".join(response_keys),
+                "has_id": has_id,
+                "has_path": has_path,
+                "has_name": isinstance(data.get("name"), str),
+                "has_originalName": "originalName" in data,
+                "has_original_name": "original_name" in data,
+            },
+        )
+        if not has_id:
+            raise PostizServiceError(
+                "Postiz upload response is missing id.",
+                status_code=status_code,
+            )
+        if not has_path:
+            raise PostizServiceError(
+                "Postiz upload response is missing path.",
+                status_code=status_code,
+            )
+        logger.info(
+            "Postiz upload completed",
+            extra={
+                "url": _redact_url(url),
+                "upload_filename": cleaned_name,
+                "content_type": mime,
+                "size_bytes": size_bytes,
+                "elapsed_ms": elapsed_ms,
+                "status_code": status_code,
+                "media_id": media_id.strip(),
+            },
+        )
+        return data
+
+    def get_media(self, access_token: str, media_id: str) -> dict[str, Any]:
+        """GET /media/:id — org-scoped; 404 if not in this avatar's Postiz org."""
+        if not access_token.startswith("pos_"):
+            raise PostizServiceError("Postiz access token has an unexpected format.")
+        cleaned = media_id.strip()
+        if not cleaned:
+            raise PostizServiceError("media_id is required for get_media.")
+
+        return self._request_json(
+            method="GET",
+            url=f"{self._settings.postiz_public_api_base_url}/media/{cleaned}",
+            headers={"Authorization": access_token},
+            allow_retries=True,
+        )
+
+    def get_linkedin_authorization_url(self, access_token: str) -> str:
+        if not access_token.startswith("pos_"):
+            raise PostizServiceError("Postiz access token has an unexpected format.")
+
+        data = self._request_json(
+            method="GET",
+            url=f"{self._settings.postiz_public_api_base_url}/social/linkedin",
+            headers={"Authorization": access_token},
+            allow_retries=True,
+        )
+        if not isinstance(data, dict) or not isinstance(data.get("url"), str):
+            raise PostizServiceError(
+                "Postiz LinkedIn connect response must include a string url field.",
+            )
+        url = data["url"].strip()
+        url = strip_unsupported_linkedin_prompt(url)
+        self.validate_navigation_url(url, allow_linkedin=True)
+        return url
+
+    def get_x_authorization_url(self, access_token: str) -> str:
+        """GET /social/x — Postiz starts OAuth 1.0a. ContOS only returns the URL."""
+        if not access_token.startswith("pos_"):
+            raise PostizServiceError("Postiz access token has an unexpected format.")
+
+        data = self._request_json(
+            method="GET",
+            url=f"{self._settings.postiz_public_api_base_url}/social/x",
+            headers={"Authorization": access_token},
+            allow_retries=True,
+        )
+        if not isinstance(data, dict) or not isinstance(data.get("url"), str):
+            raise PostizServiceError(
+                "Postiz X connect response must include a string url field.",
+            )
+        url = data["url"].strip()
+        self.validate_navigation_url(url, allow_x=True)
+        return url
+
+    def get_integration_settings(self, access_token: str, integration_id: str) -> dict[str, Any]:
+        """GET /integration-settings/:id — org-scoped. Used for X maxLength only."""
+        if not access_token.startswith("pos_"):
+            raise PostizServiceError("Postiz access token has an unexpected format.")
+        cleaned = integration_id.strip()
+        if not cleaned:
+            raise PostizServiceError("integration_id is required for integration settings.")
+
+        data = self._request_json(
+            method="GET",
+            url=(
+                f"{self._settings.postiz_public_api_base_url}"
+                f"/integration-settings/{quote(cleaned, safe='')}"
+            ),
+            headers={"Authorization": access_token},
+            allow_retries=True,
+        )
+        if not isinstance(data, dict):
+            raise PostizServiceError(
+                "Postiz integration-settings response must be a JSON object.",
+            )
+        return data
+
+    def validate_navigation_url(
+        self,
+        url: str,
+        *,
+        allow_linkedin: bool = False,
+        allow_x: bool = False,
+    ) -> None:
+        """Reject open redirects; allow only Postiz origin or LinkedIn OAuth when expected."""
+        try:
+            parsed = urlparse(url)
+        except ValueError as error:
+            raise PostizServiceError("Navigation URL is malformed.") from error
+
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            raise PostizServiceError("Navigation URL must be an absolute http(s) URL.")
+
+        postiz_origin = urlparse(self._settings.postiz_base_url)
+        host = parsed.netloc.lower()
+        postiz_host = postiz_origin.netloc.lower()
+
+        if host == postiz_host:
+            return
+
+        if allow_linkedin and host in _LINKEDIN_AUTH_HOSTS:
+            if not parsed.path.startswith("/oauth/"):
+                raise PostizServiceError(
+                    "LinkedIn navigation URL path is not an OAuth authorization path.",
+                )
+            return
+
+        if allow_x and host in _X_AUTH_HOSTS:
+            if not parsed.path.startswith("/oauth"):
+                raise PostizServiceError(
+                    "X navigation URL path is not an OAuth authorization path.",
+                )
+            return
+
+        raise PostizServiceError(
+            "Navigation URL origin is not allowed for ContOS Postiz OAuth.",
+        )
+
+    def _call_provision_endpoint(
+        self,
+        *,
+        url: str,
+        avatar_id: UUID,
+        secret: str,
+    ) -> dict[str, Any]:
+        data = self._request_json(
+            method="POST",
+            url=url,
+            headers={"Authorization": f"Bearer {secret}"},
+            json_body={"avatar_id": str(avatar_id)},
+            allow_retries=True,
+            treat_provision_409=True,
+        )
+        return self._parse_provision_response(data, avatar_id=avatar_id)
+
+    def _parse_provision_response(
+        self,
+        data: Any,
+        *,
+        avatar_id: UUID,
+    ) -> dict[str, Any]:
+        if not isinstance(data, dict):
+            raise PostizServiceError("Postiz provision response must be a JSON object.")
+
+        organization_id = data.get("organization_id")
+        access_token = data.get("access_token")
+        created = data.get("created")
+
+        if not isinstance(organization_id, str) or not organization_id.strip():
+            raise PostizServiceError(
+                "Postiz provision response is missing organization_id.",
+            )
+        if not isinstance(access_token, str) or not access_token.startswith("pos_"):
+            raise PostizServiceError(
+                "Postiz provision response is missing a valid access_token.",
+            )
+
+        logger.info(
+            "Postiz avatar provision response accepted",
+            extra={
+                "avatar_id": str(avatar_id),
+                "postiz_organization_id": organization_id.strip(),
+                # Do not use key "created" — reserved by logging.LogRecord.
+                "provision_created": bool(created) if created is not None else None,
+            },
+        )
+        return {
+            "organization_id": organization_id.strip(),
+            "created": bool(created) if isinstance(created, bool) else None,
+            "access_token": access_token,
+        }
+
+    def _request_json(
+        self,
+        *,
+        method: str,
+        url: str,
+        headers: dict[str, str] | None = None,
+        json_body: dict[str, Any] | None = None,
+        params: dict[str, str] | None = None,
+        allow_retries: bool,
+        treat_provision_409: bool = False,
+        allow_empty_body: bool = False,
+        timeout: httpx.Timeout | None = None,
+    ) -> Any:
+        last_error: Exception | None = None
+        attempts = _MAX_RETRIES + 1 if allow_retries else 1
+        request_timeout = timeout or self._timeout
+
+        for attempt in range(1, attempts + 1):
+            try:
+                with httpx.Client(timeout=request_timeout) as client:
+                    response = client.request(
+                        method,
+                        url,
+                        headers=headers,
+                        json=json_body,
+                        params=params,
+                    )
+            except httpx.HTTPError as error:
+                last_error = error
+                logger.warning(
+                    "Postiz HTTP transport failed",
+                    extra={
+                        "method": method,
+                        "url": _redact_url(url),
+                        "attempt": attempt,
+                        "error_type": type(error).__name__,
+                        "error_message": str(error)[:300],
+                        "read_timeout_seconds": request_timeout.read,
+                    },
+                )
+                if attempt < attempts:
+                    time.sleep(attempt)
+                    continue
+                raise PostizServiceError(
+                    f"Postiz request failed after retries: {type(error).__name__}",
+                ) from error
+
+            if response.status_code == 401:
+                if treat_provision_409:
+                    # Provision routes use CONTOS_PROVISION_SECRET, not a pos_ token.
+                    logger.warning(
+                        "Postiz provision endpoint rejected ContOS credentials",
+                        extra={
+                            "method": method,
+                            "url": _redact_url(url),
+                            "status_code": 401,
+                            "error_type": "provision_unauthorized",
+                        },
+                    )
+                    raise ConfigurationError(
+                        "Postiz rejected CONTOS_PROVISION_SECRET (HTTP 401). "
+                        "Ensure Backend CONTOS_PROVISION_SECRET exactly matches "
+                        "Postiz CONTOS_PROVISION_SECRET (no extra spaces).",
+                    )
+                raise PostizAuthorizationInvalidError(
+                    "Postiz authorization is no longer valid; reconnect required.",
+                )
+
+            if response.status_code in _RETRYABLE_STATUS_CODES and attempt < attempts:
+                logger.warning(
+                    "Postiz returned retryable status",
+                    extra={
+                        "method": method,
+                        "url": _redact_url(url),
+                        "status_code": response.status_code,
+                        "attempt": attempt,
+                        "content_type": response.headers.get("content-type"),
+                        "body_length": len(response.content or b""),
+                    },
+                )
+                time.sleep(attempt)
+                continue
+
+            if response.status_code >= 400:
+                body_text = response.text or ""
+                body_json: Any = None
+                try:
+                    body_json = response.json()
+                except ValueError:
+                    body_json = body_text
+
+                if treat_provision_409 and is_provision_rotate_required_conflict(
+                    response.status_code,
+                    body_json,
+                ):
+                    error = PostizServiceError(
+                        "Postiz provisioned avatar has no recoverable access token; rotate required.",
+                        status_code=response.status_code,
+                    )
+                    setattr(error, "rotate_required", True)
+                    raise error
+
+                if _is_create_posts_request(method, url):
+                    sanitized_error_body = _sanitize_postiz_error_body(body_text)
+                    logger.warning(
+                        "Postiz POST /posts rejected status_code=%s postiz_error_body=%s",
+                        response.status_code,
+                        sanitized_error_body,
+                        extra={
+                            "status_code": response.status_code,
+                            "postiz_error_body": sanitized_error_body,
+                        },
+                    )
+                logger.warning(
+                    "Postiz request failed permanently",
+                    extra={
+                        "method": method,
+                        "url": _redact_url(url),
+                        "status_code": response.status_code,
+                        "attempt": attempt,
+                        "content_type": response.headers.get("content-type"),
+                        "body_preview": _sanitize_upstream_body_preview(
+                            body_text,
+                            status_code=response.status_code,
+                        )[:200],
+                    },
+                )
+                raise PostizServiceError(
+                    f"Postiz request failed with status {response.status_code}: "
+                    f"{_sanitize_upstream_body_preview(body_text, status_code=response.status_code)}",
+                    status_code=response.status_code,
+                )
+
+            body_text = (response.text or "").strip()
+            if not body_text:
+                if allow_empty_body or response.status_code in {204, 205}:
+                    return None
+                raise PostizServiceError(
+                    "Postiz returned an empty response body.",
+                )
+
+            try:
+                return response.json()
+            except ValueError as error:
+                raise PostizServiceError(
+                    "Postiz returned a non-JSON response body.",
+                ) from error
+
+        raise PostizServiceError(f"Postiz request failed after retries: {last_error}")

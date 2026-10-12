@@ -35,11 +35,11 @@ export function PlaceholderFeaturePage({ titleKey, subtitleKey }: PlaceholderFea
       sidebarOpen={sidebarOpen}
       onSidebarOpenChange={setSidebarOpen}
       isLoading={projectsLoading}
-      mainClassName="overflow-y-auto px-4 pb-8 sm:px-8"
+      mainClassName="overflow-y-auto px-4 pb-8 pt-4 sm:px-8 sm:pt-6"
     >
       <OverviewWorkspaceHeader title={title} subtitle={subtitle} />
-      <section className="rounded-[2rem] border border-white/80 bg-white p-8 shadow-[0_16px_40px_rgba(28,27,41,0.05)] sm:p-10">
-        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-accent-primary">
+      <section className="rounded-[2rem] border border-border-hairline bg-canvas-raised p-8 shadow-[0_16px_40px_rgba(28,27,41,0.05)] sm:p-10">
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-accent-primary-deep">
           {t('placeholder.comingSoon')}
         </p>
         <h2 className="mt-3 font-serif text-2xl text-ink">{t('placeholder.inDevelopment')}</h2>
@@ -48,15 +48,6 @@ export function PlaceholderFeaturePage({ titleKey, subtitleKey }: PlaceholderFea
         </p>
       </section>
     </DashboardLayout>
-  )
-}
-
-export function CalendarPage() {
-  return (
-    <PlaceholderFeaturePage
-      titleKey="placeholder.calendar.title"
-      subtitleKey="placeholder.calendar.subtitle"
-    />
   )
 }
 

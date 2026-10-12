@@ -14,3 +14,6 @@
 | Agents | [phase-agents.md](./phase-agents.md) |
 | Celery / Redis | [phase-celery.md](./phase-celery.md) |
 | i18n / translation | [phase-i18n.md](./phase-i18n.md) |
+| Postiz LinkedIn + calendar | [phase-postiz-linkedin.md](./phase-postiz-linkedin.md) |
+| Postiz LinkedIn scopes fix | [postiz-linkedin-oauth-scopes-fix.md](./postiz-linkedin-oauth-scopes-fix.md) |
+| Same-user avatar isolation | [postiz-same-user-avatar-isolation-fix.md](./postiz-same-user-avatar-isolation-fix.md) |

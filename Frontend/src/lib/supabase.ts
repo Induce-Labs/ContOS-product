@@ -14,7 +14,14 @@ function requireEnv(name: keyof ImportMetaEnv): string {
 const supabaseUrl = requireEnv('VITE_SUPABASE_URL')
 const supabaseAnonKey = requireEnv('VITE_SUPABASE_ANON_KEY')
 
-export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey)
+export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    flowType: 'pkce',
+    detectSessionInUrl: true,
+    persistSession: true,
+    autoRefreshToken: true,
+  },
+})
 
 export function getApiBaseUrl(): string {
   const raw = requireEnv('VITE_API_BASE_URL').trim().replace(/\/+$/, '')

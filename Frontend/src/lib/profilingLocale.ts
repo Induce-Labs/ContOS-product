@@ -5,7 +5,7 @@ import {
   parseCompetitorNames,
   serializeCompetitorNames,
 } from '../config/onboardingProfilingQuestions'
-import { translateTexts } from './agentsApi'
+import { AgentsApiError, translateTexts } from './agentsApi'
 import {
   buildLocalizedQuestionnaire,
   collectQuestionnaireDisplayStrings,
@@ -74,20 +74,30 @@ export async function translateTextsChunked(params: {
   }
 
   const out: string[] = []
+  const chunks: string[][] = []
   for (let offset = 0; offset < texts.length; offset += TRANSLATE_CHUNK_SIZE) {
-    const chunk = texts.slice(offset, offset + TRANSLATE_CHUNK_SIZE)
-    const translated = await translateChunkOnce({
-      texts: chunk,
-      targetLang,
-      sourceLang,
-    })
+    chunks.push(texts.slice(offset, offset + TRANSLATE_CHUNK_SIZE))
+  }
+
+  const translatedChunks = await Promise.all(
+    chunks.map((chunk) =>
+      translateChunkOnce({
+        texts: chunk,
+        targetLang,
+        sourceLang,
+      }),
+    ),
+  )
+
+  translatedChunks.forEach((translated, index) => {
+    const chunk = chunks[index]
     if (translated.length !== chunk.length) {
       throw new Error(
-        `Translate chunk returned ${translated.length} texts for ${chunk.length} inputs (offset ${offset}).`,
+        `Translate chunk returned ${translated.length} texts for ${chunk.length} inputs (chunk ${index}).`,
       )
     }
     out.push(...translated)
-  }
+  })
   return out
 }
 
@@ -98,7 +108,7 @@ export async function translateTextsChunkedWithRetry(params: {
   sourceLang: string
   retryDelayMs?: number
 }): Promise<string[]> {
-  const { texts, targetLang, sourceLang, retryDelayMs = 600 } = params
+  const { texts, targetLang, sourceLang, retryDelayMs = 250 } = params
   try {
     return await translateTextsChunked({ texts, targetLang, sourceLang })
   } catch {
@@ -213,10 +223,11 @@ export async function answersToEnglishForSave(params: {
         })
         flatTexts.push(...parsed.nonEmpty)
       } catch (error) {
-        throw new Error(
+        throw new AgentsApiError(
           `Failed to parse competitor names payload for key "${key}": ${
             error instanceof Error ? error.message : String(error)
           }`,
+          500,
         )
       }
     } else {
@@ -324,10 +335,11 @@ export async function answersToLocaleForDisplay(params: {
           if (slot.trim()) flatTexts.push(slot)
         }
       } catch (error) {
-        throw new Error(
+        throw new AgentsApiError(
           `Failed to parse competitor display payload for key "${key}": ${
             error instanceof Error ? error.message : String(error)
           }`,
+          500,
         )
       }
     } else {

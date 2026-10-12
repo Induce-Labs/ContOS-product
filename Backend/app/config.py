@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -20,7 +20,10 @@ class Settings(BaseSettings):
     openrouter_api_key: str = Field(default="", validation_alias="OPENROUTER_API_KEY")
     openai_api_key: str = Field(default="", validation_alias="OPENAI_API_KEY")
     cors_origins: str = Field(
-        default="http://localhost:5173,http://localhost:5174",
+        default=(
+            "http://localhost:5173,http://127.0.0.1:5173,"
+            "http://localhost:5174,http://127.0.0.1:5174"
+        ),
         validation_alias="CORS_ORIGINS",
     )
     apify_instagram_actor_id: str = Field(
@@ -36,6 +39,11 @@ class Settings(BaseSettings):
         validation_alias="APIFY_LINKEDIN_ACTOR_ID",
     )
     linkedin_max_posts: int = Field(default=50, validation_alias="LINKEDIN_MAX_POSTS")
+    apify_twitter_actor_id: str = Field(
+        default="xquik/x-tweet-scraper",
+        validation_alias="APIFY_TWITTER_ACTOR_ID",
+    )
+    twitter_max_items: int = Field(default=50, validation_alias="TWITTER_MAX_ITEMS")
     apify_wait_secs: int = Field(default=300, validation_alias="APIFY_WAIT_SECS")
     apify_instagram_session_id: str = Field(
         default="",
@@ -86,10 +94,52 @@ class Settings(BaseSettings):
         default=15,
         validation_alias="CELERY_TASK_RETRY_BACKOFF",
     )
+    postiz_url: str = Field(default="", validation_alias="POSTIZ_URL")
+    postiz_client_id: str = Field(default="", validation_alias="POSTIZ_CLIENT_ID")
+    postiz_client_secret: str = Field(default="", validation_alias="POSTIZ_CLIENT_SECRET")
+    postiz_redirect_uri: str = Field(default="", validation_alias="POSTIZ_REDIRECT_URI")
+    postiz_token_encryption_key: str = Field(
+        default="",
+        validation_alias="POSTIZ_TOKEN_ENCRYPTION_KEY",
+    )
+    contos_provision_secret: str = Field(
+        default="",
+        validation_alias="CONTOS_PROVISION_SECRET",
+    )
+    sentry_dsn: str = Field(default="", validation_alias="SENTRY_DSN")
+    sentry_environment: str = Field(default="", validation_alias="SENTRY_ENVIRONMENT")
+
+    @field_validator("contos_provision_secret", mode="before")
+    @classmethod
+    def _normalize_contos_provision_secret(cls, value: object) -> object:
+        """Collapse whitespace so pasted hex secrets still match Postiz timingSafeEqual."""
+        if isinstance(value, str):
+            return "".join(value.split())
+        return value
 
     @property
     def cors_origin_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+
+    @property
+    def postiz_base_url(self) -> str:
+        return self.postiz_url.strip().rstrip("/")
+
+    @property
+    def postiz_oauth_token_url(self) -> str:
+        return f"{self.postiz_base_url}/api/oauth/token"
+
+    @property
+    def postiz_public_api_base_url(self) -> str:
+        return f"{self.postiz_base_url}/api/public/v1"
+
+    @property
+    def postiz_provision_avatar_url(self) -> str:
+        return f"{self.postiz_base_url}/api/internal/contos/provision-avatar"
+
+    @property
+    def postiz_rotate_avatar_token_url(self) -> str:
+        return f"{self.postiz_base_url}/api/internal/contos/rotate-avatar-token"
 
     def resolved_llm_provider(self) -> str:
         provider = self.llm_provider.strip().lower()

@@ -12,6 +12,7 @@ from app.services.instagram_parser import parse_instagram_posts
 from app.services.linkedin_parser import parse_linkedin_posts
 from app.services.llm_content_selection import select_content_for_llm
 from app.services.text_sanitize import sanitize_text
+from app.services.twitter_parser import parse_twitter_tweets
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +45,7 @@ def run_pipeline_batch(avatar_id: UUID, competitor_ids: list[UUID]) -> None:
 
 
 def run_competitor_job(avatar_id: UUID, competitor_id: UUID) -> None:
-    """Load one competitor and run its Instagram or LinkedIn pipeline."""
+    """Load one competitor and run its Instagram, LinkedIn, or Twitter pipeline."""
     settings = get_settings()
     try:
         repository = SupabaseRepository(settings)
@@ -98,6 +99,35 @@ def run_competitor_job(avatar_id: UUID, competitor_id: UUID) -> None:
         finally:
             _safe_refresh_avatar_status(repository, avatar_id, competitor_id)
         return
+
+    if platform == "twitter":
+        logger.info(
+            "[PIPELINE] Dispatching Twitter pipeline (scrape→analyze)",
+            extra={
+                "avatar_id": str(avatar_id),
+                "competitor_id": str(competitor_id),
+                "platform": platform,
+                "handle_or_url": competitor.get("handle_or_url"),
+            },
+        )
+        try:
+            run_twitter_competitor_pipeline(
+                avatar_id=avatar_id,
+                competitor=competitor,
+                settings=settings,
+                repository=repository,
+                apify_client=apify_client,
+                llm_client=llm_client,
+            )
+        finally:
+            _safe_refresh_avatar_status(repository, avatar_id, competitor_id)
+        return
+
+    if platform == "reddit":
+        raise PipelineError(
+            "Reddit competitor scraping is not supported yet. "
+            f"Refusing profile: {competitor.get('handle_or_url')}",
+        )
 
     logger.info(
         "[PIPELINE] Dispatching Instagram pipeline (scrape→transcribe→analyze)",
@@ -158,15 +188,23 @@ def mark_competitor_pipeline_failed(
 
 
 def resolve_competitor_platform(competitor: dict[str, Any]) -> str:
-    """Resolve scrape platform from DB field, with URL fallback for safety."""
+    """Resolve scrape platform from URL first, then DB field."""
     profile_url = str(competitor.get("handle_or_url") or "").strip().lower()
     platform = str(competitor.get("platform") or "").strip().lower()
-    if "linkedin.com" in profile_url or platform == "linkedin":
+    if "linkedin.com" in profile_url:
         return "linkedin"
-    if "instagram.com" in profile_url or platform == "instagram":
+    if "instagram.com" in profile_url:
         return "instagram"
-    if platform in {"twitter", "reddit"}:
-        return platform
+    if "twitter.com" in profile_url or "x.com" in profile_url:
+        return "twitter"
+    if platform == "linkedin":
+        return "linkedin"
+    if platform == "instagram":
+        return "instagram"
+    if platform in {"twitter", "x"}:
+        return "twitter"
+    if platform == "reddit":
+        return "reddit"
     return platform or "instagram"
 
 
@@ -191,6 +229,21 @@ def run_competitor_pipeline(
             llm_client=llm_client,
         )
         return
+    if platform == "twitter":
+        run_twitter_competitor_pipeline(
+            avatar_id=avatar_id,
+            competitor=competitor,
+            settings=settings,
+            repository=repository,
+            apify_client=apify_client,
+            llm_client=llm_client,
+        )
+        return
+    if platform == "reddit":
+        raise PipelineError(
+            "Reddit competitor scraping is not supported yet. "
+            f"Refusing profile: {competitor.get('handle_or_url')}",
+        )
     run_instagram_competitor_pipeline(
         avatar_id=avatar_id,
         competitor=competitor,
@@ -212,10 +265,22 @@ def run_instagram_competitor_pipeline(
 ) -> None:
     competitor_id = UUID(competitor["id"])
     profile_url = competitor["handle_or_url"]
-    if resolve_competitor_platform(competitor) == "linkedin":
+    resolved = resolve_competitor_platform(competitor)
+    if resolved == "linkedin":
         raise PipelineError(
             "LinkedIn competitors must use the LinkedIn pipeline "
             f"(datadoping/linkedin-profile-posts-scraper), not Instagram. "
+            f"Refusing profile: {profile_url}",
+        )
+    if resolved == "twitter":
+        raise PipelineError(
+            "Twitter competitors must use the Twitter pipeline "
+            f"(xquik/x-tweet-scraper), not Instagram. "
+            f"Refusing profile: {profile_url}",
+        )
+    if resolved == "reddit":
+        raise PipelineError(
+            "Reddit competitor scraping is not supported yet. "
             f"Refusing profile: {profile_url}",
         )
 
@@ -716,6 +781,204 @@ def _analyze_linkedin_competitor(
     )
     logger.info(
         "[PIPELINE] LinkedIn Step 2/2 ANALYZE complete — competitor pipeline done",
+        extra={
+            "avatar_id": str(avatar_id),
+            "competitor_id": str(competitor_id),
+            "content_count": len(content_for_summary),
+            "model_used": model_used,
+            "stopped_early": stopped_early,
+        },
+    )
+
+
+def run_twitter_competitor_pipeline(
+    *,
+    avatar_id: UUID,
+    competitor: dict[str, Any],
+    settings: Settings,
+    repository: SupabaseRepository,
+    apify_client: ApifyClient,
+    llm_client: LlmClient,
+) -> None:
+    competitor_id = UUID(competitor["id"])
+    profile_url = competitor["handle_or_url"]
+    logger.info(
+        "[PIPELINE] Twitter Step 1/2 SCRAPE started for competitor %s (%s)",
+        competitor_id,
+        profile_url,
+    )
+    repository.clear_cancel_requested(competitor_id)
+    repository.update_competitor_status(
+        competitor_id,
+        scrape_status="in_progress",
+        pipeline_step="scraping",
+        error_message=None,
+    )
+
+    raw_items = apify_client.scrape_twitter_profile(profile_url)
+    parsed_tweets = parse_twitter_tweets(
+        raw_items,
+        lookback_days=settings.scrape_lookback_days,
+    )
+    if not parsed_tweets:
+        if repository.is_cancel_requested(competitor_id):
+            _mark_stopped_without_content(repository, competitor_id)
+            return
+        raise PipelineError(
+            f"No Twitter tweets found in the last {settings.scrape_lookback_days} days "
+            f"for {profile_url}.",
+        )
+
+    scraped_rows = [
+        {
+            "competitor_id": str(competitor_id),
+            "external_id": tweet["external_id"],
+            "post_url": tweet["post_url"],
+            "posted_at": tweet["posted_at"],
+            "caption": tweet["caption"],
+            "author_name": tweet["author_name"],
+            "author_username": tweet["author_username"],
+            "author_followers": tweet["author_followers"],
+            "author_description": tweet["author_description"],
+            "raw_payload": tweet["raw_payload"],
+        }
+        for tweet in parsed_tweets
+    ]
+    repository.upsert_twitter_scraped_content(scraped_rows)
+    logger.info(
+        "[PIPELINE] Twitter Step 1/2 SCRAPE complete — stored %s tweets",
+        len(parsed_tweets),
+        extra={
+            "competitor_id": str(competitor_id),
+            "total_tweets": len(parsed_tweets),
+        },
+    )
+
+    stopped_early = repository.is_cancel_requested(competitor_id)
+    if stopped_early:
+        logger.info(
+            "[PIPELINE] Stop requested after Twitter scrape — summarizing stored tweets",
+            extra={"competitor_id": str(competitor_id), "stored_tweets": len(parsed_tweets)},
+        )
+
+    _analyze_twitter_competitor(
+        avatar_id=avatar_id,
+        competitor_id=competitor_id,
+        profile_url=profile_url,
+        repository=repository,
+        llm_client=llm_client,
+        stopped_early=stopped_early,
+    )
+
+
+def _analyze_twitter_competitor(
+    *,
+    avatar_id: UUID,
+    competitor_id: UUID,
+    profile_url: str,
+    repository: SupabaseRepository,
+    llm_client: LlmClient,
+    stopped_early: bool = False,
+) -> None:
+    logger.info(
+        "[PIPELINE] Twitter Step 2/2 ANALYZE started for competitor %s%s",
+        competitor_id,
+        " (after stop)" if stopped_early else "",
+    )
+    repository.update_competitor_status(
+        competitor_id,
+        scrape_status="in_progress",
+        pipeline_step="analyzing",
+        error_message=None,
+    )
+
+    content_for_summary = repository.get_twitter_content_for_summary(competitor_id)
+    if not content_for_summary:
+        if stopped_early or repository.is_cancel_requested(competitor_id):
+            _mark_stopped_without_content(repository, competitor_id)
+            return
+        raise PipelineError(
+            f"No Twitter scraped content available for summarization for competitor {competitor_id}.",
+        )
+
+    # No stored engagement metrics — omit likes/views/shares/comments for enrichment.
+    summary_content = [
+        {
+            "external_id": item["external_id"],
+            "content_type": "post",
+            "caption": item.get("caption"),
+            "likes": None,
+            "views": None,
+            "shares": None,
+            "comments_count": None,
+            "posted_at": item.get("posted_at"),
+            "author_name": item.get("author_name"),
+            "author_username": item.get("author_username"),
+            "author_followers": item.get("author_followers"),
+            "author_description": item.get("author_description"),
+        }
+        for item in content_for_summary
+    ]
+    llm_content = select_content_for_llm(
+        summary_content,
+        max_items=get_settings().llm_max_content_items,
+    )
+    logger.info(
+        "[PIPELINE] Twitter Step 2/2 ANALYZE — summarizing %s of %s tweets for LLM",
+        len(llm_content),
+        len(summary_content),
+        extra={
+            "competitor_id": str(competitor_id),
+            "llm_item_count": len(llm_content),
+            "scraped_item_count": len(summary_content),
+            "stopped_early": stopped_early,
+        },
+    )
+    summary_payload, model_used = llm_client.summarize_competitor_content(
+        competitor_handle=profile_url,
+        content_items=llm_content,
+        platform="twitter",
+    )
+    summary_payload = enrich_competitor_summary(summary_payload, summary_content)
+    summary_dict = summary_payload.model_dump()
+    repository.replace_twitter_content_summary(
+        competitor_id=competitor_id,
+        avatar_id=avatar_id,
+        summary=summary_dict,
+        model_used=model_used,
+    )
+    try:
+        from app.services.summary_embeddings import embed_twitter_content_summary
+
+        embed_twitter_content_summary(
+            settings=get_settings(),
+            repository=repository,
+            competitor_id=competitor_id,
+            summary=summary_dict,
+        )
+    except Exception as embed_error:
+        # Summaries remain usable via lexical fetch; vector RAG needs a later backfill.
+        logger.warning(
+            "Failed to embed twitter content summary after analyze",
+            extra={
+                "competitor_id": str(competitor_id),
+                "error": str(embed_error),
+            },
+        )
+    repository.clear_cancel_requested(competitor_id)
+    repository.update_competitor_status(
+        competitor_id,
+        scrape_status="completed",
+        pipeline_step="done",
+        error_message=(
+            "Research stopped early; summary is based on content scraped before stop."
+            if stopped_early
+            else None
+        ),
+        last_scraped_at=datetime.now(tz=UTC),
+    )
+    logger.info(
+        "[PIPELINE] Twitter Step 2/2 ANALYZE complete — competitor pipeline done",
         extra={
             "avatar_id": str(avatar_id),
             "competitor_id": str(competitor_id),

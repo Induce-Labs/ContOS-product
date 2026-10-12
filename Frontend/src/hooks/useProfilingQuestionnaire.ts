@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { logDevError, userFacingMessage } from '../lib/devLog'
 import type { ProfilingQuestionDef } from '../config/onboardingProfilingQuestions'
 import { useLocalizedQuestionnaire } from './useLocalizedQuestionnaire'
 import { fetchAvatar, type Avatar } from '../lib/avatars'
@@ -56,7 +57,12 @@ export function useProfilingQuestionnaire({
     translationError: questionTranslationError,
   } = useLocalizedQuestionnaire(canonicalQuestions)
 
-  const questions = displayQuestions.length > 0 ? displayQuestions : canonicalQuestions
+  const questions =
+    isTranslatingQuestions && displayQuestions.length === 0
+      ? []
+      : displayQuestions.length > 0
+        ? displayQuestions
+        : canonicalQuestions
   const currentQuestion = questions[questionIndex] ?? null
   const currentCanonical = canonicalQuestions[questionIndex] ?? null
 
@@ -95,11 +101,10 @@ export function useProfilingQuestionnaire({
         setQuestionIndex(resumeIndex)
       } catch (error) {
         if (isMounted) {
-          setErrorMessage(
-            error instanceof Error
-              ? error.message
-              : t('profiling.errors.loadQuestionnaire'),
-          )
+          logDevError('profiling load questionnaire', {
+            error: error instanceof Error ? error.message : String(error),
+          })
+          setErrorMessage(userFacingMessage(error, t('profiling.errors.loadQuestionnaire')))
         }
       } finally {
         if (isMounted) {
@@ -150,7 +155,7 @@ export function useProfilingQuestionnaire({
         if (!cancelled) {
           setAnswers({ ...english })
           setErrorMessage(
-            error instanceof Error ? error.message : t('agents.translationFailed'),
+            userFacingMessage(error, t('agents.translationFailed')),
           )
         }
       } finally {
@@ -227,9 +232,10 @@ export function useProfilingQuestionnaire({
       }))
       return true
     } catch (error) {
-      setErrorMessage(
-        error instanceof Error ? error.message : t('profiling.errors.saveAnswer'),
-      )
+      logDevError('profiling save answer', {
+        error: error instanceof Error ? error.message : String(error),
+      })
+      setErrorMessage(userFacingMessage(error, t('profiling.errors.saveAnswer')))
       return false
     } finally {
       setIsSaving(false)
@@ -265,13 +271,13 @@ export function useProfilingQuestionnaire({
       try {
         await summarizeProfiling(avatarId)
       } catch (error) {
-        console.error('Profile summary generation failed:', error)
+        logDevError('POST /api/profiling/summarize', {
+          method: 'POST',
+          path: '/api/profiling/summarize',
+          error: error instanceof Error ? error.message : String(error),
+        })
         setErrorMessage(
-          error instanceof Error
-            ? t('profiling.errors.summaryAfterSaveWithDetail', {
-                detail: error.message,
-              })
-            : t('profiling.errors.summaryAfterSave'),
+          userFacingMessage(error, t('profiling.errors.summaryAfterSave')),
         )
       } finally {
         setIsSummarizing(false)
@@ -293,11 +299,22 @@ export function useProfilingQuestionnaire({
     return 'exit'
   }
 
-  const combinedError =
-    errorMessage ??
-    (questionTranslationError
-      ? t('agents.translationFailed')
-      : null)
+  async function saveDraftCurrentAnswer(): Promise<'saved' | 'skipped' | 'blocked'> {
+    if (!currentCanonical || isSaving) {
+      return 'blocked'
+    }
+
+    const raw = (answers[currentCanonical.key] ?? '').trim()
+    if (!raw) {
+      setFieldError(null)
+      setErrorMessage(null)
+      return 'skipped'
+    }
+
+    setErrorMessage(null)
+    const saved = await saveCurrentAnswer()
+    return saved ? 'saved' : 'blocked'
+  }
 
   return {
     avatar,
@@ -306,9 +323,11 @@ export function useProfilingQuestionnaire({
     questionIndex,
     answers,
     currentQuestion,
-    errorMessage: combinedError,
+    errorMessage,
+    /** Non-null when display questions fell back to English after translate failure. */
+    translationError: questionTranslationError,
     fieldError,
-    isLoading: isLoading || isLocalizingAnswers,
+    isLoading: isLoading || isLocalizingAnswers || isTranslatingQuestions,
     isSaving,
     isSummarizing,
     isTranslatingQuestions,
@@ -316,6 +335,7 @@ export function useProfilingQuestionnaire({
     setAnswer,
     goNext,
     goBack,
+    saveDraftCurrentAnswer,
     setErrorMessage,
   }
 }

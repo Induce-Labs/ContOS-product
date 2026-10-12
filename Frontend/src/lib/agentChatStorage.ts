@@ -268,6 +268,23 @@ export function listChatSessions(store: ChatStore): ChatSession[] {
   )
 }
 
+/** Read session list from local cache without creating a new empty store. */
+export function peekLocalChatSessions(userId: string, projectId: string): ChatSession[] {
+  if (typeof localStorage === 'undefined' || !userId || !projectId) {
+    return []
+  }
+  try {
+    const raw = localStorage.getItem(storageKey(userId, projectId))
+    if (!raw) {
+      return []
+    }
+    const stub: StoredChatMessage = { id: '_peek', role: 'assistant', content: '' }
+    return listChatSessions(hydrateChatStore(JSON.parse(raw) as unknown, stub))
+  } catch {
+    return []
+  }
+}
+
 export function updateActiveSessionMessages(
   store: ChatStore,
   messages: StoredChatMessage[],
@@ -293,6 +310,47 @@ export function switchChatSession(store: ChatStore, sessionId: string): ChatStor
     throw new Error(`Chat session not found: ${sessionId}`)
   }
   return { ...store, activeSessionId: sessionId }
+}
+
+/**
+ * Remove one session. If it was active, the newest remaining session becomes
+ * active. If none remain, the store is a single empty thread.
+ */
+export function deleteChatSession(
+  store: ChatStore,
+  sessionId: string,
+  welcomeMessage: StoredChatMessage,
+): ChatStore {
+  if (!store.sessions.some((session) => session.id === sessionId)) {
+    throw new Error(`Chat session not found: ${sessionId}`)
+  }
+
+  const sessions = store.sessions.filter((session) => session.id !== sessionId)
+  if (sessions.length === 0) {
+    return createEmptyStore(welcomeMessage)
+  }
+
+  const activeSessionId =
+    store.activeSessionId === sessionId
+      ? listChatSessions({ ...store, sessions, activeSessionId: sessions[0].id })[0].id
+      : store.activeSessionId
+
+  return {
+    version: STORE_VERSION,
+    activeSessionId,
+    sessions,
+  }
+}
+
+export const CHAT_DELETE_EVENT = 'contos-chat-delete'
+export const CHAT_DELETE_REVERT_EVENT = 'contos-chat-delete-revert'
+
+export type ChatDeleteEventDetail = {
+  projectId: string
+  sessionId: string
+  handled: boolean
+  previous?: ChatStore
+  next?: ChatStore
 }
 
 /**

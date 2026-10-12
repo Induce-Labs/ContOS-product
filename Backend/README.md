@@ -72,6 +72,20 @@ Health check: `GET /health` (includes `"redis": "up"|"down"`; 503 when Redis is 
 
 API docs: [http://localhost:8000/docs](http://localhost:8000/docs)
 
+### Postiz LinkedIn OAuth (Calendar)
+
+See [`Docs/phase-postiz-linkedin.md`](../Docs/phase-postiz-linkedin.md).
+
+```
+GET  /api/postiz/connect?avatar_id=<uuid>
+GET  /api/postiz/status?avatar_id=<uuid>
+POST /api/postiz/claim
+Authorization: Bearer <supabase_access_token>
+```
+
+Requires backend env: `POSTIZ_URL`, `CONTOS_PROVISION_SECRET`, `POSTIZ_TOKEN_ENCRYPTION_KEY`.
+Never expose these to Vite. Org-consent callback is gone (410).
+
 ### Scrape enqueue
 
 ```

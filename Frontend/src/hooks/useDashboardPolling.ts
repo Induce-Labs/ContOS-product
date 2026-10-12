@@ -3,6 +3,7 @@ import {
   fetchCompetitorsForProject,
   type Competitor,
 } from '../lib/competitors'
+import { logDevError, userFacingMessage } from '../lib/devLog'
 import {
   fetchAllSummariesForProject,
   type DashboardSummary,
@@ -50,9 +51,10 @@ export function useDashboardPolling(projectId: string | null): UseDashboardPolli
         setData({ competitors, summaries })
         setErrorMessage(null)
       } catch (error) {
-        setErrorMessage(
-          error instanceof Error ? error.message : 'Failed to refresh dashboard data',
-        )
+        logDevError('dashboard refresh', {
+          error: error instanceof Error ? error.message : String(error),
+        })
+        setErrorMessage(userFacingMessage(error, 'Failed to refresh dashboard data'))
       } finally {
         setIsLoading(false)
       }

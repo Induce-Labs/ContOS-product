@@ -219,3 +219,43 @@ def backfill_linkedin_summary_embeddings(
         "embedding_provider": "openrouter",
         "only_missing": only_missing,
     }
+
+
+def backfill_twitter_summary_embeddings(
+    only_missing: bool = True, limit: int = 200
+) -> dict[str, Any]:
+    """Embed twitter_content_summaries.summary into twitter_content_summaries.embedding."""
+    from db.supabase_client import (
+        list_twitter_summaries_for_embed,
+        update_twitter_summary_embedding,
+    )
+
+    rows = list_twitter_summaries_for_embed(only_missing=only_missing, limit=limit)
+    updated = 0
+    errors: list[str] = []
+    for row in rows:
+        summary_id = row.get("id")
+        try:
+            text = summary_to_embed_text(row.get("summary"))
+            embedding = generate_embedding(text)
+            result = update_twitter_summary_embedding(str(summary_id), embedding)
+            if result is None:
+                errors.append(f"{summary_id}: update returned no row")
+            else:
+                updated += 1
+                logger.info("Embedded twitter_content_summaries id=%s", summary_id)
+        except Exception as exc:
+            errors.append(f"{summary_id}: {exc}")
+            logger.error(
+                "Failed to embed twitter_content_summary %s: %s", summary_id, exc
+            )
+
+    return {
+        "table": "twitter_content_summaries",
+        "updated": updated,
+        "attempted": len(rows),
+        "errors": errors,
+        "embedding_model": EMBEDDING_MODEL,
+        "embedding_provider": "openrouter",
+        "only_missing": only_missing,
+    }

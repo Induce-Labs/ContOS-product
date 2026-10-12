@@ -100,7 +100,7 @@ function ProjectTypeIcon({ icon }: { icon: ProjectTypeOption['icon'] }) {
   if (icon === 'user') {
     return (
       <svg
-        className="h-5 w-5 text-neutral-500"
+        className="h-5 w-5 text-ink-muted"
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
@@ -115,7 +115,7 @@ function ProjectTypeIcon({ icon }: { icon: ProjectTypeOption['icon'] }) {
   if (icon === 'store') {
     return (
       <svg
-        className="h-5 w-5 text-neutral-500"
+        className="h-5 w-5 text-ink-muted"
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
@@ -130,7 +130,7 @@ function ProjectTypeIcon({ icon }: { icon: ProjectTypeOption['icon'] }) {
 
   return (
     <svg
-      className="h-5 w-5 text-neutral-500"
+      className="h-5 w-5 text-ink-muted"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -168,31 +168,31 @@ export function ProjectTypeStep({
   const resolvedStepLabel = stepLabel ?? t('onboarding.projectType.stepLabel')
 
   return (
-    <div className="relative min-h-dvh overflow-auto bg-[#faf9fd] font-sans text-[#1c1c1c] antialiased selection:bg-neutral-900 selection:text-white">
+    <div className="relative min-h-dvh overflow-auto bg-canvas font-sans text-ink antialiased selection:bg-ink selection:text-canvas">
       <div
         aria-hidden="true"
-        className="pointer-events-none fixed inset-0 z-0 bg-[radial-gradient(ellipse_80%_60%_at_50%_0%,rgba(238,230,253,0.6)_0%,rgba(247,244,253,0.3)_45%,rgba(255,255,255,0)_80%),radial-gradient(circle_at_100%_100%,rgba(235,225,252,0.4)_0%,rgba(255,255,255,0)_50%)]"
+        className="pointer-events-none fixed inset-0 z-0 bg-[radial-gradient(ellipse_80%_60%_at_50%_0%,rgba(238,230,253,0.6)_0%,rgba(247,244,253,0.3)_45%,rgba(255,255,255,0)_80%),radial-gradient(circle_at_100%_100%,rgba(235,225,252,0.4)_0%,rgba(255,255,255,0)_50%)] dark:bg-[radial-gradient(ellipse_80%_60%_at_50%_0%,rgba(37,22,77,0.5)_0%,rgba(13,13,13,0.2)_45%,rgba(13,13,13,0)_80%),radial-gradient(circle_at_100%_100%,rgba(37,22,77,0.35)_0%,rgba(13,13,13,0)_50%)]"
       />
 
       <div
         aria-hidden="true"
-        className="pointer-events-none fixed inset-x-0 top-0 z-10 h-20 bg-gradient-to-b from-black/[0.12] via-black/[0.02] to-transparent sm:h-32"
+        className="pointer-events-none fixed inset-x-0 top-0 z-10 h-20 bg-gradient-to-b from-black/[0.12] via-black/[0.02] to-transparent sm:h-32 dark:from-white/[0.06]"
       />
 
       <main className="relative z-20 mx-auto flex min-h-dvh w-full max-w-[1180px] flex-col px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
         <div className="flex shrink-0 items-center justify-between gap-4">
           <div className="project-type-back min-w-0">{backControl}</div>
-          <span className="shrink-0 text-[11px] font-medium uppercase tracking-[0.14em] text-neutral-400 sm:text-xs">
+          <span className="shrink-0 text-[11px] font-medium uppercase tracking-[0.14em] text-ink-muted sm:text-xs">
             {resolvedStepLabel}
           </span>
         </div>
 
         <div className="flex flex-1 flex-col items-center justify-center py-10 sm:py-14">
           <header className="mx-auto max-w-2xl shrink-0 text-center">
-            <h1 className="mb-3 font-serif text-[34px] font-bold leading-[1.12] tracking-[-0.03em] text-neutral-900 sm:text-[44px] md:text-[50px]">
+            <h1 className="mb-3 break-words text-balance font-serif text-[34px] font-bold leading-[1.12] tracking-[-0.03em] text-ink sm:text-[44px] md:text-[50px]">
               {t('onboarding.projectType.title')}
             </h1>
-            <p className="mx-auto max-w-lg text-sm leading-relaxed text-neutral-500 sm:text-base">
+            <p className="mx-auto max-w-lg break-words text-sm leading-relaxed text-ink-muted sm:text-base">
               {t('onboarding.projectType.subtitle')}
             </p>
           </header>
@@ -203,8 +203,8 @@ export function ProjectTypeStep({
             </div>
           ) : null}
 
-          <div className="mt-10 w-full max-w-full overflow-x-auto overscroll-x-contain sm:mt-12">
-            <div className="mx-auto flex w-max items-stretch gap-5 px-2 py-3 sm:gap-6">
+          <div className="scrollbar-none mt-10 w-full max-w-full overflow-x-auto overscroll-x-contain sm:mt-12">
+            <div className="mx-auto flex w-max items-stretch gap-5 px-2 py-1 sm:gap-6">
               {PROJECT_TYPE_OPTIONS.map((option) => {
                 const isSelected = selectedType === option.value
                 const keys = projectTypeOptionKeys(option.value)
@@ -215,27 +215,27 @@ export function ProjectTypeStep({
                     type="button"
                     onClick={() => onSelect(option.value)}
                     aria-pressed={isSelected}
-                    className={`contos-glow-card flex w-[260px] shrink-0 cursor-pointer flex-col rounded-[28px] bg-white p-7 text-left transition-shadow duration-300 sm:w-[280px] sm:p-8 ${
+                    className={`contos-glow-card flex w-[min(100%,300px)] min-w-[260px] shrink-0 cursor-pointer flex-col rounded-[28px] bg-canvas-raised p-7 text-left transition-shadow duration-300 sm:w-[300px] sm:min-w-[280px] sm:p-8 ${
                       isSelected
-                        ? 'contos-glow-card--selected border-2 border-neutral-900 shadow-[0_12px_32px_rgba(0,0,0,0.06)]'
-                        : 'border border-transparent shadow-[0_8px_30px_rgba(0,0,0,0.04)]'
+                        ? 'contos-glow-card--selected border-2 border-ink shadow-[0_12px_32px_rgba(0,0,0,0.06)] dark:shadow-[0_12px_32px_rgba(0,0,0,0.35)]'
+                        : 'border border-transparent shadow-[0_8px_30px_rgba(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgba(0,0,0,0.28)]'
                     }`}
                   >
                     {isSelected ? (
-                      <span className="absolute right-5 top-5 z-[1] flex h-6 w-6 items-center justify-center rounded-full bg-neutral-900 text-white">
+                      <span className="absolute right-5 top-5 z-[1] flex h-6 w-6 items-center justify-center rounded-full bg-ink text-canvas">
                         <CheckIcon className="h-3.5 w-3.5" />
                       </span>
                     ) : null}
 
-                    <div className="relative z-[1] mb-6 flex h-11 w-11 items-center justify-center rounded-full bg-neutral-100">
+                    <div className="relative z-[1] mb-6 flex h-11 w-11 items-center justify-center rounded-full bg-canvas">
                       <ProjectTypeIcon icon={option.icon} />
                     </div>
 
-                    <h2 className="relative z-[1] mb-2.5 font-serif text-[22px] font-bold leading-[1.2] tracking-[-0.02em] text-neutral-900 sm:text-[24px]">
+                    <h2 className="relative z-[1] mb-2.5 break-words text-balance font-serif text-[22px] font-bold leading-[1.2] tracking-[-0.02em] text-ink sm:text-[24px]">
                       {t(keys.title)}
                     </h2>
 
-                    <p className="relative z-[1] text-[13.5px] leading-relaxed text-neutral-500 sm:text-[14px]">
+                    <p className="relative z-[1] break-words text-[13.5px] leading-relaxed text-ink-muted sm:text-[14px]">
                       {t(keys.description)}
                     </p>
                   </button>
@@ -245,7 +245,7 @@ export function ProjectTypeStep({
           </div>
 
           {fieldError ? (
-            <p className="mt-4 shrink-0 text-center text-sm text-red-600">{fieldError}</p>
+            <p className="mt-4 shrink-0 text-center text-sm text-red-600 dark:text-red-400">{fieldError}</p>
           ) : null}
         </div>
 
@@ -254,9 +254,9 @@ export function ProjectTypeStep({
             type="button"
             onClick={onContinue}
             disabled={isSubmitting}
-            className="group inline-flex cursor-pointer items-center gap-2.5 rounded-full bg-[#9353ea] px-7 py-3 text-sm font-semibold text-white shadow-[0_8px_25px_rgba(147,83,234,0.4)] transition-all duration-300 hover:scale-105 hover:bg-[#823fe0] hover:shadow-[0_12px_30px_rgba(147,83,234,0.5)] active:scale-95 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100 sm:px-8 sm:py-3.5 sm:text-[14.5px]"
+            className="contos-btn contos-btn--pill contos-btn--primary group max-w-full whitespace-normal sm:px-8 sm:py-3.5 sm:text-[14.5px]"
           >
-            <span>
+            <span className="text-left">
               {isSubmitting
                 ? t('onboarding.projectType.creating')
                 : t('onboarding.projectType.continue')}
