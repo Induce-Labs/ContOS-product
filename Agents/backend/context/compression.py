@@ -66,6 +66,10 @@ def compress_context(context: dict[str, Any], max_tokens: int = MAX_CONTEXT_TOKE
     if isinstance(playbooks, list) and len(playbooks) > 3:
         compressed["relevant_playbooks"] = playbooks[:3]
 
+    performance = compressed.get("previous_content_performance") or []
+    if isinstance(performance, list) and len(performance) > 5:
+        compressed["previous_content_performance"] = performance[:5]
+
     serialized = json.dumps(compressed, default=str)
     if estimate_tokens(serialized) <= max_tokens:
         return compressed
@@ -100,6 +104,21 @@ def compress_context(context: dict[str, Any], max_tokens: int = MAX_CONTEXT_TOKE
                 "category": p.get("category"),
             }
             for p in compressed["relevant_playbooks"][:2]
+        ]
+
+    if isinstance(compressed.get("previous_content_performance"), list):
+        compressed["previous_content_performance"] = [
+            {
+                "id": item.get("id"),
+                "day": item.get("day"),
+                "content_type": item.get("content_type"),
+                "hook": item.get("hook"),
+                "performance_goal": item.get("performance_goal"),
+                "performance_metrics": item.get("performance_metrics") or {},
+                "performance_updated_at": item.get("performance_updated_at"),
+            }
+            for item in compressed["previous_content_performance"][:5]
+            if isinstance(item, dict)
         ]
 
     return compressed

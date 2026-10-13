@@ -17,16 +17,35 @@ class PlaybookOutput(BaseModel):
     reasoning: str = ""
 
 
+class StrategistEnvelope(BaseModel):
+    mode: str = "chat"
+    reply: str = ""
+    thesis: str = ""
+    next_question: str = ""
+    ideas: list[dict[str, Any]] = Field(default_factory=list)
+    facts_used: list[str] = Field(default_factory=list)
+    draft_kind: str = ""
+    disclaimer: str = ""
+    unverified_claims: list[str] = Field(default_factory=list)
+    memory_updates: list[dict[str, Any]] = Field(default_factory=list)
+
+
 class InstagramCalendarItem(BaseModel):
+    content_plan_item_id: str = ""
     day: int = 0
     date: str = ""
     content_type: str = ""
     hook: str = ""
     caption: str = ""
+    copy_paste_post: str = ""
     hashtags: list[str] = Field(default_factory=list)
     cta: str = ""
     audio_suggestion: str = ""
     transcript: str = ""
+    video_prompt: str = ""
+    strategy_reasoning: str = ""
+    performance_goal: str = ""
+    evidence_citations: list[str] = Field(default_factory=list)
     reasoning: str = ""
 
 
@@ -39,12 +58,13 @@ class CompetitorCompareCard(BaseModel):
     key_signals: list[str] = Field(default_factory=list)
 
 
-class InstagramOutput(BaseModel):
+class InstagramOutput(StrategistEnvelope):
     agent: Literal["instagram"] = "instagram"
     platform: Literal["instagram"] = "instagram"
     response_type: Literal[
         "content_calendar", "competitor_comparison", "analysis"
     ] = "content_calendar"
+    presentation_mode: Literal["copy_only", "detailed"] = "copy_only"
     content_calendar: list[InstagramCalendarItem] = Field(default_factory=list)
     top_hooks: list[str] = Field(default_factory=list)
     caption_formulas: list[str] = Field(default_factory=list)
@@ -53,19 +73,22 @@ class InstagramOutput(BaseModel):
     comparison_summary: str = ""
     differentiation_angles: list[str] = Field(default_factory=list)
     analysis: str = ""
+    content_plan_item_ids: list[str] = Field(default_factory=list)
+    recommended_option: str = ""
+    alternative_options: list[str] = Field(default_factory=list)
 
 
 class LinkedInPostIdea(BaseModel):
-    topic: str
-    hook: str
-    post_structure: str
-    content_type: str
+    topic: str = ""
+    hook: str = ""
+    post_structure: str = ""
+    content_type: str = "text"
     cta: str = ""
     transcript: str = ""
     reasoning: str = ""
 
 
-class LinkedInOutput(BaseModel):
+class LinkedInOutput(StrategistEnvelope):
     agent: Literal["linkedin"] = "linkedin"
     platform: Literal["linkedin"] = "linkedin"
     post_ideas: list[LinkedInPostIdea] = Field(default_factory=list)
@@ -76,9 +99,9 @@ class LinkedInOutput(BaseModel):
 
 
 class TweetIdea(BaseModel):
-    hook: str
-    full_tweet: str
-    type: str
+    hook: str = ""
+    full_tweet: str = ""
+    type: str = "single"
     reasoning: str = ""
 
 
@@ -87,7 +110,7 @@ class ThreadStructure(BaseModel):
     tweets: list[str] = Field(default_factory=list)
 
 
-class TwitterOutput(BaseModel):
+class TwitterOutput(StrategistEnvelope):
     agent: Literal["twitter"] = "twitter"
     platform: Literal["twitter"] = "twitter"
     tweet_ideas: list[TweetIdea] = Field(default_factory=list)

@@ -9,6 +9,10 @@ You have MCP tools available (fetch_playbooks, similarity_search). Call them ONL
 the user query needs specific rules, frameworks, or an audit against playbooks.
 Do not fetch rules for pure greetings or unrelated chit-chat.
 
+TRANSCRIPT GROUNDING
+When CONTEXT contains "transcript_lessons", base recommendations on those principles,
+adapted to this brand and its competitors. Keep your output schema unchanged.
+
 When you respond, you MUST return valid JSON only (no markdown fences) matching:
 Do not use asterisk (*) characters in any string field.
 {

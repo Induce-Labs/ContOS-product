@@ -9,11 +9,11 @@ logger = logging.getLogger(__name__)
 
 SUPPORTED_TABLES = {
     "playbooks",
+    "marketing_knowledge_chunks",
     "linkedin_content_summaries",
     "instagram_content_summaries",
     "twitter_content_summaries",
 }
-
 
 def _lexical_rank(
     query_text: str, items: list[dict[str, Any]], haystack_fn, top_k: int
@@ -190,6 +190,11 @@ def similarity_search(
     from embeddings.embed import generate_embedding
     from db import supabase_client as db
 
+    if table == "marketing_knowledge_chunks":
+        from context.query_enrichment import build_avatar_aware_query
+
+        query_text = build_avatar_aware_query(query_text, avatar_id, user_id)
+
     embedding = generate_embedding(query_text)
 
     if table == "playbooks":
@@ -214,6 +219,24 @@ def similarity_search(
         return _lexical_search(
             query_text, table, top_k, avatar_id=avatar_id, platform=platform
         )
+
+    if table == "marketing_knowledge_chunks":
+        rows = db.similarity_search_marketing_knowledge(embedding, top_k=top_k)
+        return [
+            {
+                "content": {
+                    "category": "Source transcript",
+                    "topic": row.get("section") or row.get("source_name"),
+                    "rule_summary": row.get("content"),
+                    "source_name": row.get("source_name"),
+                    "chunk_index": row.get("chunk_index"),
+                    "metadata": row.get("metadata") or {},
+                },
+                "similarity": row.get("similarity"),
+                "source": "pgvector",
+            }
+            for row in rows
+        ]
 
     if table == "linkedin_content_summaries":
         rows = db.similarity_search_linkedin_summaries(

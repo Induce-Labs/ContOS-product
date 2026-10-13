@@ -11,6 +11,20 @@ from fastapi import Depends, Header, HTTPException, status
 logger = logging.getLogger(__name__)
 
 
+def _dev_bypass_user_id() -> UUID | None:
+    """Return the explicitly configured local test user, never in production."""
+    if (os.getenv("LLM_ENV") or "dev").strip().lower() == "prod":
+        return None
+    raw = (os.getenv("AGENTS_DEV_AUTH_BYPASS_USER_ID") or "").strip()
+    if not raw:
+        return None
+    try:
+        return UUID(raw)
+    except ValueError:
+        logger.warning("Ignoring invalid AGENTS_DEV_AUTH_BYPASS_USER_ID")
+        return None
+
+
 def _supabase_client():
     from db.supabase_client import get_supabase_client
 
@@ -27,6 +41,13 @@ def get_current_user_id(
     authorization: str | None = Header(default=None),
 ) -> UUID:
     if not authorization or not authorization.startswith("Bearer "):
+        bypass_user_id = _dev_bypass_user_id()
+        if bypass_user_id:
+            logger.warning(
+                "Using development auth bypass for user_id=%s",
+                bypass_user_id,
+            )
+            return bypass_user_id
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Missing or invalid Authorization header. Expected Bearer <access_token>.",

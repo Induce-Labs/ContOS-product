@@ -395,6 +395,31 @@ def similarity_search_playbooks(
         raise
 
 
+def similarity_search_marketing_knowledge(
+    query_embedding: list[float], top_k: int = 5
+) -> list[dict[str, Any]]:
+    """Return source-grounded chunks from the shared marketing reference corpus."""
+    client = _require_client()
+    result = client.rpc(
+        "match_marketing_knowledge_chunks",
+        {"query_embedding": query_embedding, "match_count": top_k},
+    ).execute()
+    return result.data or []
+
+
+def replace_marketing_knowledge_chunks(
+    source_name: str, rows: list[dict[str, Any]]
+) -> None:
+    """Replace one document's chunks after all embeddings have succeeded."""
+    if not rows:
+        raise ValueError("rows is required")
+    client = _require_client()
+    client.table("marketing_knowledge_chunks").delete().eq(
+        "source_name", source_name
+    ).execute()
+    client.table("marketing_knowledge_chunks").insert(rows).execute()
+
+
 def _cosine_similarity(a: list[float], b: list[float]) -> float:
     if not a or not b or len(a) != len(b):
         return 0.0

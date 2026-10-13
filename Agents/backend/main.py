@@ -126,6 +126,12 @@ class CompetitorIngestRequest(BaseModel):
     avatar_id: str = Field(..., min_length=1)
 
 
+class ContentPlanPerformanceRequest(BaseModel):
+    metrics: dict[str, Any] = Field(..., min_length=1)
+    status: Literal["planned", "published", "archived"] | None = None
+    top_comments: list[str] = Field(default_factory=list, max_length=20)
+
+
 class ProfileSummarizeRequest(BaseModel):
     avatar_id: str = Field(..., min_length=1)
     force: bool = False
@@ -234,6 +240,34 @@ def ingest_competitors(
         "competitors": ingested,
         "errors": errors,
         "message": message,
+    }
+
+
+@app.post("/api/content-plan/items/{item_id}/performance")
+def update_content_plan_item_performance(
+    item_id: UUID,
+    body: ContentPlanPerformanceRequest,
+    user_id: UUID = Depends(get_current_user_id),
+) -> dict[str, Any]:
+    """Store measured post metrics for a future Instagram planning request."""
+    from services.content_plan import ContentPlanError, update_content_plan_performance
+
+    try:
+        item = update_content_plan_performance(
+            item_id=item_id,
+            user_id=str(user_id),
+            metrics=body.metrics,
+            status=body.status,
+            top_comments=body.top_comments,
+        )
+    except ContentPlanError as exc:
+        message = str(exc)
+        status_code = 404 if "not found" in message.lower() else 403
+        raise HTTPException(status_code=status_code, detail=message) from exc
+
+    return {
+        "status": "updated",
+        "content_plan_item": item,
     }
 
 

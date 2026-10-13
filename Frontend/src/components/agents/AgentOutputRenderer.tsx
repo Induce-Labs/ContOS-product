@@ -1,4 +1,4 @@
-import { useMemo, type ReactNode } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
 import type { AgentType } from '../../lib/agentsApi'
@@ -128,6 +128,10 @@ function InstagramRichOutputView({ output }: { output: UnknownRecord }) {
   const captionFormulas = asStringList(output.caption_formulas)
   const postingFrequency = asString(output.posting_frequency)
   const differentiation = asStringList(output.differentiation_angles)
+  const recommendedOption = asString(output.recommended_option)
+  const alternativeOptions = asStringList(output.alternative_options)
+  const copyOnly = output.presentation_mode !== 'detailed'
+  const [copied, setCopied] = useState(false)
 
   const competitorCards = competitors.map((raw, index) => {
     const card = asRecord(raw) ?? {}
@@ -149,11 +153,37 @@ function InstagramRichOutputView({ output }: { output: UnknownRecord }) {
       contentType: asString(row.content_type) || 'Post',
       hook: asString(row.hook),
       caption: asString(row.caption),
+      copyPastePost: asString(row.copy_paste_post),
       hashtags: asStringList(row.hashtags),
       cta: asString(row.cta),
+      strategyReasoning: asString(row.strategy_reasoning),
+      performanceGoal: asString(row.performance_goal),
+      evidenceCitations: asStringList(row.evidence_citations),
       reasoning: asString(row.reasoning),
     }
   })
+
+  if (copyOnly && calendarRows.length > 0) {
+    const copy = calendarRows[0].copyPastePost || calendarRows[0].caption
+    return (
+      <div className="space-y-3">
+        <p className="whitespace-pre-wrap rounded-md bg-canvas-raised px-3 py-3 text-sm leading-relaxed text-ink">
+          {copy}
+        </p>
+        <button
+          type="button"
+          className="text-xs text-accent-primary"
+          onClick={() => {
+            void navigator.clipboard.writeText(copy)
+            setCopied(true)
+            window.setTimeout(() => setCopied(false), 1200)
+          }}
+        >
+          {copied ? t('agents.output.copied') : t('agents.output.copyPost')}
+        </button>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-4">
@@ -235,6 +265,11 @@ function InstagramRichOutputView({ output }: { output: UnknownRecord }) {
                 {row.caption ? (
                   <p className="mt-2 whitespace-pre-wrap text-sm text-ink-muted">{row.caption}</p>
                 ) : null}
+                {row.copyPastePost ? (
+                  <p className="mt-2 whitespace-pre-wrap rounded-md bg-canvas px-2 py-2 text-sm text-ink">
+                    {row.copyPastePost}
+                  </p>
+                ) : null}
                 {row.hashtags.length > 0 ? (
                   <p className="mt-2 text-xs text-accent-primary-deep">
                     {row.hashtags
@@ -247,6 +282,21 @@ function InstagramRichOutputView({ output }: { output: UnknownRecord }) {
                     {t('agents.output.cta', { value: row.cta })}
                   </p>
                 ) : null}
+                {row.performanceGoal ? (
+                  <p className="mt-2 text-xs text-ink-muted">
+                    {t('agents.output.performanceGoal', { value: row.performanceGoal })}
+                  </p>
+                ) : null}
+                {row.strategyReasoning ? (
+                  <p className="mt-2 border-t border-border-hairline pt-2 text-xs text-ink-muted">
+                    {t('agents.output.strategyReasoning', { value: row.strategyReasoning })}
+                  </p>
+                ) : null}
+                {row.evidenceCitations.length > 0 ? (
+                  <p className="mt-2 text-xs text-ink-muted">
+                    {t('agents.output.evidence', { value: row.evidenceCitations.join(' · ') })}
+                  </p>
+                ) : null}
                 {row.reasoning ? (
                   <p className="mt-2 border-t border-border-hairline pt-2 text-xs text-ink-muted">
                     {t('agents.output.reasoning')}: {row.reasoning}
@@ -255,6 +305,16 @@ function InstagramRichOutputView({ output }: { output: UnknownRecord }) {
               </article>
             ))}
           </div>
+        </Section>
+      ) : null}
+      {recommendedOption ? (
+        <Section title={t('agents.output.recommendedOption')}>
+          <p className="text-sm text-ink">{recommendedOption}</p>
+        </Section>
+      ) : null}
+      {alternativeOptions.length > 0 ? (
+        <Section title={t('agents.output.otherOptions')}>
+          <BulletList items={alternativeOptions} />
         </Section>
       ) : null}
       {topHooks.length > 0 ? (
@@ -477,6 +537,62 @@ function TwitterOutputView({ output }: { output: UnknownRecord }) {
   )
 }
 
+const PLATFORM_CONTENT_KEYS = [
+  'content_calendar',
+  'post_ideas',
+  'tweet_ideas',
+  'thread_structures',
+  'competitor_comparison',
+]
+
+function hasPlatformContent(output: UnknownRecord): boolean {
+  return PLATFORM_CONTENT_KEYS.some(
+    (key) => Array.isArray(output[key]) && (output[key] as unknown[]).length > 0,
+  )
+}
+
+function StrategistHeader({ output }: { output: UnknownRecord }) {
+  const { t } = useTranslation()
+  const reply = asString(output.reply)
+  const thesis = asString(output.thesis)
+  const nextQuestion = asString(output.next_question)
+  const ideas = Array.isArray(output.ideas) ? output.ideas : []
+  if (!reply && !thesis && !nextQuestion && ideas.length === 0) return null
+
+  return (
+    <div className="space-y-3">
+      {reply ? (
+        <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink">{reply}</p>
+      ) : null}
+      {thesis ? (
+        <Section title={t('agents.output.thesis')}>
+          <p className="text-sm text-ink">{thesis}</p>
+        </Section>
+      ) : null}
+      {ideas.length > 0 ? (
+        <Section title={t('agents.output.ideas')}>
+          <ol className="list-decimal space-y-2 pl-5 text-sm text-ink">
+            {ideas.map((raw, index) => {
+              const idea = asRecord(raw) ?? {}
+              return (
+                <li key={index}>
+                  <span className="font-medium">{asString(idea.title)}</span>
+                  {asString(idea.why) ? (
+                    <span className="block text-xs text-ink-muted">{asString(idea.why)}</span>
+                  ) : null}
+                </li>
+              )
+            })}
+          </ol>
+        </Section>
+      ) : null}
+      {nextQuestion ? (
+        <p className="border-l-2 border-accent-primary pl-3 text-sm text-ink">{nextQuestion}</p>
+      ) : null}
+    </div>
+  )
+}
+
 export function AgentOutputRenderer({
   agentType,
   output,
@@ -513,10 +629,39 @@ export function AgentOutputRenderer({
       (asString(record.agent) as AgentType | '') ||
       'chatbot'
 
-    if (agent === 'instagram') return <InstagramOutputView output={record} />
-    if (agent === 'linkedin') return <LinkedInOutputView output={record} />
     if (agent === 'playbook') return <PlaybookOutputView output={record} />
-    if (agent === 'twitter') return <TwitterOutputView output={record} />
+    if (agent === 'instagram' || agent === 'linkedin' || agent === 'twitter') {
+      const showBody = hasPlatformContent(record) || !asString(record.reply)
+      const view =
+        agent === 'instagram' ? (
+          <InstagramOutputView output={record} />
+        ) : agent === 'linkedin' ? (
+          <LinkedInOutputView output={record} />
+        ) : (
+          <TwitterOutputView output={record} />
+        )
+      const draftKind = asString(record.draft_kind)
+      const draftLabel =
+        draftKind === 'example'
+          ? t('agents.output.exampleDraft')
+          : draftKind === 'plan'
+            ? t('agents.output.weeklyPlan')
+            : ''
+      return (
+        <div className="space-y-4">
+          <StrategistHeader output={record} />
+          {showBody && draftLabel && hasPlatformContent(record) ? (
+            <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">
+              {draftLabel}
+            </p>
+          ) : null}
+          {showBody ? view : null}
+          {showBody && asString(record.disclaimer) && hasPlatformContent(record) ? (
+            <p className="text-xs italic text-ink-muted">{asString(record.disclaimer)}</p>
+          ) : null}
+        </div>
+      )
+    }
   }
 
   if (streamingText?.trim()) {
