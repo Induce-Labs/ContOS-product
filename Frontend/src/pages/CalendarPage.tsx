@@ -2341,7 +2341,7 @@ function AvatarCalendarBoard({
                       className={`flex min-w-[8.5rem] items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium text-ink ${
                         composerPlatform === 'linkedin'
                           ? 'border-[#c4b5fd] bg-[#f7f3ff] ring-1 ring-[#c4b5fd] dark:bg-[#2a2238]'
-                          : 'border-border-hairline bg-white hover:bg-[#faf9fc] dark:bg-canvas'
+                          : 'border-border-hairline bg-white hover:bg-[#faf9fc] dark:bg-canvas dark:hover:bg-[#222126]'
                       }`}
                     >
                       <LinkedInMark className="h-8 w-8" />
@@ -2354,7 +2354,7 @@ function AvatarCalendarBoard({
                       className={`flex min-w-[8.5rem] items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium text-ink ${
                         composerPlatform === 'x'
                           ? 'border-[#c4b5fd] bg-[#f7f3ff] ring-1 ring-[#c4b5fd] dark:bg-[#2a2238]'
-                          : 'border-border-hairline bg-white hover:bg-[#faf9fc] dark:bg-canvas'
+                          : 'border-border-hairline bg-white hover:bg-[#faf9fc] dark:bg-canvas dark:hover:bg-[#222126]'
                       }`}
                     >
                       <XMark className="h-8 w-8" />
