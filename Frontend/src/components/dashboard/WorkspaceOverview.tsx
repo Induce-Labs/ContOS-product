@@ -1,7 +1,8 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
+import { useTranslatedTexts } from '../../hooks/useTranslatedTexts'
 import { OverviewWorkspaceHeader } from './OverviewWorkspaceHeader'
 import { ChatIcon } from '../icons/ActionIcons'
 import { MAX_COMPETITORS_PER_AVATAR, type Competitor } from '../../lib/competitors'
@@ -152,6 +153,28 @@ export function WorkspaceOverview({
         : '—'
       : totalPosts.toLocaleString()
 
+  const strategyLabels = useMemo(() => {
+    const labels = new Set<string>()
+    for (const slice of distribution.slices) {
+      labels.add(shortPrimaryStrategy(slice.theme))
+    }
+    for (const row of rows) {
+      if (row.theme) {
+        labels.add(shortPrimaryStrategy(row.theme))
+      }
+    }
+    return [...labels]
+  }, [distribution.slices, rows])
+  const { texts: translatedStrategyLabels } = useTranslatedTexts(strategyLabels)
+  const strategyLabelByEnglish = new Map(
+    strategyLabels.map((label, index) => [label, translatedStrategyLabels[index] ?? label]),
+  )
+
+  function strategyLabel(theme: string): string {
+    const english = shortPrimaryStrategy(theme)
+    return strategyLabelByEnglish.get(english) ?? english
+  }
+
   const normalizedQuery = query.trim().toLowerCase()
   const visibleRows = normalizedQuery
     ? rows.filter((row) => row.handle.toLowerCase().includes(normalizedQuery))
@@ -199,7 +222,7 @@ export function WorkspaceOverview({
                   />
                   <div className="text-left">
                     <p className="whitespace-nowrap text-sm font-medium text-ink" title={slice.theme}>
-                      {shortPrimaryStrategy(slice.theme)}
+                      {strategyLabel(slice.theme)}
                     </p>
                     <p className="text-xs text-ink-muted">
                       {t('dashboard.distributionCount', { count: slice.posts })}
@@ -309,7 +332,7 @@ export function WorkspaceOverview({
                             title={row.theme}
                             className={`inline-flex whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium ${style.pillClass}`}
                           >
-                            {shortPrimaryStrategy(row.theme)}
+                            {strategyLabel(row.theme)}
                           </span>
                         ) : (
                           <span className="text-ink-muted">—</span>

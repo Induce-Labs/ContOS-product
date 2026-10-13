@@ -65,7 +65,7 @@ Agents and profile summaries continue to consume English profiling data. Backend
 
 ### Profiling translate timing
 
-Non-English profiling waits on `isTranslating` (`useLayoutEffect`, parallel `/api/translate` chunks) and shows `agents.translating` — questions are not rendered in English while translation is in flight. Translate failures surface `agents.translationFailed` and then fall back to English.
+Non-English profiling waits on `isTranslating` (`useLayoutEffect`, `/api/translate` chunks sent one at a time) and shows `agents.translating` — questions are not rendered in English while translation is in flight. The Agents process also translates one OpenRouter batch at a time so overlapping requests do not fail together. Translate failures surface `agents.translationFailed` and then fall back to English.
 
 ### Onboarding overflow guidelines
 
@@ -175,7 +175,7 @@ Declared in [`Agents/backend/.env.example`](../Agents/backend/.env.example).
 
 - Live SSE token streams are not translated mid-flight
 - Profiling questionnaire rows stay English in Supabase; UI translates on demand
-- Catalog files for hi/zh/fr/es may lag `en` until `scripts/translate_ui_strings.py` is re-run for new keys
+- Catalog files for hi/zh/fr/es may lag `en` until `scripts/translate_ui_strings.py` is re-run for new keys. Calendar and Postiz callback copy, including status chips (`stateScheduled`, `stateDraft`, `stateFailed`), is translated in those four catalogs. `untitledPost` and `mediaUploadTimeout` sit beside the same neighbors as in English. Brand names (LinkedIn, X, Twitter, Postiz, ContOS, Instagram), format templates (`stateOther`, `charCountOf`, `distributionShare`, welcome greeting), and URL examples stay as in English. Instagram format labels `Reels` / `Reel`, French `Actions` and `Audit`, and Spanish `Idea {{n}}` stay spelled the same because that is the word in that language.
 - `profile_summary` / `website_summary` are not rendered in the UI today (English remains fine for agents)
 - Requires `public.translation_cache` migration applied; without it `/api/translate` fails and Profiling/Analytics stay English
 - Dashboard LanguageSelector updates `localStorage` only; it does not yet write back to `user_profiles.preferred_language`
