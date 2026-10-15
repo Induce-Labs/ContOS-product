@@ -94,6 +94,12 @@ Shared input controls live in [`ProfilingQuestionField`](../Frontend/src/compone
 
 When the active project has `profiling_completeness < 100`, [`AgentsPage`](../Frontend/src/pages/AgentsPage.tsx) shows [`IncompleteProfilingBanner`](../Frontend/src/components/dashboard/IncompleteProfilingBanner.tsx) at the top of the chat screen with progress and a **Complete profiling** link to `/dashboard/:projectId/profiling`. The banner is informational only (chat is not blocked). `AgentsPage` calls `refreshProjects()` on mount so the banner hides after the user finishes profiling and returns to chat.
 
+## Chat message formatting
+
+Assistant bubbles, the strategist reply, and in-progress stream text go through `FormattedAssistantText`. It turns blank lines into paragraphs, closed `**phrase**` into bold, `#` headings and bold-only lines into headings, and `-` / `*` or `1.` lines into lists. Numbered items separated only by blank lines stay one list, and the list starts at the first item's number. An unclosed `**` or a list marker with no item text yet stays literal until the stream finishes. User bubbles stay plain text. Nothing is injected as HTML.
+
+LinkedIn `post_ideas` and X `tweet_ideas` render as paste-ready drafts (`composePublishablePostList`): hook, body, then call to action when it is not already there. Blank lines inside a draft collapse to single newlines. On screen, several drafts are stacked with a hairline divider between them; saved chat text joins the same drafts with a blank line (no `---`). Topic, content type, and reasoning stay in the payload and are not shown on the draft. Instagram calendar rows stay labeled hook and caption fields.
+
 ## Security
 
 All new routes remain behind `ProtectedRoute` and `RequireOnboardingComplete`. Project switcher only lists avatars returned by the signed-in user's query.
