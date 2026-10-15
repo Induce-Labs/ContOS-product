@@ -2710,11 +2710,11 @@ class TestPostizX:
                 thread=("Edit", "Reply"),
             )
 
-    def test_x_delete_allows_draft_and_scheduled_only(self) -> None:
+    def test_x_delete_allows_draft_scheduled_and_failed(self) -> None:
         service, client, _repository, _settings_obj = self._ready()
         client.delete_post.return_value = {"id": "px"}
 
-        for state in ("DRAFT", "QUEUE"):
+        for state in ("DRAFT", "QUEUE", "ERROR"):
             client.delete_post.reset_mock()
             client.list_posts.return_value = [
                 _raw_post(
@@ -2740,7 +2740,7 @@ class TestPostizX:
                 state="PUBLISHED",
             ),
         ]
-        with pytest.raises(PostizBadRequestError, match="Only draft and scheduled"):
+        with pytest.raises(PostizBadRequestError, match="Only draft, scheduled, and failed"):
             service.delete_post(
                 contos_user_id=USER_A,
                 avatar_id=AVATAR_A,

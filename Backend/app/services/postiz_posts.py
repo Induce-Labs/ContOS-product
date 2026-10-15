@@ -617,9 +617,9 @@ class PostizPostsService:
             and x_integration_id.strip()
             and owned.integration_id == x_integration_id.strip()
         )
-        if is_x_post and owned.state not in {"DRAFT", "QUEUE"}:
+        if is_x_post and owned.state not in {"DRAFT", "QUEUE", "ERROR"}:
             raise PostizBadRequestError(
-                "Only draft and scheduled X posts can be deleted. "
+                "Only draft, scheduled, and failed X posts can be deleted. "
                 f"This post is {owned.state}.",
             )
         result = self._client.delete_post(access_token, post_id)

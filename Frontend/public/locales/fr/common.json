@@ -738,7 +738,7 @@
       "saveFailed": "Impossible d'enregistrer la publication.",
       "deleteFailed": "Impossible de supprimer la publication.",
       "deleteTitle": "Supprimer cette publication ?",
-      "deleteBody": "Cela supprime le brouillon ou la publication programmée de cet avatar. Cette action est irréversible.",
+      "deleteBody": "Cela supprime le brouillon, la publication programmée ou la publication échouée de cet avatar. Cette action est irréversible.",
       "morePosts": "+{{count}} de plus",
       "showLess": "Voir moins",
       "statePublished": "Publié",

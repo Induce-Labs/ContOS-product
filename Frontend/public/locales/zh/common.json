@@ -738,7 +738,7 @@
       "saveFailed": "无法保存帖子。",
       "deleteFailed": "无法删除帖子。",
       "deleteTitle": "删除这篇帖子？",
-      "deleteBody": "这将删除此头像的草稿或已排期帖子。此操作无法撤销。",
+      "deleteBody": "这将删除此头像的草稿、已排期或失败的帖子。此操作无法撤销。",
       "morePosts": "还有 {{count}} 条",
       "showLess": "收起",
       "statePublished": "已发布",

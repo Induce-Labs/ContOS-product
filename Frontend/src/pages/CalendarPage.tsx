@@ -2641,6 +2641,16 @@ function AvatarCalendarBoard({
                 {modalMode === 'view' ? t('common.close') : t('common.cancel')}
               </button>
               <div className="flex flex-wrap justify-end gap-2">
+                {modalMode === 'view' && editingPost?.state.toUpperCase() === 'ERROR' ? (
+                  <button
+                    type="button"
+                    disabled={saving || deleting}
+                    className={COMPOSER_SECONDARY_BTN}
+                    onClick={() => setDeleteOpen(true)}
+                  >
+                    {t('common.delete')}
+                  </button>
+                ) : null}
                 {modalMode === 'create' ? (
                   <>
                     <button

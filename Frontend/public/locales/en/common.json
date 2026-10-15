@@ -744,7 +744,7 @@
       "saveFailed": "Failed to save the post.",
       "deleteFailed": "Failed to delete the post.",
       "deleteTitle": "Delete this post?",
-      "deleteBody": "This removes the draft or scheduled post for this avatar. This cannot be undone.",
+      "deleteBody": "This removes the draft, scheduled, or failed post for this avatar. This cannot be undone.",
       "morePosts": "+{{count}} more",
       "showLess": "Show less",
       "statePublished": "Published",
