@@ -9,6 +9,7 @@ import {
   MAX_AVATARS,
   avatarTypeLabel,
   deleteAvatar,
+  displayAvatarName,
   setDefaultAvatar,
 } from '../../lib/avatars'
 import { logDevError, userFacingMessage } from '../../lib/devLog'
@@ -129,7 +130,7 @@ export function DashboardSidebar({
                 >
                   <span className="flex items-center gap-2 truncate">
                     <span aria-hidden="true">{project.is_default ? '●' : '○'}</span>
-                    <span className="truncate">{project.name}</span>
+                    <span className="truncate">{displayAvatarName(project)}</span>
                   </span>
                   <span className="mt-0.5 block pl-5 text-xs capitalize opacity-80">
                     {avatarTypeLabel(project.type)}

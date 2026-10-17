@@ -345,15 +345,22 @@ export function CompetitorsStep({
         <div className="mb-6 flex w-full flex-col justify-between gap-3 rounded-2xl border border-border-hairline bg-canvas-raised/80 p-4 text-xs backdrop-blur-sm sm:flex-row sm:items-center">
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-semibold text-ink">
-              {count} of {maxCompetitors}
+              {t('onboarding.competitors.countOf', {
+                count,
+                max: maxCompetitors,
+              })}
             </span>
             <span className="text-ink-muted" aria-hidden="true">
               •
             </span>
             <span className={atRecommended ? 'font-medium text-emerald-600 dark:text-signal-positive' : 'font-medium text-accent-primary-deep'}>
               {atRecommended
-                ? `${RECOMMENDED_COMPETITORS_PER_AVATAR}+`
-                : `Recommend ${RECOMMENDED_COMPETITORS_PER_AVATAR}`}
+                ? t('onboarding.competitors.recommendMet', {
+                    n: RECOMMENDED_COMPETITORS_PER_AVATAR,
+                  })
+                : t('onboarding.competitors.recommend', {
+                    n: RECOMMENDED_COMPETITORS_PER_AVATAR,
+                  })}
             </span>
           </div>
 

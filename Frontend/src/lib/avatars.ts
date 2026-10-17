@@ -1,4 +1,4 @@
-import i18n from '../i18n'
+import i18n, { SUPPORTED_LANGUAGES } from '../i18n'
 import { remoteStatusCode } from './devLog'
 import { supabase } from './supabase'
 import type { Tables } from '../types/database'
@@ -47,23 +47,82 @@ function mapAvatarError(error: { message: string; code?: string }): AvatarsServi
   return new AvatarsServiceError(message, error)
 }
 
-export function avatarTypeLabel(type: ProjectType | string): string {
+function workspaceTypeKey(type: ProjectType | string): string {
   switch (type) {
     case 'personal_branding':
-      return i18n.t('workspaceTypes.personalBrand')
+      return 'personalBrand'
     case 'business_1':
-      return i18n.t('workspaceTypes.business1')
+      return 'business1'
     case 'business_2':
-      return i18n.t('workspaceTypes.business2')
+      return 'business2'
     case 'business':
-      return i18n.t('workspaceTypes.business')
+      return 'business'
     default:
-      return i18n.t('workspaceTypes.workspace')
+      return 'workspace'
   }
 }
 
+function optionTitleKey(type: ProjectType | string): string | null {
+  switch (type) {
+    case 'personal_branding':
+      return 'onboarding.projectType.options.personalBrand.title'
+    case 'business_1':
+      return 'onboarding.projectType.options.business1.title'
+    case 'business_2':
+      return 'onboarding.projectType.options.business2.title'
+    default:
+      return null
+  }
+}
+
+export function avatarTypeLabel(type: ProjectType | string): string {
+  return i18n.t(`workspaceTypes.${workspaceTypeKey(type)}`)
+}
+
+/** Known default labels for a type across all supported UI languages. */
+function defaultAvatarNameAliases(type: ProjectType | string): Set<string> {
+  const aliases = new Set<string>()
+  const workspaceKey = `workspaceTypes.${workspaceTypeKey(type)}`
+  const optionKey = optionTitleKey(type)
+
+  for (const lng of SUPPORTED_LANGUAGES) {
+    const tLng = i18n.getFixedT(lng, 'common')
+    const workspaceLabel = tLng(workspaceKey)
+    if (typeof workspaceLabel === 'string' && workspaceLabel.trim()) {
+      aliases.add(workspaceLabel.trim())
+    }
+    if (optionKey) {
+      const optionLabel = tLng(optionKey)
+      if (typeof optionLabel === 'string' && optionLabel.trim()) {
+        aliases.add(optionLabel.trim())
+      }
+    }
+  }
+
+  return aliases
+}
+
+/**
+ * Show default type-named avatars in the active UI language.
+ * Custom renames (names outside known defaults) stay as stored.
+ */
+export function displayAvatarName(avatar: {
+  name: string
+  type: ProjectType | string
+}): string {
+  const trimmed = avatar.name.trim()
+  if (!trimmed) {
+    return avatarTypeLabel(avatar.type)
+  }
+  if (defaultAvatarNameAliases(avatar.type).has(trimmed)) {
+    return avatarTypeLabel(avatar.type)
+  }
+  return avatar.name
+}
+
+/** Always store the English workspace type label so DB names stay stable. */
 export function defaultAvatarNameForType(type: ProjectType): string {
-  return avatarTypeLabel(type)
+  return i18n.getFixedT('en', 'common')(`workspaceTypes.${workspaceTypeKey(type)}`)
 }
 
 export async function fetchUserAvatars(): Promise<Avatar[]> {

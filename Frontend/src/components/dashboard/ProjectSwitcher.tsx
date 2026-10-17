@@ -6,6 +6,7 @@ import {
   MAX_AVATARS,
   avatarTypeLabel,
   deleteAvatar,
+  displayAvatarName,
   setDefaultAvatar,
 } from '../../lib/avatars'
 import { logDevError, userFacingMessage } from '../../lib/devLog'
@@ -122,7 +123,9 @@ export function ProjectSwitcher({
         type="button"
         onClick={() => setOpen((current) => !current)}
         title={t('projectSwitcher.projectPrefix', {
-          name: activeProject?.name ?? t('projectSwitcher.selectProject'),
+          name: activeProject
+            ? displayAvatarName(activeProject)
+            : t('projectSwitcher.selectProject'),
         })}
         aria-label={t('projectSwitcher.selectProject')}
         className={
@@ -133,13 +136,17 @@ export function ProjectSwitcher({
       >
         {collapsed ? (
           <span aria-hidden="true">
-            {(activeProject?.name?.trim()?.[0] ?? 'P').toUpperCase()}
+            {(activeProject
+              ? displayAvatarName(activeProject).trim()?.[0]
+              : 'P')?.toUpperCase() ?? 'P'}
           </span>
         ) : (
           <>
             <span className="truncate">
               {t('projectSwitcher.projectPrefix', {
-                name: activeProject?.name ?? t('projectSwitcher.selectProject'),
+                name: activeProject
+                  ? displayAvatarName(activeProject)
+                  : t('projectSwitcher.selectProject'),
               })}
             </span>
             <span aria-hidden="true" className="text-ink-muted">
@@ -167,7 +174,7 @@ export function ProjectSwitcher({
                         isActive ? 'font-semibold text-ink' : 'text-ink-muted'
                       }`}
                     >
-                      {project.name}
+                      {displayAvatarName(project)}
                       {project.is_default ? t('projectSwitcher.defaultSuffix') : ''}
                     </button>
                     <p className="text-xs text-ink-muted">{avatarTypeLabel(project.type)}</p>
@@ -225,9 +232,12 @@ export function ProjectSwitcher({
       <ConfirmDialog
         open={deleteTargetId !== null}
         title={t('projectSwitcher.deleteDialogTitle', {
-          name:
-            projects.find((project) => project.id === deleteTargetId)?.name ??
-            t('projectSwitcher.deleteDialogFallbackName'),
+          name: (() => {
+            const target = projects.find((project) => project.id === deleteTargetId)
+            return target
+              ? displayAvatarName(target)
+              : t('projectSwitcher.deleteDialogFallbackName')
+          })(),
         })}
         description={t('projectSwitcher.deleteDialogBody')}
         confirmLabel={t('projectSwitcher.deleteDialogConfirm')}
