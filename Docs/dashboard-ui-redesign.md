@@ -39,8 +39,8 @@ Sidebar chrome matches the ContOS home design:
 - Applied as `class="dark"` on `<html>` (FOUC script in `index.html` + `ThemeProvider`).
 - **Dark follows the signed-in preference** on `/dashboard/*` and the new-project wizard (`/projects/new`, `/avatars/new`), including project type, profiling, and competitors. The same profiling questions therefore look the same on the first pass and after **Save draft** resume. Auth (`/login`, `/signup`), welcome, and `/onboarding/*` always render light. Users with no stored preference still start light.
 - Choosing Dark in the account menu persists for that user across later logins on the same browser.
-- Design tokens in `Frontend/src/index.css`: light defaults in `@theme`, dark overrides under `.dark` (main `#0d0d0d`, sidebar/cards `#161618`, ink white / muted `#a1a1aa`, hairline `#2d2d30`). Accent buttons use soft pastel lavender (`#D8C7F5` / dark `#BFA4F5`) with deep purple label on the fill (`btn-primary-fg`); see [button-system.md](./button-system.md).
-- Light-mode **main column** (right of sidebar) uses `#FFFFFF` with `bg-right-content.png` as a full-bleed soft lavender wash behind the top bar and page content (`DashboardLayout`); sidebar stays `canvas-raised` with no background image. Dark mode main column still uses solid `canvas` (`#0d0d0d`) and hides the wash.
+- Design tokens in `Frontend/src/index.css`: light defaults in `@theme`, dark overrides under `.dark` (main `#030304`, sidebar/cards `#161618`, ink white / muted `#a1a1aa`, hairline `#2d2d30`). Accent buttons use soft pastel lavender (`#D8C7F5` / dark `#BFA4F5`) with deep purple label on the fill (`btn-primary-fg`); see [button-system.md](./button-system.md).
+- Light-mode **main column** (right of sidebar) uses `#FFFFFF` with `bg-right-content.png` as a full-bleed soft lavender wash behind the top bar and page content (`DashboardLayout`); sidebar stays `canvas-raised` with no background image. Dark mode main column still uses solid `canvas` (`#030304`) and hides the wash.
 - Toggle lives in the sidebar account menu only (not a top-bar control): a single **Dark mode** switch (on = dark, off = light).
 
 Top bar: mobile hamburger only. On Agents, **+ New chat** and **+ New Project** sit in the page header on the same row as the project title (right-aligned), so they share vertical alignment with the heading; agent pills stay on the row below.
@@ -93,6 +93,12 @@ Shared input controls live in [`ProfilingQuestionField`](../Frontend/src/compone
 ## Chatbot incomplete-profiling prompt
 
 When the active project has `profiling_completeness < 100`, [`AgentsPage`](../Frontend/src/pages/AgentsPage.tsx) shows [`IncompleteProfilingBanner`](../Frontend/src/components/dashboard/IncompleteProfilingBanner.tsx) at the top of the chat screen with progress and a **Complete profiling** link to `/dashboard/:projectId/profiling`. The banner is informational only (chat is not blocked). `AgentsPage` calls `refreshProjects()` on mount so the banner hides after the user finishes profiling and returns to chat.
+
+## Chat message formatting
+
+Assistant bubbles, the strategist reply, and in-progress stream text go through `FormattedAssistantText`. It turns blank lines into paragraphs, closed `**phrase**` into bold, `#` headings and bold-only lines into headings, and `-` / `*` or `1.` lines into lists. Numbered items separated only by blank lines stay one list, and the list starts at the first item's number. An unclosed `**` or a list marker with no item text yet stays literal until the stream finishes. User bubbles stay plain text. Nothing is injected as HTML.
+
+LinkedIn `post_ideas` and X `tweet_ideas` render as paste-ready drafts (`composePublishablePostList`): hook, body, then call to action when it is not already there. Blank lines inside a draft collapse to single newlines. On screen, several drafts are stacked with a hairline divider between them; saved chat text joins the same drafts with a blank line (no `---`). Topic, content type, and reasoning stay in the payload and are not shown on the draft. Instagram calendar rows stay labeled hook and caption fields.
 
 ## Security
 

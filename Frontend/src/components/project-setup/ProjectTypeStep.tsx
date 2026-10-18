@@ -171,7 +171,7 @@ export function ProjectTypeStep({
     <div className="relative min-h-dvh overflow-auto bg-canvas font-sans text-ink antialiased selection:bg-ink selection:text-canvas">
       <div
         aria-hidden="true"
-        className="pointer-events-none fixed inset-0 z-0 bg-[radial-gradient(ellipse_80%_60%_at_50%_0%,rgba(238,230,253,0.6)_0%,rgba(247,244,253,0.3)_45%,rgba(255,255,255,0)_80%),radial-gradient(circle_at_100%_100%,rgba(235,225,252,0.4)_0%,rgba(255,255,255,0)_50%)] dark:bg-[radial-gradient(ellipse_80%_60%_at_50%_0%,rgba(37,22,77,0.5)_0%,rgba(13,13,13,0.2)_45%,rgba(13,13,13,0)_80%),radial-gradient(circle_at_100%_100%,rgba(37,22,77,0.35)_0%,rgba(13,13,13,0)_50%)]"
+        className="pointer-events-none fixed inset-0 z-0 bg-[radial-gradient(ellipse_80%_60%_at_50%_0%,rgba(238,230,253,0.6)_0%,rgba(247,244,253,0.3)_45%,rgba(255,255,255,0)_80%),radial-gradient(circle_at_100%_100%,rgba(235,225,252,0.4)_0%,rgba(255,255,255,0)_50%)] dark:bg-[radial-gradient(ellipse_80%_60%_at_50%_0%,rgba(37,22,77,0.5)_0%,rgba(3,3,4,0.2)_45%,rgba(3,3,4,0)_80%),radial-gradient(circle_at_100%_100%,rgba(37,22,77,0.35)_0%,rgba(3,3,4,0)_50%)]"
       />
 
       <div

@@ -4,7 +4,9 @@ import type { TFunction } from 'i18next'
 import type { AgentType } from '../../lib/agentsApi'
 import {
   buildInstagramDisplaySections,
+  composePublishablePostList,
 } from '../../lib/agentOutputDisplay'
+import { FormattedAssistantText } from './FormattedAssistantText'
 
 type UnknownRecord = Record<string, unknown>
 
@@ -361,52 +363,30 @@ function LinkedInOutputView({ output }: { output: UnknownRecord }) {
   const hooks = asStringList(output.hook_formulas)
   const frequency = asString(output.posting_frequency)
 
-  const ideaCards = ideas.map((raw, index) => {
-    const idea = asRecord(raw) ?? {}
-    return {
-      contentType: asString(idea.content_type) || 'Post',
-      topic: asString(idea.topic) || t('agents.output.ideaN', { n: index + 1 }),
-      hook: asString(idea.hook),
-      postStructure: asString(idea.post_structure),
-      cta: asString(idea.cta),
-      reasoning: asString(idea.reasoning),
-    }
-  })
+  const drafts = composePublishablePostList(
+    ideas.map((raw) => {
+      const idea = asRecord(raw) ?? {}
+      return {
+        hook: asString(idea.hook),
+        body: asString(idea.post_structure),
+        cta: asString(idea.cta),
+      }
+    }),
+  )
 
   return (
     <div className="space-y-4">
-      {ideaCards.length > 0 ? (
-        <Section title={t('agents.output.postIdeas')}>
-          <div className="space-y-3">
-            {ideaCards.map((idea, index) => (
-              <article
-                key={`li-${index}`}
-                className="rounded-xl border border-border-hairline bg-canvas-raised px-3 py-3"
-              >
-                <p className="text-xs uppercase tracking-wide text-accent-primary-deep">
-                  {idea.contentType}
-                </p>
-                <h5 className="mt-1 font-medium text-ink">{idea.topic}</h5>
-                {idea.hook ? <p className="mt-2 font-medium text-ink">{idea.hook}</p> : null}
-                {idea.postStructure ? (
-                  <p className="mt-2 whitespace-pre-wrap text-sm text-ink-muted">
-                    {idea.postStructure}
-                  </p>
-                ) : null}
-                {idea.cta ? (
-                  <p className="mt-2 text-sm text-ink">
-                    {t('agents.output.cta', { value: idea.cta })}
-                  </p>
-                ) : null}
-                {idea.reasoning ? (
-                  <p className="mt-2 border-t border-border-hairline pt-2 text-xs text-ink-muted">
-                    {t('agents.output.reasoning')}: {idea.reasoning}
-                  </p>
-                ) : null}
-              </article>
-            ))}
-          </div>
-        </Section>
+      {drafts.length > 0 ? (
+        <div className="divide-y divide-border-hairline">
+          {drafts.map((draft, index) => (
+            <div
+              key={`li-draft-${index}`}
+              className="whitespace-pre-wrap break-words py-3 text-sm leading-relaxed text-ink first:pt-0 last:pb-0"
+            >
+              {draft}
+            </div>
+          ))}
+        </div>
       ) : null}
       {themes.length > 0 ? (
         <Section title={t('agents.output.themes')}>
@@ -481,42 +461,29 @@ function TwitterOutputView({ output }: { output: UnknownRecord }) {
   const tactics = asStringList(output.engagement_tactics)
   const frequency = asString(output.posting_frequency)
 
-  const tweetCards = tweets.map((raw) => {
-    const tweet = asRecord(raw) ?? {}
-    return {
-      type: asString(tweet.type) || 'Tweet',
-      hook: asString(tweet.hook),
-      fullTweet: asString(tweet.full_tweet),
-      reasoning: asString(tweet.reasoning),
-    }
-  })
+  const drafts = composePublishablePostList(
+    tweets.map((raw) => {
+      const tweet = asRecord(raw) ?? {}
+      return {
+        hook: asString(tweet.hook),
+        body: asString(tweet.full_tweet),
+      }
+    }),
+  )
 
   return (
     <div className="space-y-4">
-      {tweetCards.length > 0 ? (
-        <Section title={t('agents.output.tweetIdeas')}>
-          <div className="space-y-3">
-            {tweetCards.map((tweet, index) => (
-              <article
-                key={`tw-${index}`}
-                className="rounded-xl border border-border-hairline bg-canvas-raised px-3 py-3"
-              >
-                <p className="text-xs uppercase tracking-wide text-accent-primary-deep">{tweet.type}</p>
-                {tweet.hook ? <p className="mt-2 font-medium text-ink">{tweet.hook}</p> : null}
-                {tweet.fullTweet ? (
-                  <p className="mt-2 whitespace-pre-wrap text-sm text-ink-muted">
-                    {tweet.fullTweet}
-                  </p>
-                ) : null}
-                {tweet.reasoning ? (
-                  <p className="mt-2 border-t border-border-hairline pt-2 text-xs text-ink-muted">
-                    {t('agents.output.reasoning')}: {tweet.reasoning}
-                  </p>
-                ) : null}
-              </article>
-            ))}
-          </div>
-        </Section>
+      {drafts.length > 0 ? (
+        <div className="divide-y divide-border-hairline">
+          {drafts.map((draft, index) => (
+            <div
+              key={`tw-draft-${index}`}
+              className="whitespace-pre-wrap break-words py-3 text-sm leading-relaxed text-ink first:pt-0 last:pb-0"
+            >
+              {draft}
+            </div>
+          ))}
+        </div>
       ) : null}
       {formulas.length > 0 ? (
         <Section title={t('agents.output.hookFormulas')}>
@@ -561,9 +528,7 @@ function StrategistHeader({ output }: { output: UnknownRecord }) {
 
   return (
     <div className="space-y-3">
-      {reply ? (
-        <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink">{reply}</p>
-      ) : null}
+      {reply ? <FormattedAssistantText text={reply} /> : null}
       {thesis ? (
         <Section title={t('agents.output.thesis')}>
           <p className="text-sm text-ink">{thesis}</p>
@@ -605,7 +570,7 @@ export function AgentOutputRenderer({
   const { t } = useTranslation()
 
   if (typeof output === 'string' && output.trim()) {
-    return <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink">{output}</p>
+    return <FormattedAssistantText text={output} />
   }
 
   const record = asRecord(output)
@@ -665,9 +630,7 @@ export function AgentOutputRenderer({
   }
 
   if (streamingText?.trim()) {
-    return (
-      <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink">{streamingText}</p>
-    )
+    return <FormattedAssistantText text={streamingText} />
   }
 
   return <p className="text-sm text-ink-muted">{t('agents.output.noResponseYet')}</p>

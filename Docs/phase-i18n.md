@@ -67,6 +67,12 @@ Agents and profile summaries continue to consume English profiling data. Backend
 
 Non-English profiling waits on `isTranslating` (`useLayoutEffect`, `/api/translate` chunks sent one at a time) and shows `agents.translating` — questions are not rendered in English while translation is in flight. The Agents process also translates one OpenRouter batch at a time so overlapping requests do not fail together. Translate failures surface `agents.translationFailed` and then fall back to English.
 
+### Onboarding and new-project chrome
+
+Onboarding project-type and existing-user new-project flows use `onboarding.projectType.*` and `onboarding.competitors.*` (including `backToOverview`, `cancel`, `newProjectStepLabel`, `countOf`, `recommend`, `recommendMet`). Do not hardcode English in those pages.
+
+Default avatar names are stored as the English `workspaceTypes` label (`defaultAvatarNameForType`). UI chrome shows `displayAvatarName({ name, type })`, which remaps known default labels from any of the five catalogs to the live `avatarTypeLabel` so language switches update the project switcher and sidebar without rewriting `avatars.name`. Custom renames are left as stored. Agent `@mention` matching still uses the DB name.
+
 ### Onboarding overflow guidelines
 
 Long translations (hi/zh/fr/es) must not clip chrome:

@@ -314,7 +314,7 @@ export function CompetitorsStep({
     >
       <div
         aria-hidden="true"
-        className="pointer-events-none fixed inset-0 z-0 bg-[radial-gradient(ellipse_75%_55%_at_15%_10%,rgba(238,230,253,0.55)_0%,rgba(247,244,253,0.25)_45%,rgba(255,255,255,0)_75%),radial-gradient(ellipse_70%_50%_at_85%_90%,rgba(235,225,252,0.45)_0%,rgba(247,244,253,0.2)_40%,rgba(255,255,255,0)_70%)] dark:bg-[radial-gradient(ellipse_75%_55%_at_15%_10%,rgba(37,22,77,0.45)_0%,rgba(13,13,13,0.2)_45%,rgba(13,13,13,0)_75%),radial-gradient(ellipse_70%_50%_at_85%_90%,rgba(37,22,77,0.35)_0%,rgba(13,13,13,0.15)_40%,rgba(13,13,13,0)_70%)]"
+        className="pointer-events-none fixed inset-0 z-0 bg-[radial-gradient(ellipse_75%_55%_at_15%_10%,rgba(238,230,253,0.55)_0%,rgba(247,244,253,0.25)_45%,rgba(255,255,255,0)_75%),radial-gradient(ellipse_70%_50%_at_85%_90%,rgba(235,225,252,0.45)_0%,rgba(247,244,253,0.2)_40%,rgba(255,255,255,0)_70%)] dark:bg-[radial-gradient(ellipse_75%_55%_at_15%_10%,rgba(37,22,77,0.45)_0%,rgba(3,3,4,0.2)_45%,rgba(3,3,4,0)_75%),radial-gradient(ellipse_70%_50%_at_85%_90%,rgba(37,22,77,0.35)_0%,rgba(3,3,4,0.15)_40%,rgba(3,3,4,0)_70%)]"
       />
 
       <div
@@ -345,15 +345,22 @@ export function CompetitorsStep({
         <div className="mb-6 flex w-full flex-col justify-between gap-3 rounded-2xl border border-border-hairline bg-canvas-raised/80 p-4 text-xs backdrop-blur-sm sm:flex-row sm:items-center">
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-semibold text-ink">
-              {count} of {maxCompetitors}
+              {t('onboarding.competitors.countOf', {
+                count,
+                max: maxCompetitors,
+              })}
             </span>
             <span className="text-ink-muted" aria-hidden="true">
               •
             </span>
             <span className={atRecommended ? 'font-medium text-emerald-600 dark:text-signal-positive' : 'font-medium text-accent-primary-deep'}>
               {atRecommended
-                ? `${RECOMMENDED_COMPETITORS_PER_AVATAR}+`
-                : `Recommend ${RECOMMENDED_COMPETITORS_PER_AVATAR}`}
+                ? t('onboarding.competitors.recommendMet', {
+                    n: RECOMMENDED_COMPETITORS_PER_AVATAR,
+                  })
+                : t('onboarding.competitors.recommend', {
+                    n: RECOMMENDED_COMPETITORS_PER_AVATAR,
+                  })}
             </span>
           </div>
 

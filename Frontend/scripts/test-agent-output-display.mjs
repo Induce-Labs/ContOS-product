@@ -27,6 +27,7 @@ const {
   isStructuredAgentOutput,
   buildInstagramDisplaySections,
   formatStructuredAgentOutput,
+  composePublishablePosts,
 } = mod.exports
 
 const sample = {
@@ -80,6 +81,83 @@ assert.ok(!text.includes('"response_type"'), 'must not dump schema keys as JSON'
 // Regression: old AgentsPage behavior stringified the whole payload
 const badDump = JSON.stringify(sample, null, 2)
 assert.notEqual(text.trim(), badDump.trim(), 'must not equal JSON.stringify dump')
+
+const linkedIn = {
+  agent: 'linkedin',
+  post_ideas: [
+    {
+      topic: 'Secret topic title',
+      content_type: 'CAROUSEL',
+      hook: 'Ship the work.',
+      post_structure: 'Ship the work.\n\nThen tell them what broke.',
+      cta: 'Reply with yours.',
+      reasoning: 'Because operators remember specifics.',
+    },
+    {
+      topic: 'Second topic',
+      content_type: 'TEXT',
+      hook: 'Second hook',
+      post_structure: 'The body of the second post.',
+      cta: 'Follow along.',
+      reasoning: 'Hidden on purpose.',
+    },
+  ],
+}
+const linkedInText = formatStructuredAgentOutput(linkedIn)
+const linkedInDraft = composePublishablePosts([
+  {
+    hook: 'Ship the work.',
+    body: 'Ship the work.\n\nThen tell them what broke.',
+    cta: 'Reply with yours.',
+  },
+  {
+    hook: 'Second hook',
+    body: 'The body of the second post.',
+    cta: 'Follow along.',
+  },
+])
+assert.equal(linkedInText, linkedInDraft, 'saved LinkedIn text matches the on-screen draft')
+assert.equal(linkedInText.split('Ship the work.').length - 1, 1, 'hook is not repeated')
+assert.ok(linkedInText.includes('\n'), 'composed draft contains real newlines')
+assert.equal(linkedInText.includes('---'), false, 'draft must not use dash dividers')
+assert.ok(
+  linkedInText.includes('Reply with yours.\n\nSecond hook'),
+  'two posts are separated by a blank line',
+)
+assert.equal(
+  linkedInDraft,
+  'Ship the work.\nThen tell them what broke.\nReply with yours.\n\nSecond hook\nThe body of the second post.\nFollow along.',
+)
+for (const label of ['CAROUSEL', 'HOOK', 'CTA:', 'POST IDEAS', 'Reasoning:', 'Secret topic title']) {
+  assert.equal(linkedInText.includes(label), false, `draft must not show ${label}`)
+}
+assert.ok(linkedInText.includes('Reply with yours.'))
+assert.ok(linkedInText.includes('Second hook'))
+
+const alreadyClosed = composePublishablePosts([
+  {
+    hook: 'Open here',
+    body: 'Open here\n\nBody already ends with the ask.',
+    cta: 'Body already ends with the ask.',
+  },
+])
+assert.equal(alreadyClosed, 'Open here\nBody already ends with the ask.')
+assert.equal(alreadyClosed.includes('\n\n'), false, 'single draft collapses blank lines')
+
+const tweets = formatStructuredAgentOutput({
+  agent: 'twitter',
+  tweet_ideas: [
+    {
+      type: 'THREAD',
+      hook: 'Already in the tweet',
+      full_tweet: 'Already in the tweet\nSecond line',
+      reasoning: 'Do not show this.',
+    },
+  ],
+})
+assert.equal(tweets, 'Already in the tweet\nSecond line')
+assert.equal(tweets.includes('THREAD'), false)
+assert.equal(tweets.includes('Reasoning:'), false)
 
 console.log('OK — Instagram strategy renders as readable sections, not raw JSON')
 console.log(`Sections (${sections.length}): ${titles.join(' | ')}`)

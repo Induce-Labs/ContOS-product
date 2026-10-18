@@ -1,6 +1,7 @@
 import type { FormEvent } from 'react'
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { ProjectTypeStep } from '../components/project-setup/ProjectTypeStep'
 import { CompetitorsStep } from '../components/project-setup/CompetitorsStep'
 import {
@@ -31,6 +32,7 @@ function NewProjectProfiling({
   onBackToType: () => void
   onFinished: () => void
 }) {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const [isSavingDraft, setIsSavingDraft] = useState(false)
   const {
@@ -86,7 +88,7 @@ function NewProjectProfiling({
   if (!avatar || questions.length === 0) {
     return (
       <ProfilingStepUnavailable
-        message={errorMessage ?? 'Profiling questions are unavailable.'}
+        message={errorMessage ?? t('onboarding.profiling.questionsUnavailable')}
       />
     )
   }
@@ -114,6 +116,7 @@ function NewProjectProfiling({
 }
 
 export function NewProjectPage() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const [step, setStep] = useState<WizardStep>('type')
   const [selectedType, setSelectedType] = useState<ProjectType | null>(null)
@@ -140,7 +143,7 @@ export function NewProjectPage() {
     setErrorMessage(null)
 
     if (!selectedType) {
-      setFieldError('Select a workspace type to continue.')
+      setFieldError(t('onboarding.projectType.selectTypeError'))
       return
     }
 
@@ -162,7 +165,7 @@ export function NewProjectPage() {
       setErrorMessage(
         userFacingMessage(
           error,
-          `Failed to create avatar (max ${MAX_AVATARS} on Basic plan).`,
+          t('onboarding.projectType.createAvatarFailed', { max: MAX_AVATARS }),
         ),
       )
     } finally {
@@ -198,13 +201,13 @@ export function NewProjectPage() {
         isSubmitting={isCreatingAvatar}
         errorMessage={errorMessage}
         fieldError={fieldError}
-        stepLabel="New Project"
+        stepLabel={t('onboarding.projectType.newProjectStepLabel')}
         backControl={
           <Link
             to="/dashboard"
             className="inline-flex items-center gap-1.5 text-sm font-medium text-ink-muted transition-colors hover:text-ink"
           >
-            ← Cancel
+            {t('onboarding.projectType.cancel')}
           </Link>
         }
       />
@@ -214,7 +217,7 @@ export function NewProjectPage() {
   if (step === 'profiling') {
     if (!avatar) {
       return (
-        <ProfilingStepUnavailable message="Avatar is missing. Return to project type selection." />
+        <ProfilingStepUnavailable message={t('onboarding.competitors.missingAvatar')} />
       )
     }
 
