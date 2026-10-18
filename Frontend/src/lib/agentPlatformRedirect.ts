@@ -23,6 +23,47 @@ export function detectPlatformRedirectRequest(text: string): PlatformAgent | nul
   return null
 }
 
+const PLATFORM_TOKEN = '(instagram|insta|ig|linkedin|twitter|x)'
+const LEAD_IN = '(?:(?:ok(?:ay)?|hey|hi|so|now|please|pls|can\\s+you|could\\s+you|can\\s+u|would\\s+you|will\\s+you)[,\\s]+)*'
+const TAIL = '(?:\\s+(?:please|pls|now|for\\s+me))?[\\s.!?]*$'
+
+/** "switch to X" style commands: the platform name is the whole point of the message. */
+const SWITCH_TO_RE = new RegExp(
+  `^${LEAD_IN}(?:switch|change|move|go|jump)(?:\\s+me)?\\s+(?:over\\s+)?(?:to|into)\\s+(?:the\\s+|my\\s+)?${PLATFORM_TOKEN}(?:\\s+(?:agent|chat|mode|assistant))?${TAIL}`,
+  'i',
+)
+const TAKE_ME_RE = new RegExp(
+  `^${LEAD_IN}take\\s+me\\s+to\\s+(?:the\\s+)?${PLATFORM_TOKEN}(?:\\s+(?:agent|chat|mode|assistant))?${TAIL}`,
+  'i',
+)
+/** "use / open the X agent": only counts when the word "agent" is present. */
+const USE_AGENT_RE = new RegExp(
+  `^${LEAD_IN}(?:use|open|run|start)\\s+(?:the\\s+|my\\s+)?${PLATFORM_TOKEN}\\s+(?:agent|assistant)${TAIL}`,
+  'i',
+)
+
+function platformFromToken(token: string): PlatformAgent | null {
+  const t = token.toLowerCase()
+  if (t === 'instagram' || t === 'insta' || t === 'ig') return 'instagram'
+  if (t === 'linkedin') return 'linkedin'
+  if (t === 'twitter' || t === 'x') return 'twitter'
+  return null
+}
+
+/**
+ * An explicit request to change agents ("switch to instagram agent") must switch
+ * immediately, from any agent. A bare platform name or a content request does not count.
+ */
+export function detectExplicitSwitchRequest(text: string): PlatformAgent | null {
+  const trimmed = text.trim()
+  if (!trimmed || trimmed.length > 80) return null
+  for (const re of [SWITCH_TO_RE, TAKE_ME_RE, USE_AGENT_RE]) {
+    const match = re.exec(trimmed)
+    if (match) return platformFromToken(match[1])
+  }
+  return null
+}
+
 export function isAffirmativeReply(text: string): boolean {
   return AFFIRMATIVE_RE.test(text.trim())
 }

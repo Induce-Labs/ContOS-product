@@ -51,6 +51,7 @@ def assemble_context(
     transcript_lessons: list[dict[str, Any]] | None = None,
     previous_performance: list[dict[str, Any]] | None = None,
     avatar_memory: list[dict[str, Any]] | None = None,
+    competitor_post_style: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     multi = bool(avatar_bundle and avatar_bundle.get("multi_avatar"))
     profiles = (avatar_bundle or {}).get("profiles") or (
@@ -75,6 +76,7 @@ def assemble_context(
         "transcript_lessons": transcript_lessons or [],
         "previous_content_performance": previous_performance or [],
         "avatar_memory": _group_memory(avatar_memory),
+        "competitor_post_style": competitor_post_style or {},
         "user_input": user_input,
     }
 

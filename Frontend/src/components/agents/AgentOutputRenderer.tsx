@@ -2,10 +2,12 @@ import { useMemo, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
 import type { AgentType } from '../../lib/agentsApi'
+import { buildInstagramDisplaySections } from '../../lib/agentOutputDisplay'
 import {
-  buildInstagramDisplaySections,
-  composePublishablePostList,
-} from '../../lib/agentOutputDisplay'
+  outputHasSuggestions,
+  splitSuggestions,
+  stripSuggestionMarkers,
+} from '../../lib/draftSuggestions'
 import { FormattedAssistantText } from './FormattedAssistantText'
 
 type UnknownRecord = Record<string, unknown>
@@ -34,6 +36,23 @@ function asStringList(value: unknown): string[] {
       }
     })
     .filter(Boolean)
+}
+
+/** Draft text with the assistant's unconfirmed suggestions shown in bold. */
+function DraftText({ text }: { text: string }) {
+  return (
+    <>
+      {splitSuggestions(text).map((segment, index) =>
+        segment.suggestion ? (
+          <strong key={index} className="rounded bg-accent-primary/10 px-0.5 font-semibold text-ink">
+            {segment.text}
+          </strong>
+        ) : (
+          <span key={index}>{segment.text}</span>
+        ),
+      )}
+    </>
+  )
 }
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
@@ -170,13 +189,13 @@ function InstagramRichOutputView({ output }: { output: UnknownRecord }) {
     return (
       <div className="space-y-3">
         <p className="whitespace-pre-wrap rounded-md bg-canvas-raised px-3 py-3 text-sm leading-relaxed text-ink">
-          {copy}
+          <DraftText text={copy} />
         </p>
         <button
           type="button"
           className="text-xs text-accent-primary"
           onClick={() => {
-            void navigator.clipboard.writeText(copy)
+            void navigator.clipboard.writeText(stripSuggestionMarkers(copy))
             setCopied(true)
             window.setTimeout(() => setCopied(false), 1200)
           }}
@@ -263,13 +282,19 @@ function InstagramRichOutputView({ output }: { output: UnknownRecord }) {
                     {row.contentType}
                   </span>
                 </div>
-                {row.hook ? <p className="mt-2 font-medium text-ink">{row.hook}</p> : null}
-                {row.caption ? (
-                  <p className="mt-2 whitespace-pre-wrap text-sm text-ink-muted">{row.caption}</p>
+                {row.hook && !row.copyPastePost && !row.caption ? (
+                  <p className="mt-2 font-medium text-ink">
+                    <DraftText text={row.hook} />
+                  </p>
+                ) : null}
+                {row.caption && !row.copyPastePost ? (
+                  <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-ink">
+                    <DraftText text={row.caption} />
+                  </p>
                 ) : null}
                 {row.copyPastePost ? (
-                  <p className="mt-2 whitespace-pre-wrap rounded-md bg-canvas px-2 py-2 text-sm text-ink">
-                    {row.copyPastePost}
+                  <p className="mt-2 whitespace-pre-wrap rounded-md bg-canvas px-2 py-2 text-sm leading-relaxed text-ink">
+                    <DraftText text={row.copyPastePost} />
                   </p>
                 ) : null}
                 {row.hashtags.length > 0 ? (
@@ -363,30 +388,56 @@ function LinkedInOutputView({ output }: { output: UnknownRecord }) {
   const hooks = asStringList(output.hook_formulas)
   const frequency = asString(output.posting_frequency)
 
-  const drafts = composePublishablePostList(
-    ideas.map((raw) => {
-      const idea = asRecord(raw) ?? {}
-      return {
-        hook: asString(idea.hook),
-        body: asString(idea.post_structure),
-        cta: asString(idea.cta),
-      }
-    }),
-  )
+  const ideaCards = ideas.map((raw, index) => {
+    const idea = asRecord(raw) ?? {}
+    return {
+      contentType: asString(idea.content_type) || 'Post',
+      topic: asString(idea.topic) || t('agents.output.ideaN', { n: index + 1 }),
+      hook: asString(idea.hook),
+      postStructure: asString(idea.post_structure),
+      cta: asString(idea.cta),
+      reasoning: asString(idea.reasoning),
+    }
+  })
 
   return (
     <div className="space-y-4">
-      {drafts.length > 0 ? (
-        <div className="divide-y divide-border-hairline">
-          {drafts.map((draft, index) => (
-            <div
-              key={`li-draft-${index}`}
-              className="whitespace-pre-wrap break-words py-3 text-sm leading-relaxed text-ink first:pt-0 last:pb-0"
-            >
-              {draft}
-            </div>
-          ))}
-        </div>
+      {ideaCards.length > 0 ? (
+        <Section title={t('agents.output.postIdeas')}>
+          <div className="space-y-3">
+            {ideaCards.map((idea, index) => (
+              <article
+                key={`li-${index}`}
+                className="rounded-xl border border-border-hairline bg-canvas-raised px-3 py-3"
+              >
+                <p className="text-xs uppercase tracking-wide text-accent-primary-deep">
+                  {idea.contentType}
+                </p>
+                <h5 className="mt-1 font-medium text-ink">{idea.topic}</h5>
+                {idea.hook && !idea.postStructure ? (
+                  <p className="mt-2 font-medium text-ink">
+                    <DraftText text={idea.hook} />
+                  </p>
+                ) : null}
+                {idea.postStructure ? (
+                  <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-ink">
+                    <DraftText text={idea.postStructure} />
+                  </p>
+                ) : null}
+                {idea.cta ? (
+                  <p className="mt-2 text-sm text-ink">
+                    {t('agents.output.cta', { value: idea.cta })}
+                  </p>
+                ) : null}
+                {idea.reasoning ? (
+                  <p className="mt-2 border-t border-border-hairline pt-2 text-xs text-ink-muted">
+                    {t('agents.output.reasoning')}: {idea.reasoning}
+                  </p>
+                ) : null}
+              </article>
+            ))}
+          </div>
+        </Section>
       ) : null}
       {themes.length > 0 ? (
         <Section title={t('agents.output.themes')}>
@@ -461,29 +512,46 @@ function TwitterOutputView({ output }: { output: UnknownRecord }) {
   const tactics = asStringList(output.engagement_tactics)
   const frequency = asString(output.posting_frequency)
 
-  const drafts = composePublishablePostList(
-    tweets.map((raw) => {
-      const tweet = asRecord(raw) ?? {}
-      return {
-        hook: asString(tweet.hook),
-        body: asString(tweet.full_tweet),
-      }
-    }),
-  )
+  const tweetCards = tweets.map((raw) => {
+    const tweet = asRecord(raw) ?? {}
+    return {
+      type: asString(tweet.type) || 'Tweet',
+      hook: asString(tweet.hook),
+      fullTweet: asString(tweet.full_tweet),
+      reasoning: asString(tweet.reasoning),
+    }
+  })
 
   return (
     <div className="space-y-4">
-      {drafts.length > 0 ? (
-        <div className="divide-y divide-border-hairline">
-          {drafts.map((draft, index) => (
-            <div
-              key={`tw-draft-${index}`}
-              className="whitespace-pre-wrap break-words py-3 text-sm leading-relaxed text-ink first:pt-0 last:pb-0"
-            >
-              {draft}
-            </div>
-          ))}
-        </div>
+      {tweetCards.length > 0 ? (
+        <Section title={t('agents.output.tweetIdeas')}>
+          <div className="space-y-3">
+            {tweetCards.map((tweet, index) => (
+              <article
+                key={`tw-${index}`}
+                className="rounded-xl border border-border-hairline bg-canvas-raised px-3 py-3"
+              >
+                <p className="text-xs uppercase tracking-wide text-accent-primary-deep">{tweet.type}</p>
+                {tweet.hook && !tweet.fullTweet ? (
+                  <p className="mt-2 font-medium text-ink">
+                    <DraftText text={tweet.hook} />
+                  </p>
+                ) : null}
+                {tweet.fullTweet ? (
+                  <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-ink">
+                    <DraftText text={tweet.fullTweet} />
+                  </p>
+                ) : null}
+                {tweet.reasoning ? (
+                  <p className="mt-2 border-t border-border-hairline pt-2 text-xs text-ink-muted">
+                    {t('agents.output.reasoning')}: {tweet.reasoning}
+                  </p>
+                ) : null}
+              </article>
+            ))}
+          </div>
+        </Section>
       ) : null}
       {formulas.length > 0 ? (
         <Section title={t('agents.output.hookFormulas')}>
@@ -621,6 +689,9 @@ export function AgentOutputRenderer({
             </p>
           ) : null}
           {showBody ? view : null}
+          {showBody && outputHasSuggestions(record) ? (
+            <p className="text-xs text-ink-muted">{t('agents.output.suggestionHint')}</p>
+          ) : null}
           {showBody && asString(record.disclaimer) && hasPlatformContent(record) ? (
             <p className="text-xs italic text-ink-muted">{asString(record.disclaimer)}</p>
           ) : null}

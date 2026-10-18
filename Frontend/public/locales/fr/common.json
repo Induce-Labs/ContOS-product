@@ -440,7 +440,8 @@
     "platformRedirect": {
       "ask": "Voulez-vous que je vous bascule vers l'agent {{platform}} ? Répondez yes pour continuer.",
       "switched": "Basculé vers {{platform}}. Demandez-moi des stratégies, idées de contenu ou comparaisons.",
-      "stayed": "D'accord — on reste en Chat. Comment puis-je vous aider ?"
+      "stayed": "D'accord — on reste en Chat. Comment puis-je vous aider ?",
+      "alreadyOn": "Vous êtes déjà sur l'agent {{platform}}."
     },
     "history": {
       "title": "Discussions précédentes",
@@ -503,6 +504,8 @@
       "ideas": "Idées",
       "exampleDraft": "Exemple de post - un point de départ à ajuster",
       "weeklyPlan": "Plan de la semaine",
+      "suggestionHint": "Les parties en gras sont des suggestions. Modifiez-les, ou dites « confirm » pour les garder.",
+      "confirmedNote": "Confirmé. Voici la version finale. Vérifiez que chaque détail est exact avant de publier.",
       "day": "Jour {{n}}",
       "competitorN": "Concurrent {{n}}",
       "ideaN": "Idée {{n}}",

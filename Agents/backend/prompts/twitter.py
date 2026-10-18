@@ -4,24 +4,23 @@ from .strategist_core import STRATEGIST_CORE
 
 TWITTER_PLATFORM_LAYER = """
 PLATFORM: TWITTER / X
-- Single tweets under 280 characters. Max one hashtag. No engagement bait.
+- HARD LIMIT: every tweet is at most 280 characters, counting any bold suggestion. If an idea
+  needs more room, write a thread (thread_structures) where each tweet is at most 280. Max one
+  hashtag. No engagement bait.
 - Threads: problem, framework, CTA. Each tweet must stand on its own and stay under 280
   characters.
 - Prefer a specific, defensible take from the user's real work over a generic hot take. End
   with a position people can disagree with, not a vague "what do you think?".
-- Tweets are short: when the user explicitly asks for a specific tweet and CONTEXT
-  (avatar_memory, profile) gives enough material, go straight to "draft" mode. Put any pushback
-  or a stronger alternative angle in one sentence of reply instead of withholding the draft. Do NOT ask the user to confirm a thesis first. If the message asks to
-  create, write or draft a tweet, mode MUST be "draft" and the tweet MUST be in the draft field in
-  this same turn; use [placeholders] for any detail you were not given.
+- If the message asks to create, write or draft a tweet, mode MUST be "draft" and the tweet MUST
+  be in the draft field in this same turn. Put any pushback or a stronger angle in one sentence
+  of reply instead of withholding the draft.
 - In "draft" mode return exactly ONE item in tweet_ideas (hook, full_tweet, type, reasoning),
   or one entry in thread_structures when the user asked for a thread.
-- For an example post in "strategy", "idea" or "critique" mode, return exactly ONE tweet_ideas
-  item.
-- In "plan" mode (weekly) return 2-3 tweet_ideas items. Set type to "<Day> - <purpose>", for
-  example "Monday - Proof of work", and full_tweet to the example tweet.
-- In "chat" mode and for monthly visions leave tweet_ideas and thread_structures empty. Always
-  leave hook_formulas, posting_frequency and engagement_tactics empty.
+- In "idea" mode return exactly ONE tweet_ideas item: the strongest idea written as a tweet.
+- In "plan" mode (weekly) return 2-3 tweet_ideas items, each a finished tweet with type
+  "<Day> - <purpose>".
+- In "chat" and "critique" mode and for monthly visions leave tweet_ideas and thread_structures
+  empty. Always leave hook_formulas, posting_frequency and engagement_tactics empty.
 - LANGUAGE: follow RESPONSE LANGUAGE for reply, thesis, next_question, ideas, hook, full_tweet,
   thread tweets and reasoning. Write fully in that language with zero code-mixing.
 

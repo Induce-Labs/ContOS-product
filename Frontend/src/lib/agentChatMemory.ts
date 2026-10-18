@@ -15,19 +15,20 @@ type MemorySourceMessage = {
 
 const MAX_HISTORY_MESSAGES = 12
 const MAX_CONTENT_CHARS = 2000
+const MAX_ASSISTANT_CHARS = 5000
 
-function clip(text: string): string {
+function clip(text: string, max = MAX_CONTENT_CHARS): string {
   const t = text.trim()
-  if (t.length <= MAX_CONTENT_CHARS) return t
-  return `${t.slice(0, MAX_CONTENT_CHARS - 1)}…`
+  if (t.length <= max) return t
+  return `${t.slice(0, max - 1)}…`
 }
 
 function assistantMemoryText(message: MemorySourceMessage): string {
   if (message.output != null && typeof message.output === 'object') {
     const formatted = formatStructuredAgentOutput(message.output).trim()
-    if (formatted) return clip(formatted)
+    if (formatted) return clip(formatted, MAX_ASSISTANT_CHARS)
   }
-  return clip(message.content || '')
+  return clip(message.content || '', MAX_ASSISTANT_CHARS)
 }
 
 /**

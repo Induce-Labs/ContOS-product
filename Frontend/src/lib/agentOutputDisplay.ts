@@ -166,10 +166,48 @@ function formatSections(sections: DisplaySection[]): string {
 }
 
 /** Flatten sections to plain text (never a JSON dump of the whole payload). */
+/** Reply, thesis, ideas and the full draft text, so the next turn can build on them. */
+function formatStrategistOutput(record: Record<string, unknown>): string {
+  if (typeof record.mode !== 'string') return ''
+  const parts: string[] = []
+  const reply = asString(record.reply)
+  if (reply) parts.push(reply)
+  const thesis = asString(record.thesis)
+  if (thesis) parts.push(`Angle: ${thesis}`)
+  const ideas = Array.isArray(record.ideas) ? record.ideas : []
+  for (const raw of ideas) {
+    const idea = asRecord(raw) ?? {}
+    const title = asString(idea.title)
+    if (title) parts.push(`- ${title}: ${asString(idea.why)}`.trim())
+  }
+  const drafts: Array<[string, string]> = []
+  for (const raw of Array.isArray(record.post_ideas) ? record.post_ideas : []) {
+    const item = asRecord(raw) ?? {}
+    drafts.push([asString(item.topic), asString(item.post_structure) || asString(item.hook)])
+  }
+  for (const raw of Array.isArray(record.tweet_ideas) ? record.tweet_ideas : []) {
+    const item = asRecord(raw) ?? {}
+    drafts.push([asString(item.type), asString(item.full_tweet) || asString(item.hook)])
+  }
+  for (const raw of Array.isArray(record.content_calendar) ? record.content_calendar : []) {
+    const item = asRecord(raw) ?? {}
+    drafts.push([asString(item.day) ? `Day ${asString(item.day)}` : '', asString(item.copy_paste_post) || asString(item.caption)])
+  }
+  for (const [label, text] of drafts) {
+    if (text) parts.push(`${label ? `Draft (${label})` : 'Draft'}:\n${text}`)
+  }
+  const question = asString(record.next_question)
+  if (question) parts.push(question)
+  return parts.join('\n\n')
+}
+
 export function formatStructuredAgentOutput(output: unknown): string {
   if (typeof output === 'string') return output
   const record = asRecord(output)
   if (!record) return ''
+
+  const strategist = formatStrategistOutput(record)
+  if (strategist) return strategist
 
   const agent = asString(record.agent)
   let sections = buildInstagramDisplaySections(output)
