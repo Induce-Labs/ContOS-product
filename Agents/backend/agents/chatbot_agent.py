@@ -20,20 +20,20 @@ _GREETING_RE = re.compile(
 
 _INSTANT_GREETING_BY_LANG: dict[str, str] = {
     "en": (
-        "Hey! I'm ContOS — your fractional CMO assistant. "
+        "Hey! I'm ContOS, your fractional CMO assistant. "
         "What would you like help with today?"
     ),
     "hi": (
-        "नमस्ते! मैं ContOS हूँ — आपका fractional CMO सहायक। "
+        "नमस्ते! मैं ContOS हूँ, आपका fractional CMO सहायक। "
         "आज मैं आपकी किस तरह मदद कर सकता हूँ?"
     ),
-    "zh": "你好！我是 ContOS — 你的 fractional CMO 助手。今天想让我帮你做什么？",
+    "zh": "你好！我是 ContOS，你的 fractional CMO 助手。今天想让我帮你做什么？",
     "fr": (
-        "Salut ! Je suis ContOS — votre assistant fractional CMO. "
+        "Salut ! Je suis ContOS, votre assistant fractional CMO. "
         "Comment puis-je vous aider aujourd'hui ?"
     ),
     "es": (
-        "¡Hola! Soy ContOS — tu asistente fractional CMO. "
+        "¡Hola! Soy ContOS, tu asistente fractional CMO. "
         "¿En qué te puedo ayudar hoy?"
     ),
 }

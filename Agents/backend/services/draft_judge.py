@@ -224,12 +224,6 @@ def apply_fallback(output: dict[str, Any], verdict: dict[str, Any]) -> str:
     return "kept_with_disclaimer"
 
 
-DRAFT_DISCLAIMER = (
-    "AI-generated draft. Details you did not give us may be inaccurate or invented, and we cannot "
-    "fully control what the model writes. Check every detail before you post."
-)
-
-
 TWEET_LIMIT = 280
 
 

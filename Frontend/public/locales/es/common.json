@@ -504,7 +504,7 @@
       "ideas": "Ideas",
       "exampleDraft": "Publicación de ejemplo - un punto de partida para ajustar",
       "weeklyPlan": "Plan de la semana",
-      "suggestionHint": "Las partes en negrita son sugerencias. Cámbialas, o di \"confirm\" para conservarlas.",
+      "suggestionHint": "Las partes en negrita son sugerencias. Cámbialas, o di \"confirmar\" para conservarlas.",
       "confirmedNote": "Confirmado. Esta es la versión final. Comprueba que cada detalle sea cierto antes de publicar.",
       "day": "Día {{n}}",
       "competitorN": "Competidor {{n}}",
@@ -525,7 +525,19 @@
       "signal": "Señal: {{value}}",
       "theme": "Tema: {{value}}",
       "strength": "Fortaleza: {{value}}",
-      "weakness": "Debilidad: {{value}}"
+      "weakness": "Debilidad: {{value}}",
+      "contentTypes": {
+        "post": "Publicación",
+        "text": "Texto",
+        "carousel": "Carrusel",
+        "reel": "Reel",
+        "video": "Video",
+        "story": "Historia",
+        "tweet": "Tweet",
+        "single": "Individual",
+        "thread": "Hilo",
+        "reply": "Respuesta"
+      }
     },
     "translating": "Traduciendo…",
     "translationFailed": "Error de traducción. Mostrando el original en inglés."

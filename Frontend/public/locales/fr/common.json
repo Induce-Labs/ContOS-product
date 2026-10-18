@@ -504,7 +504,7 @@
       "ideas": "Idées",
       "exampleDraft": "Exemple de post - un point de départ à ajuster",
       "weeklyPlan": "Plan de la semaine",
-      "suggestionHint": "Les parties en gras sont des suggestions. Modifiez-les, ou dites « confirm » pour les garder.",
+      "suggestionHint": "Les parties en gras sont des suggestions. Modifiez-les, ou dites « confirmer » pour les garder.",
       "confirmedNote": "Confirmé. Voici la version finale. Vérifiez que chaque détail est exact avant de publier.",
       "day": "Jour {{n}}",
       "competitorN": "Concurrent {{n}}",
@@ -525,7 +525,19 @@
       "signal": "Signal : {{value}}",
       "theme": "Thème : {{value}}",
       "strength": "Force : {{value}}",
-      "weakness": "Faiblesse : {{value}}"
+      "weakness": "Faiblesse : {{value}}",
+      "contentTypes": {
+        "post": "Publication",
+        "text": "Texte",
+        "carousel": "Carrousel",
+        "reel": "Reel",
+        "video": "Vidéo",
+        "story": "Story",
+        "tweet": "Tweet",
+        "single": "Unique",
+        "thread": "Fil",
+        "reply": "Réponse"
+      }
     },
     "translating": "Traduction en cours…",
     "translationFailed": "Échec de la traduction. Affichage de l'anglais original."

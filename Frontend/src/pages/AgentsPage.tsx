@@ -34,6 +34,7 @@ import {
   detectExplicitSwitchRequest,
   detectPlatformFromRedirectAsk,
   detectPlatformRedirectRequest,
+  detectSingleNamedPlatform,
   isAffirmativeReply,
   isNegativeReply,
   platformLabel,
@@ -813,7 +814,8 @@ export function AgentsPage() {
       }
     }
 
-    // Chat → Instagram / LinkedIn handoff (confirm then auto-switch chip).
+    // Chat → platform agent: auto-switch when exactly one platform is named.
+    let invokeAgentType: AgentType = agentType
     if (agentType === 'chatbot') {
       const inferredPending =
         pendingPlatformRedirect ??
@@ -826,6 +828,7 @@ export function AgentsPage() {
             : null
         })()
 
+      // Legacy yes/no replies to an old "want me to switch?" bubble.
       if (inferredPending && isAffirmativeReply(text)) {
         const label = platformLabel(inferredPending)
         const assistantMessage: ChatMessage = {
@@ -852,23 +855,29 @@ export function AgentsPage() {
         return
       }
 
-      const requestedPlatform = detectPlatformRedirectRequest(text)
-      // Already inside agentType === 'chatbot'; any detected platform differs.
-      if (requestedPlatform) {
-        const label = platformLabel(requestedPlatform)
+      // Bare platform name (e.g. "linkedin"): switch chip only, no model call.
+      const barePlatform = detectPlatformRedirectRequest(text)
+      if (barePlatform) {
+        const label = platformLabel(barePlatform)
         const assistantMessage: ChatMessage = {
           id: newId(),
           role: 'assistant',
-          content: t('agents.platformRedirect.ask', { platform: label }),
-          agentType: 'chatbot',
+          content: t('agents.platformRedirect.switched', { platform: label }),
+          agentType: barePlatform,
         }
         setMessages((current) => [...current, userMessage, assistantMessage])
-        setPendingPlatformRedirect(requestedPlatform)
+        setPendingPlatformRedirect(null)
+        setAgentType(barePlatform)
         return
       }
 
-      // Any other message clears a stale pending redirect offer.
-      if (pendingPlatformRedirect) {
+      // Content that names exactly one platform: switch and invoke that agent.
+      const namedPlatform = detectSingleNamedPlatform(text)
+      if (namedPlatform) {
+        setPendingPlatformRedirect(null)
+        setAgentType(namedPlatform)
+        invokeAgentType = namedPlatform
+      } else if (pendingPlatformRedirect) {
         setPendingPlatformRedirect(null)
       }
     }
@@ -878,7 +887,7 @@ export function AgentsPage() {
     setMessages((current) => [
       ...current,
       userMessage,
-      { id: assistantId, role: 'assistant', content: '', agentType },
+      { id: assistantId, role: 'assistant', content: '', agentType: invokeAgentType },
     ])
     setStreaming(true)
     setAwaitingCatchUp(true)
@@ -887,10 +896,10 @@ export function AgentsPage() {
       await runAgentStream({
         projectId,
         assistantId,
-        agentType,
+        agentType: invokeAgentType,
         body: {
           avatar_id: projectId,
-          agent_type: agentType,
+          agent_type: invokeAgentType,
           user_input: text,
           chatbot_context_on: true,
           tagged_avatar_ids: extraTaggedIds.length > 0 ? extraTaggedIds : undefined,
@@ -901,12 +910,6 @@ export function AgentsPage() {
           onComplete: (data) => {
             const output = data.output
             const formatted = formatAgentOutput(output)
-            if (agentType === 'chatbot' && typeof output === 'string') {
-              const offered = detectPlatformFromRedirectAsk(output)
-              if (offered) {
-                setPendingPlatformRedirect(offered)
-              }
-            }
             setMessages((current) =>
               current.map((message) => {
                 if (message.id !== assistantId) {
@@ -917,7 +920,7 @@ export function AgentsPage() {
                     ...message,
                     content: formatted || message.content,
                     output,
-                    agentType,
+                    agentType: invokeAgentType,
                   }
                 }
                 // Prefer the full complete payload over partial streamed tokens
@@ -926,17 +929,17 @@ export function AgentsPage() {
                   return {
                     ...message,
                     content: output,
-                    agentType,
+                    agentType: invokeAgentType,
                   }
                 }
                 if (formatted) {
                   return {
                     ...message,
                     content: formatted,
-                    agentType,
+                    agentType: invokeAgentType,
                   }
                 }
-                return { ...message, agentType }
+                return { ...message, agentType: invokeAgentType }
               }),
             )
           },

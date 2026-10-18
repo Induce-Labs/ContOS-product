@@ -70,10 +70,21 @@ describe('outputHasSuggestions / confirmSuggestions', () => {
 })
 
 describe('isConfirmMessage', () => {
-  it.each(['confirm', 'Confirm.', 'confirmed', 'yes confirm', 'ok, confirm it', 'looks good, confirm', 'I confirm', "that's final", 'confirm the draft'])(
-    'accepts %s',
-    (text) => expect(isConfirmMessage(text)).toBe(true),
-  )
+  it.each([
+    'confirm',
+    'Confirm.',
+    'confirmed',
+    'yes confirm',
+    'ok, confirm it',
+    'looks good, confirm',
+    'I confirm',
+    "that's final",
+    'confirm the draft',
+    '确认',
+    'पुष्टि',
+    'confirmer',
+    'confirmar',
+  ])('accepts %s', (text) => expect(isConfirmMessage(text)).toBe(true))
 
   it.each([
     '',

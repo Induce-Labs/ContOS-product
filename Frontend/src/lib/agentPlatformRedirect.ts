@@ -64,6 +64,21 @@ export function detectExplicitSwitchRequest(text: string): PlatformAgent | null 
   return null
 }
 
+/**
+ * When Chat is active and the message names exactly one platform, return that agent.
+ * Zero or multiple named platforms (e.g. LinkedIn vs Instagram) returns null.
+ */
+export function detectSingleNamedPlatform(text: string): PlatformAgent | null {
+  const trimmed = text.trim()
+  if (!trimmed) return null
+  const found = new Set<PlatformAgent>()
+  if (/\b(instagram|insta|ig)\b/i.test(trimmed)) found.add('instagram')
+  if (/\blinkedin\b/i.test(trimmed)) found.add('linkedin')
+  if (/\btwitter\b/i.test(trimmed) || /\bx\b/i.test(trimmed)) found.add('twitter')
+  if (found.size !== 1) return null
+  return [...found][0]
+}
+
 export function isAffirmativeReply(text: string): boolean {
   return AFFIRMATIVE_RE.test(text.trim())
 }

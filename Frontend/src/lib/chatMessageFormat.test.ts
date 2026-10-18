@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseChatMessage } from './chatMessageFormat'
+import { parseChatMessage, sanitizeAssistantText } from './chatMessageFormat'
 
 describe('parseChatMessage', () => {
   it('keeps a short reply as one plain paragraph', () => {
@@ -78,5 +78,32 @@ describe('parseChatMessage', () => {
       kind: 'ul',
       items: [[{ kind: 'text', value: 'First' }], [{ kind: 'text', value: 'Second' }]],
     })
+  })
+
+  it('treats --- / *** / ___ lines as dividers', () => {
+    const blocks = parseChatMessage('First section\n\n---\n\nSecond section')
+    expect(blocks.map((block) => block.kind)).toEqual(['paragraph', 'divider', 'paragraph'])
+    expect(parseChatMessage('a\n***\nb').map((block) => block.kind)).toEqual([
+      'paragraph',
+      'divider',
+      'paragraph',
+    ])
+    expect(parseChatMessage('a\n____\nb').map((block) => block.kind)).toEqual([
+      'paragraph',
+      'divider',
+      'paragraph',
+    ])
+  })
+
+  it('replaces em and en dashes before parsing', () => {
+    expect(sanitizeAssistantText('A — B – C')).toBe('A, B, C')
+    expect(sanitizeAssistantText('伤疤——你的客户')).toBe('伤疤, 你的客户')
+    const blocks = parseChatMessage('Trust — then ask')
+    expect(blocks).toEqual([
+      {
+        kind: 'paragraph',
+        inlines: [{ kind: 'text', value: 'Trust, then ask' }],
+      },
+    ])
   })
 })

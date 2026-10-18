@@ -525,7 +525,19 @@
       "signal": "Signal: {{value}}",
       "theme": "Theme: {{value}}",
       "strength": "Strength: {{value}}",
-      "weakness": "Weakness: {{value}}"
+      "weakness": "Weakness: {{value}}",
+      "contentTypes": {
+        "post": "Post",
+        "text": "Text",
+        "carousel": "Carousel",
+        "reel": "Reel",
+        "video": "Video",
+        "story": "Story",
+        "tweet": "Tweet",
+        "single": "Single",
+        "thread": "Thread",
+        "reply": "Reply"
+      }
     },
     "translating": "Translating…",
     "translationFailed": "Translation failed. Showing original English."

@@ -504,7 +504,7 @@
       "ideas": "创意",
       "exampleDraft": "示例帖子 - 供您参考修改的起点",
       "weeklyPlan": "本周计划",
-      "suggestionHint": "加粗部分是建议。可以修改，或说“confirm”保留它们。",
+      "suggestionHint": "加粗部分是建议。可以修改，或说“确认”保留它们。",
       "confirmedNote": "已确认。这是最终版本。发布前请核实每个细节都属实。",
       "day": "第 {{n}} 天",
       "competitorN": "竞争对手 {{n}}",
@@ -525,7 +525,19 @@
       "signal": "信号: {{value}}",
       "theme": "主题: {{value}}",
       "strength": "优势: {{value}}",
-      "weakness": "劣势: {{value}}"
+      "weakness": "劣势: {{value}}",
+      "contentTypes": {
+        "post": "帖子",
+        "text": "文本",
+        "carousel": "轮播",
+        "reel": "Reel",
+        "video": "视频",
+        "story": "快拍",
+        "tweet": "推文",
+        "single": "单条",
+        "thread": "线程",
+        "reply": "回复"
+      }
     },
     "translating": "正在翻译…",
     "translationFailed": "翻译失败。显示原始英语。"

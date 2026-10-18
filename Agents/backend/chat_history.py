@@ -9,7 +9,10 @@ from pydantic import BaseModel, Field
 ChatRole = Literal["user", "assistant"]
 
 _MAX_TURNS = 12  # messages, not pairs
-_MAX_CONTENT_LEN = 2000
+# Keep in sync with Frontend/src/lib/agentChatMemory.ts MAX_ASSISTANT_CHARS.
+# Content-first drafts send full posts (with bold markers) in history; 2000
+# caused FastAPI 422 on the next user turn after a long assistant reply.
+_MAX_CONTENT_LEN = 5000
 
 
 class ChatHistoryTurn(BaseModel):

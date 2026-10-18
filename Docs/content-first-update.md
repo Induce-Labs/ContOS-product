@@ -25,6 +25,14 @@ Rules on suggestions:
 - The draft checker (LLM judge) treats bold as editable suggestions. It still rejects invented numbers, results, quotes and named people outside the user's facts.
 - Facts the user gave are never bolded.
 
+## Response presentation refinements
+
+- **No em dashes:** Chatbot prompts ban `—` / `–`; greetings avoid them; the chat formatter replaces any remaining ones with commas before display.
+- **Section dividers:** Deep answers use a `---` line between sections. The UI renders that as a hairline rule (not dots or ellipsis).
+- **Platform auto-switch:** Naming exactly one of LinkedIn / Instagram / X in Chat switches to that agent (bare name switches the chip only; a content ask invokes that agent in the same turn). Multiple platforms or none stay on Chat.
+- **Hidden in the UI:** thesis / Angle, per-item and playbook reasoning, and the AI-generated draft disclaimer footer. The backend no longer injects the disclaimer.
+- **Language consistency (en / hi / es / fr / zh):** RESPONSE LANGUAGE rules ban English ContOS jargon in non-English prose; `suggestionHint` and confirm detection use localized confirm verbs; content-type badges are translated via `agents.output.contentTypes`.
+
 ## Other behavior
 
 - **Weekly plan:** 2-3 posts, each a full draft with its own opening and closing line.
@@ -36,7 +44,7 @@ Rules on suggestions:
 
 ## Fixes found while testing
 
-- The chat history sent back to the model had only each idea's hook line. It now includes the full reply and draft text, with the per-message limit raised from 2000 to 5000 characters.
+- The chat history sent back to the model had only each idea's hook line. It now includes the full reply and draft text, with the per-message limit raised from 2000 to 5000 characters. The Agents API `ChatHistoryTurn` max length must match that 5000 limit; otherwise FastAPI returns 422 on the next invoke after a long reply.
 - A tweet came out at 365 characters. A length check and retry now handle this.
 - A weekly "Monday" post copied an earlier draft, and posts repeated the same closing line. The prompt now forbids this.
 - A schema hint was echoed as the draft type. This is now cleaned up.

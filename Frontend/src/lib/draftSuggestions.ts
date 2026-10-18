@@ -91,9 +91,13 @@ export function confirmSuggestions(output: unknown, note: string): unknown {
 const CONFIRM_RE =
   /^(?:(?:ok(?:ay)?|yes|yep|yeah|sure|great|perfect|looks\s+good|all\s+good|that\s+works)[,.!\s]+)*(?:i\s+)?(?:confirm(?:ed)?(?:\s+(?:it|this|that|the\s+(?:draft|post|tweet)|draft|post))?|that'?s\s+final|it'?s\s+final|finali[sz]e(?:\s+(?:it|this))?)[\s.!]*$/i
 
+/** Localized confirm verbs (zh / hi / fr / es) plus English via CONFIRM_RE. */
+const LOCALIZED_CONFIRM_RE =
+  /^(确认|確認|पुष्टि|पुष्टि करें|confirmer|confirmar|c'?est\s+bon|d'?accord[,.\s]*confirmer?)[.!]*$/iu
+
 /** A short message whose whole meaning is "confirm" (not "confirm the switch" or a question). */
 export function isConfirmMessage(text: string): boolean {
   const trimmed = text.trim()
   if (!trimmed || trimmed.length > 48) return false
-  return CONFIRM_RE.test(trimmed)
+  return CONFIRM_RE.test(trimmed) || LOCALIZED_CONFIRM_RE.test(trimmed)
 }

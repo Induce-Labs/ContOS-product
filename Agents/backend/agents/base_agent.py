@@ -1195,11 +1195,6 @@ class BaseAgent:
                     tools_used.append("draft_judge")
 
             if agent_type in STRATEGIST_AGENTS and isinstance(parsed, dict):
-                from services.draft_judge import DRAFT_DISCLAIMER, has_draft
-
-                if has_draft(parsed):
-                    parsed["disclaimer"] = DRAFT_DISCLAIMER
-
                 try:
                     from services.draft_grounding import (
                         build_allowed_text,

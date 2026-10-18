@@ -30,6 +30,9 @@ export function FormattedAssistantText({ text }: { text: string }) {
             </Tag>
           )
         }
+        if (block.kind === 'divider') {
+          return <hr key={index} className="border-0 border-t border-border-hairline" />
+        }
         if (block.kind === 'ol') {
           return (
             <ol key={index} start={block.start} className="list-decimal space-y-2 pl-5">

@@ -37,16 +37,21 @@ def response_language_instruction(lang: str, *, structured: bool = False) -> str
         f"blend. Every sentence must be fully in {name}.\n"
         f"- Do not insert English words, phrases, or template labels inside {name} "
         f"prose (e.g. avoid mixing 'trust problem', 'Hook + Reframe + CTA', "
-        f"'price sensitivity' into {name} text). Rewrite those ideas in {name}.\n"
+        f"'price sensitivity', 'brand profile', 'objection', 'transcript lessons', "
+        f"'confirm', 'too early' into {name} text). Rewrite those ideas in {name}.\n"
+        f"- ContOS-internal jargon must also be translated into {name}: never leave "
+        f"English labels like brand profile, objection, transcript lessons, or confirm "
+        f"inside a non-English reply.\n"
         f"- Allowed English-only exceptions: brand names, @handles, URLs, numbers, "
         f"dates, and platform enum tokens (Reel, Carousel, Story, LinkedIn, Instagram).\n"
+        f"- Never use an em dash (—) or en dash (–) as punctuation in user-facing text.\n"
     )
     if structured:
         return (
-            f"\n\nRESPONSE LANGUAGE (HIGHEST PRIORITY — overrides chat history "
+            f"\n\nRESPONSE LANGUAGE (HIGHEST PRIORITY; overrides chat history "
             f"AND competitor English source text):\n"
             f"- The ContOS UI language is {name} ({code}).\n"
-            f"- Write EVERY user-facing string in {name} only — including hook, caption, "
+            f"- Write EVERY user-facing string in {name} only, including hook, caption, "
             f"cta, hashtags, reply, thesis, next_question, ideas, copy_paste_post, reasoning, analysis, "
             f"top_hooks, caption_formulas, posting_frequency, comparison_summary, "
             f"differentiation_angles, strengths, weaknesses, hooks_and_themes, "
@@ -55,20 +60,20 @@ def response_language_instruction(lang: str, *, structured: bool = False) -> str
             f"transcripts, hashtags, top_hooks, AND caption_formulas MUST also be "
             f"fully in {name} (no English formula skeletons).\n"
             f"{no_mix}"
-            f"- Competitor intel in CONTEXT is often English — adapt patterns/themes into "
+            f"- Competitor intel in CONTEXT is often English; adapt patterns/themes into "
             f"{name}; never paste English post copy into hook/caption/cta.\n"
             f"- Keep JSON keys, enum codes (Reel/Carousel/Story), URLs, @handles, "
             f"dates, and numbers unchanged.\n"
-            f"- Prior turns may be in another language — do NOT continue in that language.\n"
+            f"- Prior turns may be in another language; do NOT continue in that language.\n"
             f"- The only foreign-language text allowed is a short quoted competitor line "
             f"inside reasoning, clearly marked as a quote.\n"
         )
     return (
-        f"\n\nRESPONSE LANGUAGE (HIGHEST PRIORITY — overrides chat history):\n"
+        f"\n\nRESPONSE LANGUAGE (HIGHEST PRIORITY; overrides chat history):\n"
         f"- The ContOS UI language is {name} ({code}).\n"
         f"- You MUST write your entire reply in {name} only.\n"
         f"{no_mix}"
-        f"- Prior turns may be in another language — do NOT continue in that language.\n"
+        f"- Prior turns may be in another language; do NOT continue in that language.\n"
         f"- Keep URLs, @handles, brand names, and numbers unchanged.\n"
     )
 
@@ -84,13 +89,16 @@ def response_language_user_reminder(lang: str, *, structured: bool = False) -> s
             f"English/Hinglish mixing: hook, caption, cta, hashtags, transcript, "
             f"reply, thesis, next_question, copy_paste_post, reasoning, analysis, top_hooks, caption_formulas, "
             f"posting_frequency, comparison text. "
-            f"Write caption_formulas as natural {name} sentences — not English "
+            f"Write caption_formulas as natural {name} sentences, not English "
             f"templates like 'Hook + Reframe + CTA'. "
+            f"Translate ContOS jargon (brand profile, objection, transcript lessons, confirm) "
+            f"into {name}. "
             f"Only brand names, @handles, URLs, numbers, and platform enum tokens "
             f"may stay English.]"
         )
     return (
         f"\n\n[ContOS UI language = {name} ({code}). "
         f"Reply entirely in {name} with ZERO code-mixing / Hinglish. "
-        f"Do not use the language of earlier turns.]"
+        f"Do not leave English jargon (brand profile, objection, transcript lessons, confirm) "
+        f"untranslated. Do not use the language of earlier turns.]"
     )

@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { detectExplicitSwitchRequest } from './agentPlatformRedirect'
+import {
+  detectExplicitSwitchRequest,
+  detectSingleNamedPlatform,
+} from './agentPlatformRedirect'
 
 describe('detectExplicitSwitchRequest', () => {
   it.each([
@@ -30,5 +33,26 @@ describe('detectExplicitSwitchRequest', () => {
     '',
   ])('does not switch on: %s', (text) => {
     expect(detectExplicitSwitchRequest(text)).toBeNull()
+  })
+})
+
+describe('detectSingleNamedPlatform', () => {
+  it.each([
+    ['write a linkedin post about coffee', 'linkedin'],
+    ['draft an Instagram carousel', 'instagram'],
+    ['tweet about launch on twitter', 'twitter'],
+    ['post this on x please', 'twitter'],
+    ['ig caption ideas', 'instagram'],
+  ])('%s -> %s', (text, expected) => {
+    expect(detectSingleNamedPlatform(text)).toBe(expected)
+  })
+
+  it.each([
+    'how is instagram different from linkedin?',
+    'linkedin and twitter calendar',
+    'I want to switch my brand voice to bolder',
+    '',
+  ])('returns null for: %s', (text) => {
+    expect(detectSingleNamedPlatform(text)).toBeNull()
   })
 })

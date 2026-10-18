@@ -12,6 +12,7 @@ export type ChatBlock =
   | { kind: 'heading'; level: 3 | 4; text: string }
   | { kind: 'ol'; start: number; items: ChatInline[][] }
   | { kind: 'ul'; items: ChatInline[][] }
+  | { kind: 'divider' }
 
 type Classified =
   | { type: 'blank' }
@@ -19,7 +20,13 @@ type Classified =
   | { type: 'ol'; n: number; text: string }
   | { type: 'ul'; text: string }
   | { type: 'heading'; level: 3 | 4; text: string }
+  | { type: 'divider' }
   | { type: 'para'; text: string }
+
+/** Replace em/en dashes so replies do not look AI-generated. */
+export function sanitizeAssistantText(source: string): string {
+  return source.replace(/\s*[\u2014\u2013]+\s*/g, ', ')
+}
 
 /** Closed `**phrase**` becomes strong. An unclosed `**` stays literal text. */
 export function parseChatInlines(input: string): ChatInline[] {
@@ -49,6 +56,11 @@ export function parseChatInlines(input: string): ChatInline[] {
 function classifyLine(line: string): Classified {
   if (!line.trim()) return { type: 'blank' }
   const trimmed = line.trim()
+
+  // Horizontal rule: --- / *** / ___ on its own line.
+  if (/^[-*_]{3,}$/.test(trimmed)) {
+    return { type: 'divider' }
+  }
 
   // A marker with no item text yet is still streaming. Keep it literal.
   if (/^\d+\.?$/.test(trimmed) || /^[-*]$/.test(trimmed)) {
@@ -86,11 +98,16 @@ function classifyLine(line: string): Classified {
  * stay one list, and `start` is the first item's number.
  */
 export function parseChatMessage(source: string): ChatBlock[] {
-  const text = source.replace(/\r\n/g, '\n')
+  const text = sanitizeAssistantText(source).replace(/\r\n/g, '\n')
   const lines = text.split('\n').map(classifyLine)
   const content = lines.filter((line) => line.type !== 'blank')
   const hasStructure = content.some(
-    (line) => line.type === 'ol' || line.type === 'ul' || line.type === 'heading' || line.type === 'plain',
+    (line) =>
+      line.type === 'ol' ||
+      line.type === 'ul' ||
+      line.type === 'heading' ||
+      line.type === 'plain' ||
+      line.type === 'divider',
   )
   const hasBlank = lines.some((line) => line.type === 'blank') && content.length > 0
 
@@ -161,6 +178,11 @@ export function parseChatMessage(source: string): ChatBlock[] {
     if (line.type === 'heading') {
       flushAll()
       blocks.push({ kind: 'heading', level: line.level, text: line.text })
+      continue
+    }
+    if (line.type === 'divider') {
+      flushAll()
+      blocks.push({ kind: 'divider' })
       continue
     }
     flushOrdered()

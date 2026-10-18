@@ -43,6 +43,9 @@ def test_instruction_requires_target_language() -> None:
     assert "(zh)" in text
     assert "MUST write your entire reply" in text
     assert "HIGHEST PRIORITY" in text
+    assert "brand profile" in text
+    assert "transcript lessons" in text
+    assert "em dash" in text
 
 
 def test_structured_instruction_requires_creative_fields() -> None:
@@ -56,6 +59,8 @@ def test_structured_instruction_requires_creative_fields() -> None:
     assert "ZERO code-mixing" in text
     assert "Hinglish" in text
     assert "JSON keys" in text
+    assert "objection" in text
+    assert "confirm" in text
 
 
 def test_structured_user_reminder_pins_creative_fields() -> None:
@@ -66,6 +71,7 @@ def test_structured_user_reminder_pins_creative_fields() -> None:
     assert "ZERO" in text
     assert "Hinglish" in text
     assert "caption_formulas" in text
+    assert "brand profile" in text
 
 
 def test_user_reminder_pins_ui_language() -> None:
@@ -74,3 +80,4 @@ def test_user_reminder_pins_ui_language() -> None:
     assert "(zh)" in text
     assert "Reply entirely in Chinese" in text
     assert "ZERO code-mixing" in text
+    assert "transcript lessons" in text

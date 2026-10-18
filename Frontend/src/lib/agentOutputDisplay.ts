@@ -166,14 +166,12 @@ function formatSections(sections: DisplaySection[]): string {
 }
 
 /** Flatten sections to plain text (never a JSON dump of the whole payload). */
-/** Reply, thesis, ideas and the full draft text, so the next turn can build on them. */
+/** Reply, ideas and the full draft text, so the next turn can build on them. */
 function formatStrategistOutput(record: Record<string, unknown>): string {
   if (typeof record.mode !== 'string') return ''
   const parts: string[] = []
   const reply = asString(record.reply)
   if (reply) parts.push(reply)
-  const thesis = asString(record.thesis)
-  if (thesis) parts.push(`Angle: ${thesis}`)
   const ideas = Array.isArray(record.ideas) ? record.ideas : []
   for (const raw of ideas) {
     const idea = asRecord(raw) ?? {}
@@ -267,8 +265,6 @@ export function formatStructuredAgentOutput(output: unknown): string {
     const recs = asStringList(record.recommendations)
     if (frameworks.length) sections.push({ title: 'Frameworks', items: frameworks })
     if (recs.length) sections.push({ title: 'Recommendations', items: recs })
-    const reasoning = asString(record.reasoning)
-    if (reasoning) sections.push({ title: 'Reasoning', body: reasoning })
   }
 
   if (!sections.length) {

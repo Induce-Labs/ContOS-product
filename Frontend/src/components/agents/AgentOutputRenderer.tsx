@@ -77,6 +77,13 @@ function BulletList({ items }: { items: string[] }) {
   )
 }
 
+function contentTypeLabel(contentType: string, t: TFunction): string {
+  const normalized = contentType.trim().toLowerCase().replace(/\s+/g, '_')
+  const key = `agents.output.contentTypes.${normalized}`
+  const translated = t(key)
+  return translated === key ? contentType : translated
+}
+
 function translateKnownSectionTitle(title: string, t: TFunction): string {
   const known: Record<string, string> = {
     Strategy: t('agents.output.strategy'),
@@ -171,16 +178,14 @@ function InstagramRichOutputView({ output }: { output: UnknownRecord }) {
     return {
       day: typeof row.day === 'number' ? row.day : index + 1,
       date: asString(row.date),
-      contentType: asString(row.content_type) || 'Post',
+      contentType: asString(row.content_type) || 'post',
       hook: asString(row.hook),
       caption: asString(row.caption),
       copyPastePost: asString(row.copy_paste_post),
       hashtags: asStringList(row.hashtags),
       cta: asString(row.cta),
-      strategyReasoning: asString(row.strategy_reasoning),
       performanceGoal: asString(row.performance_goal),
       evidenceCitations: asStringList(row.evidence_citations),
-      reasoning: asString(row.reasoning),
     }
   })
 
@@ -279,7 +284,7 @@ function InstagramRichOutputView({ output }: { output: UnknownRecord }) {
                   <span>{t('agents.output.day', { n: row.day })}</span>
                   {row.date ? <span>· {row.date}</span> : null}
                   <span className="rounded-md bg-accent-primary-soft px-2 py-0.5 font-medium text-accent-primary-deep">
-                    {row.contentType}
+                    {contentTypeLabel(row.contentType, t)}
                   </span>
                 </div>
                 {row.hook && !row.copyPastePost && !row.caption ? (
@@ -314,19 +319,9 @@ function InstagramRichOutputView({ output }: { output: UnknownRecord }) {
                     {t('agents.output.performanceGoal', { value: row.performanceGoal })}
                   </p>
                 ) : null}
-                {row.strategyReasoning ? (
-                  <p className="mt-2 border-t border-border-hairline pt-2 text-xs text-ink-muted">
-                    {t('agents.output.strategyReasoning', { value: row.strategyReasoning })}
-                  </p>
-                ) : null}
                 {row.evidenceCitations.length > 0 ? (
                   <p className="mt-2 text-xs text-ink-muted">
                     {t('agents.output.evidence', { value: row.evidenceCitations.join(' · ') })}
-                  </p>
-                ) : null}
-                {row.reasoning ? (
-                  <p className="mt-2 border-t border-border-hairline pt-2 text-xs text-ink-muted">
-                    {t('agents.output.reasoning')}: {row.reasoning}
                   </p>
                 ) : null}
               </article>
@@ -391,12 +386,11 @@ function LinkedInOutputView({ output }: { output: UnknownRecord }) {
   const ideaCards = ideas.map((raw, index) => {
     const idea = asRecord(raw) ?? {}
     return {
-      contentType: asString(idea.content_type) || 'Post',
+      contentType: asString(idea.content_type) || 'post',
       topic: asString(idea.topic) || t('agents.output.ideaN', { n: index + 1 }),
       hook: asString(idea.hook),
       postStructure: asString(idea.post_structure),
       cta: asString(idea.cta),
-      reasoning: asString(idea.reasoning),
     }
   })
 
@@ -411,7 +405,7 @@ function LinkedInOutputView({ output }: { output: UnknownRecord }) {
                 className="rounded-xl border border-border-hairline bg-canvas-raised px-3 py-3"
               >
                 <p className="text-xs uppercase tracking-wide text-accent-primary-deep">
-                  {idea.contentType}
+                  {contentTypeLabel(idea.contentType, t)}
                 </p>
                 <h5 className="mt-1 font-medium text-ink">{idea.topic}</h5>
                 {idea.hook && !idea.postStructure ? (
@@ -427,11 +421,6 @@ function LinkedInOutputView({ output }: { output: UnknownRecord }) {
                 {idea.cta ? (
                   <p className="mt-2 text-sm text-ink">
                     {t('agents.output.cta', { value: idea.cta })}
-                  </p>
-                ) : null}
-                {idea.reasoning ? (
-                  <p className="mt-2 border-t border-border-hairline pt-2 text-xs text-ink-muted">
-                    {t('agents.output.reasoning')}: {idea.reasoning}
                   </p>
                 ) : null}
               </article>
@@ -464,7 +453,6 @@ function PlaybookOutputView({ output }: { output: UnknownRecord }) {
   const guardrails = asStringList(output.guardrails)
   const recommendations = asStringList(output.recommendations)
   const brokenRules = asStringList(output.broken_rules)
-  const reasoning = asString(output.reasoning)
 
   return (
     <div className="space-y-4">
@@ -496,11 +484,6 @@ function PlaybookOutputView({ output }: { output: UnknownRecord }) {
           <BulletList items={brokenRules} />
         </Section>
       ) : null}
-      {reasoning ? (
-        <p className="whitespace-pre-wrap border-t border-border-hairline pt-3 text-sm text-ink-muted">
-          {reasoning}
-        </p>
-      ) : null}
     </div>
   )
 }
@@ -515,10 +498,9 @@ function TwitterOutputView({ output }: { output: UnknownRecord }) {
   const tweetCards = tweets.map((raw) => {
     const tweet = asRecord(raw) ?? {}
     return {
-      type: asString(tweet.type) || 'Tweet',
+      type: asString(tweet.type) || 'tweet',
       hook: asString(tweet.hook),
       fullTweet: asString(tweet.full_tweet),
-      reasoning: asString(tweet.reasoning),
     }
   })
 
@@ -532,7 +514,9 @@ function TwitterOutputView({ output }: { output: UnknownRecord }) {
                 key={`tw-${index}`}
                 className="rounded-xl border border-border-hairline bg-canvas-raised px-3 py-3"
               >
-                <p className="text-xs uppercase tracking-wide text-accent-primary-deep">{tweet.type}</p>
+                <p className="text-xs uppercase tracking-wide text-accent-primary-deep">
+                  {contentTypeLabel(tweet.type, t)}
+                </p>
                 {tweet.hook && !tweet.fullTweet ? (
                   <p className="mt-2 font-medium text-ink">
                     <DraftText text={tweet.hook} />
@@ -541,11 +525,6 @@ function TwitterOutputView({ output }: { output: UnknownRecord }) {
                 {tweet.fullTweet ? (
                   <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-ink">
                     <DraftText text={tweet.fullTweet} />
-                  </p>
-                ) : null}
-                {tweet.reasoning ? (
-                  <p className="mt-2 border-t border-border-hairline pt-2 text-xs text-ink-muted">
-                    {t('agents.output.reasoning')}: {tweet.reasoning}
                   </p>
                 ) : null}
               </article>
@@ -589,19 +568,13 @@ function hasPlatformContent(output: UnknownRecord): boolean {
 function StrategistHeader({ output }: { output: UnknownRecord }) {
   const { t } = useTranslation()
   const reply = asString(output.reply)
-  const thesis = asString(output.thesis)
   const nextQuestion = asString(output.next_question)
   const ideas = Array.isArray(output.ideas) ? output.ideas : []
-  if (!reply && !thesis && !nextQuestion && ideas.length === 0) return null
+  if (!reply && !nextQuestion && ideas.length === 0) return null
 
   return (
     <div className="space-y-3">
       {reply ? <FormattedAssistantText text={reply} /> : null}
-      {thesis ? (
-        <Section title={t('agents.output.thesis')}>
-          <p className="text-sm text-ink">{thesis}</p>
-        </Section>
-      ) : null}
       {ideas.length > 0 ? (
         <Section title={t('agents.output.ideas')}>
           <ol className="list-decimal space-y-2 pl-5 text-sm text-ink">
@@ -691,9 +664,6 @@ export function AgentOutputRenderer({
           {showBody ? view : null}
           {showBody && outputHasSuggestions(record) ? (
             <p className="text-xs text-ink-muted">{t('agents.output.suggestionHint')}</p>
-          ) : null}
-          {showBody && asString(record.disclaimer) && hasPlatformContent(record) ? (
-            <p className="text-xs italic text-ink-muted">{asString(record.disclaimer)}</p>
           ) : null}
         </div>
       )
