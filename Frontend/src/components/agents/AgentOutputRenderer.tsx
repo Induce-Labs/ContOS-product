@@ -5,6 +5,11 @@ import type { AgentType } from '../../lib/agentsApi'
 import {
   buildInstagramDisplaySections,
 } from '../../lib/agentOutputDisplay'
+import {
+  outputHasSuggestions,
+  splitSuggestions,
+  stripSuggestionMarkers,
+} from '../../lib/draftSuggestions'
 
 type UnknownRecord = Record<string, unknown>
 
@@ -32,6 +37,23 @@ function asStringList(value: unknown): string[] {
       }
     })
     .filter(Boolean)
+}
+
+/** Draft text with the assistant's unconfirmed suggestions shown in bold. */
+function DraftText({ text }: { text: string }) {
+  return (
+    <>
+      {splitSuggestions(text).map((segment, index) =>
+        segment.suggestion ? (
+          <strong key={index} className="rounded bg-accent-primary/10 px-0.5 font-semibold text-ink">
+            {segment.text}
+          </strong>
+        ) : (
+          <span key={index}>{segment.text}</span>
+        ),
+      )}
+    </>
+  )
 }
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
@@ -168,13 +190,13 @@ function InstagramRichOutputView({ output }: { output: UnknownRecord }) {
     return (
       <div className="space-y-3">
         <p className="whitespace-pre-wrap rounded-md bg-canvas-raised px-3 py-3 text-sm leading-relaxed text-ink">
-          {copy}
+          <DraftText text={copy} />
         </p>
         <button
           type="button"
           className="text-xs text-accent-primary"
           onClick={() => {
-            void navigator.clipboard.writeText(copy)
+            void navigator.clipboard.writeText(stripSuggestionMarkers(copy))
             setCopied(true)
             window.setTimeout(() => setCopied(false), 1200)
           }}
@@ -261,13 +283,19 @@ function InstagramRichOutputView({ output }: { output: UnknownRecord }) {
                     {row.contentType}
                   </span>
                 </div>
-                {row.hook ? <p className="mt-2 font-medium text-ink">{row.hook}</p> : null}
-                {row.caption ? (
-                  <p className="mt-2 whitespace-pre-wrap text-sm text-ink-muted">{row.caption}</p>
+                {row.hook && !row.copyPastePost && !row.caption ? (
+                  <p className="mt-2 font-medium text-ink">
+                    <DraftText text={row.hook} />
+                  </p>
+                ) : null}
+                {row.caption && !row.copyPastePost ? (
+                  <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-ink">
+                    <DraftText text={row.caption} />
+                  </p>
                 ) : null}
                 {row.copyPastePost ? (
-                  <p className="mt-2 whitespace-pre-wrap rounded-md bg-canvas px-2 py-2 text-sm text-ink">
-                    {row.copyPastePost}
+                  <p className="mt-2 whitespace-pre-wrap rounded-md bg-canvas px-2 py-2 text-sm leading-relaxed text-ink">
+                    <DraftText text={row.copyPastePost} />
                   </p>
                 ) : null}
                 {row.hashtags.length > 0 ? (
@@ -387,10 +415,14 @@ function LinkedInOutputView({ output }: { output: UnknownRecord }) {
                   {idea.contentType}
                 </p>
                 <h5 className="mt-1 font-medium text-ink">{idea.topic}</h5>
-                {idea.hook ? <p className="mt-2 font-medium text-ink">{idea.hook}</p> : null}
+                {idea.hook && !idea.postStructure ? (
+                  <p className="mt-2 font-medium text-ink">
+                    <DraftText text={idea.hook} />
+                  </p>
+                ) : null}
                 {idea.postStructure ? (
-                  <p className="mt-2 whitespace-pre-wrap text-sm text-ink-muted">
-                    {idea.postStructure}
+                  <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-ink">
+                    <DraftText text={idea.postStructure} />
                   </p>
                 ) : null}
                 {idea.cta ? (
@@ -502,10 +534,14 @@ function TwitterOutputView({ output }: { output: UnknownRecord }) {
                 className="rounded-xl border border-border-hairline bg-canvas-raised px-3 py-3"
               >
                 <p className="text-xs uppercase tracking-wide text-accent-primary-deep">{tweet.type}</p>
-                {tweet.hook ? <p className="mt-2 font-medium text-ink">{tweet.hook}</p> : null}
+                {tweet.hook && !tweet.fullTweet ? (
+                  <p className="mt-2 font-medium text-ink">
+                    <DraftText text={tweet.hook} />
+                  </p>
+                ) : null}
                 {tweet.fullTweet ? (
-                  <p className="mt-2 whitespace-pre-wrap text-sm text-ink-muted">
-                    {tweet.fullTweet}
+                  <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-ink">
+                    <DraftText text={tweet.fullTweet} />
                   </p>
                 ) : null}
                 {tweet.reasoning ? (
@@ -656,6 +692,9 @@ export function AgentOutputRenderer({
             </p>
           ) : null}
           {showBody ? view : null}
+          {showBody && outputHasSuggestions(record) ? (
+            <p className="text-xs text-ink-muted">{t('agents.output.suggestionHint')}</p>
+          ) : null}
           {showBody && asString(record.disclaimer) && hasPlatformContent(record) ? (
             <p className="text-xs italic text-ink-muted">{asString(record.disclaimer)}</p>
           ) : null}

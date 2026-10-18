@@ -436,7 +436,8 @@
     "platformRedirect": {
       "ask": "Want me to switch you to the {{platform}} agent? Reply yes to continue.",
       "switched": "Switched to {{platform}}. Ask me for strategies, content ideas, or competitor comparisons.",
-      "stayed": "Okay — staying in Chat. What would you like help with?"
+      "stayed": "Okay — staying in Chat. What would you like help with?",
+      "alreadyOn": "You're already on the {{platform}} agent."
     },
     "history": {
       "title": "Previous chats",
@@ -499,6 +500,8 @@
       "ideas": "Ideas",
       "exampleDraft": "Example post - a starting point to react to",
       "weeklyPlan": "This week's plan",
+      "suggestionHint": "Bold parts are suggestions. Change them, or say \"confirm\" to keep them.",
+      "confirmedNote": "Confirmed. This is the final version. Check that every detail is true before you post.",
       "day": "Day {{n}}",
       "competitorN": "Competitor {{n}}",
       "ideaN": "Idea {{n}}",

@@ -6,7 +6,7 @@ import re
 from typing import Any
 
 QUOTE_PATTERN = re.compile(r'["“]([^"”]{12,})["”]')
-PLACEHOLDER = "[real customer quote]"
+PLACEHOLDER = "**what a customer actually said**"
 DRAFT_FIELDS = {
     "post_ideas": ("post_structure", "hook"),
     "tweet_ideas": ("full_tweet", "hook"),
@@ -51,7 +51,7 @@ def _strip(text: str, allowed_norm: str) -> tuple[str, int]:
 
 
 def strip_unsupported_quotes(output: dict[str, Any], allowed_norm: str) -> int:
-    """Replace quotes the user never gave with a placeholder; returns how many were replaced."""
+    """Replace quotes the user never gave with a bold suggestion; returns how many were replaced."""
     total = 0
     for key, fields in DRAFT_FIELDS.items():
         for item in output.get(key) or []:
@@ -71,8 +71,8 @@ def strip_unsupported_quotes(output: dict[str, Any], allowed_norm: str) -> int:
             thread["tweets"] = fixed
     if total:
         note = (
-            " I removed a customer quote I could not source from your messages; "
-            "add a real one if you have it."
+            " I replaced a customer quote I could not source from your messages with a "
+            "bold suggestion; put in their real words if you have them."
         )
         output["reply"] = (str(output.get("reply") or "").rstrip() + note).strip()
     return total

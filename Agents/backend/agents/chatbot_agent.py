@@ -40,10 +40,15 @@ _INSTANT_GREETING_BY_LANG: dict[str, str] = {
 
 
 def _is_greeting(text: str) -> bool:
+    """True only for a bare greeting ("hi", "hello there"), never "hey, what can I do...?"."""
     t = (text or "").strip()
-    if not t or len(t) > 60:
+    if not t or len(t) > 60 or "?" in t:
         return False
-    return bool(_GREETING_RE.match(t))
+    match = _GREETING_RE.match(t)
+    if not match:
+        return False
+    remainder = re.sub(r"[^\w\s]", " ", t[match.end():]).split()
+    return len(remainder) <= 2
 
 
 def _instant_greeting(response_language: str) -> str:

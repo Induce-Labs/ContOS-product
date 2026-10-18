@@ -1,4 +1,4 @@
-"""LLM-as-judge for strategist drafts: verdict, retry context, and placeholder fallback."""
+"""LLM-as-judge for strategist drafts: verdict, retry context, and the keep-with-disclaimer fallback."""
 
 from __future__ import annotations
 
@@ -12,7 +12,6 @@ from services.draft_grounding import DRAFT_FIELDS
 
 logger = logging.getLogger(__name__)
 
-PLACEHOLDER = "[add a real detail]"
 JUDGE_MODEL = os.getenv("JUDGE_MODEL", "google/gemini-2.5-flash")
 JUDGE_ENABLED = os.getenv("DRAFT_JUDGE_ENABLED", "1") not in {"0", "false", "False"}
 PROFILE_KEYS = (
@@ -26,7 +25,10 @@ draft may be shown to the user.
 STEP 1. List every concrete claim the draft makes about THIS brand or user: events, people who
 did or said something, numbers, causes and reasons, how something used to be done, results and
 outcomes, product or taste properties, offers. Ignore opinions, rhetorical framing, generic
-statements about the world, and anything inside [square brackets] (placeholders).
+statements about the world, and anything inside **double asterisks**: those are suggestions the
+user will confirm or change, so they are not claims. The ONE exception: inside **double
+asterisks** it is still a failure to state a statistic or number as a result, an award, a
+client, revenue, words quoted from a customer or another person, or a named third party.
 STEP 2. For each claim, mark supported=true ONLY if ALLOWED_FACTS says it or directly implies it.
 A cause, a person, a scene or a detail that ALLOWED_FACTS never mentions is supported=false, even
 if it sounds plausible. Examples of unsupported: "a cafe owner sent us a video", "we tasted it
@@ -36,7 +38,7 @@ blamed the baristas", "the cup is bright, not sharp".
 FAIL the draft if any claim is unsupported, or if it is off_topic (unrelated or absurd), or
 ignored_request (does not do what the latest user message asked), or contradicts_memory (uses
 something in rejections). Do NOT fail for tone, style, or rephrasing an allowed fact. A weekly
-schedule IS a short list of 2-3 days, each with an example post, so never fail a plan for not
+schedule IS a short list of 2-3 days, each with a full post, so never fail a plan for not
 being a "real calendar". Deliberate, explained pushback is not ignored_request: for example offering 5 focused ideas instead of 30,
 or a monthly theme outline instead of a full month of posts. First-person opinions and beliefs
 ("I think...", "we care about...") are not claims. General statements about what an audience
@@ -180,11 +182,16 @@ def build_retry_messages(
         "The user NEVER saw the rejected answer: do not mention it, apologize, or say you "
         "overreached or removed anything. Regenerate the FULL JSON with a different approach for the "
         "draft only: keep the same mode, ideas, thesis and next_question unless they were the problem. "
-        "Still deliver the draft the user asked for: write a SHORT one (LinkedIn about 60-100 words, "
-        "Instagram and X a few lines) built ONLY from facts the user gave in this conversation or "
-        "the memory. Use at most 3 [placeholders]; if more would be needed, write a first-person "
-        "point-of-view post (opinions and beliefs, no events or results) instead. Name the "
-        "placeholders in reply so the user can fill them in. Do not reuse the rejected "
+        + ("Shorten every tweet to 280 characters or fewer, counting bold text, keeping the same idea; "
+           "if it needs more room, write a thread where each tweet fits. "
+           if verdict.get("length") else
+           "Still deliver the draft the user asked for, at the same length and layout as before. ")
+        +
+        "Keep every fact the user gave. Do not use square brackets. Wrap each detail the user did not "
+        "give in a **bold** suggestion that fits their profile; if a statement cannot be written as a "
+        "short bold suggestion, write it as an opinion or belief in the user's voice instead. "
+        "Never use statistics, results, awards, clients, revenue, quoted speech or named third "
+        "parties, even in bold. Do not reuse the rejected "
         "sentences and do not add any backstory, cause, person, quote or result the user never stated."
     )
     return [
@@ -192,12 +199,6 @@ def build_retry_messages(
         {"role": "assistant", "content": rejected_raw},
         {"role": "user", "content": feedback},
     ]
-
-
-def _replace_ci(text: str, snippet: str) -> tuple[str, bool]:
-    pattern = re.compile(re.escape(snippet.strip()), re.IGNORECASE)
-    new, n = pattern.subn(PLACEHOLDER, text)
-    return new, n > 0
 
 
 def apply_fallback(output: dict[str, Any], verdict: dict[str, Any]) -> str:
@@ -213,6 +214,12 @@ def apply_fallback(output: dict[str, Any], verdict: dict[str, Any]) -> str:
             "Tell me a little more about what actually happened and I will build it from that."
         )
         return "draft_dropped"
+    if verdict.get("length"):
+        output["reply"] = (
+            str(output.get("reply") or "").rstrip()
+            + f" Note: {verdict.get('reason')}. Shorten it or post it as a thread."
+        ).strip()
+        return "kept_over_limit"
     output["unverified_claims"] = list(verdict.get("unsupported") or [])[:8]
     return "kept_with_disclaimer"
 
@@ -223,22 +230,36 @@ DRAFT_DISCLAIMER = (
 )
 
 
+TWEET_LIMIT = 280
+
+
+def length_violation(agent_type: str, output: Any) -> str | None:
+    """A tweet longer than X allows (bold markers do not count); None when everything fits."""
+    if agent_type != "twitter" or not isinstance(output, dict):
+        return None
+    texts = [
+        str(item.get("full_tweet") or "")
+        for item in output.get("tweet_ideas") or []
+        if isinstance(item, dict)
+    ]
+    for thread in output.get("thread_structures") or []:
+        if isinstance(thread, dict):
+            texts += [str(t) for t in thread.get("tweets") or []]
+    longest = max((len(t.replace("**", "")) for t in texts), default=0)
+    if longest > TWEET_LIMIT:
+        return f"a tweet is {longest} characters; the limit is {TWEET_LIMIT}"
+    return None
+
+
+def length_verdict(reason: str) -> dict[str, Any]:
+    return {
+        "pass": False, "off_topic": False, "ignored_request": False, "contradicts_memory": False,
+        "unsupported": [], "reason": reason, "length": True,
+    }
+
+
 def has_draft(output: Any) -> bool:
     return isinstance(output, dict) and bool(_draft_texts(output))
-
-
-def _mostly_placeholders(output: dict[str, Any], limit: float = 0.4) -> bool:
-    """True when placeholder-only lines make the draft unreadable."""
-    lines = [
-        line.strip()
-        for text in _draft_texts(output)
-        for line in text.split("\n")
-        if line.strip() and not line.strip().startswith("#")
-    ]
-    if not lines:
-        return True
-    bare = sum(1 for line in lines if PLACEHOLDER in line or re.fullmatch(r"\[[^\]]+\]\.?", line))
-    return bare / len(lines) > limit
 
 
 EXPLICIT_DRAFT_REQUEST = re.compile(

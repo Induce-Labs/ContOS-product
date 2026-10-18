@@ -43,14 +43,27 @@ def get_llm_client() -> OpenAI:
     )
 
 
-def _max_tokens_for(agent_type: str, structured: bool) -> int:
-    if agent_type == "chatbot":
-        return int(os.getenv("CHATBOT_MAX_TOKENS", "350"))
-    if structured:
-        # Keep well under typical OpenRouter free-tier residual credit budgets.
-        # Lower default also speeds structured JSON generation.
-        return int(os.getenv("AGENT_MAX_TOKENS", "2500"))
-    return 800
+def _max_tokens_for(agent_type: str, structured: bool) -> int | None:
+    """Completion cap from the environment; None (the default) sends no limit."""
+    name = "CHATBOT_MAX_TOKENS" if agent_type == "chatbot" else "AGENT_MAX_TOKENS"
+    raw = (os.getenv(name) or "").strip()
+    try:
+        value = int(raw)
+    except ValueError:
+        return None
+    return value if value > 0 else None
+
+
+def _log_tokens(agent_type: str, usage: dict[str, int], finish: Any, cap: int | None) -> None:
+    logger.info(
+        "tokens agent=%s input=%s output=%s total=%s finish=%s cap=%s",
+        agent_type,
+        usage.get("input_tokens"),
+        usage.get("output_tokens"),
+        usage.get("total_tokens"),
+        finish,
+        cap if cap else "none",
+    )
 
 
 def _affordable_tokens_from_error(exc: BaseException) -> int | None:
@@ -96,8 +109,10 @@ def _create_chat_completion(client: OpenAI, kwargs: dict[str, Any]) -> Any:
         if affordable is None:
             raise _friendly_credit_error(exc) from exc
         # Leave headroom for prompt/system overhead billed against the same balance.
-        next_max = min(current, max(512, affordable - 800))
-        if next_max >= current:
+        next_max = max(512, affordable - 800)
+        if current:
+            next_max = min(current, next_max)
+        if current and next_max >= current:
             raise _friendly_credit_error(exc) from exc
         logger.warning(
             "OpenRouter credit limit hit (affordable=%s, requested=%s); retrying with max_tokens=%s",
@@ -115,16 +130,24 @@ def _create_chat_completion(client: OpenAI, kwargs: dict[str, Any]) -> Any:
             raise
 
 
-def strip_asterisks(value: Any) -> Any:
-    """Remove * from agent-facing text (no markdown bold/italic)."""
+# Draft text keeps **bold** markers: they mark details the user has not confirmed yet.
+DRAFT_TEXT_KEYS = frozenset(
+    {"post_structure", "full_tweet", "copy_paste_post", "caption", "hook", "cta", "tweets"}
+)
+
+
+def strip_asterisks(value: Any, _key: str | None = None) -> Any:
+    """Remove * from agent-facing text; draft text fields keep their **bold** markers."""
     if value is None:
+        return value
+    if _key in DRAFT_TEXT_KEYS:
         return value
     if isinstance(value, str):
         return value.replace("*", "")
     if isinstance(value, list):
-        return [strip_asterisks(v) for v in value]
+        return [strip_asterisks(v, _key) for v in value]
     if isinstance(value, dict):
-        return {k: strip_asterisks(v) for k, v in value.items()}
+        return {k: strip_asterisks(v, k) for k, v in value.items()}
     return value
 
 
@@ -197,6 +220,10 @@ def _normalize_agent_payload(data: dict[str, Any]) -> dict[str, Any]:
             for i, idea in enumerate(ideas)
         ]
 
+    # draft_kind must be one of the known labels (models sometimes echo the schema hint)
+    if "draft_kind" in data and data["draft_kind"] not in ("draft", "plan", "example", ""):
+        data["draft_kind"] = ""
+
     # content_mix as string → keep empty dict
     if isinstance(data.get("content_mix"), str):
         data["content_mix"] = {"note": data["content_mix"]}
@@ -233,6 +260,32 @@ def _repair_truncated_json(text: str) -> dict[str, Any] | None:
         return data if isinstance(data, dict) else None
     except json.JSONDecodeError:
         return None
+
+
+def _drop_partial_word(text: str) -> tuple[str, str]:
+    """Cut a reply back to its last whole word; return (kept text, whitespace that followed it)."""
+    if not text or text[-1].isspace():
+        body = text.rstrip()
+        return body, text[len(body):]
+    cut = max(text.rfind(" "), text.rfind("\n"), text.rfind("\t"))
+    if cut == -1:
+        return text, ""
+    body = text[:cut].rstrip()
+    if not body:
+        return text, ""
+    return body, text[len(body) : cut + 1]
+
+
+def _join_continuation(kept: str, addition: str, sep: str) -> str:
+    """Join a continuation onto kept text with correct spacing at the seam."""
+    addition = addition.lstrip(" \t")
+    if not addition:
+        return kept
+    if sep and not sep.strip() and addition[0] in ",.;:!?)]}":
+        sep = ""
+    if not sep and kept and not kept[-1].isspace() and addition[0].isalnum():
+        sep = " "
+    return kept + sep + addition
 
 
 STRATEGIST_AGENTS = frozenset({"linkedin", "instagram", "twitter"})
@@ -328,9 +381,11 @@ class BaseAgent:
                 "\n\nRespond with valid JSON only, using the envelope and platform fields "
                 "from your instructions. Choose exactly one mode. ANSWER THE USER REQUEST "
                 "DIRECTLY in reply. Greetings get mode chat with a short reply and no content. "
-                "Do not write a full draft until the thesis is agreed unless the user "
-                "explicitly asks you to just write it. Ask at most one next_question. "
-                "Never use asterisk (*) characters."
+                "Write the draft right away when asked; do not wait for a thesis. A content request gets the finished post in this "
+                "turn; an advice question gets advice and no post. Never use square brackets in a "
+                "draft: wrap details the user did not give in **bold** suggestions, and never invent "
+                "statistics, results or quotes. Ask at most one next_question. "
+                "Use asterisks only for those **bold** suggestions inside draft text."
             )
         elif self.structured_output:
             user_content += (
@@ -384,10 +439,12 @@ class BaseAgent:
             "model": MODEL,
             "messages": messages,
             "temperature": 0.3 if self.structured_output else 0.5,
-            "max_tokens": _max_tokens_for(self.agent_type, self.structured_output),
             "stream": True,
             "extra_body": _kimi_no_thinking_body(),
         }
+        cap = _max_tokens_for(self.agent_type, self.structured_output)
+        if cap:
+            kwargs["max_tokens"] = cap
         if tools:
             kwargs["tools"] = tools
             kwargs["tool_choice"] = "auto"
@@ -443,6 +500,7 @@ class BaseAgent:
                     if tc.function and tc.function.arguments:
                         tool_calls_acc[idx]["arguments"] += tc.function.arguments
 
+        _log_tokens(self.agent_type, usage, finish_reason, kwargs.get("max_tokens"))
         self._last_usage = usage
         self._last_tool_calls = list(tool_calls_acc.values())
         self._last_raw = "".join(full_parts)
@@ -461,6 +519,7 @@ class BaseAgent:
         messages: list[dict[str, Any]],
         tools: list[dict[str, Any]] | None = None,
         temperature: float = 0.2,
+        max_tokens: int | None = None,
     ) -> tuple[Any, str, dict[str, int]]:
         """Non-streaming completion — preferred for structured JSON agents."""
         client = get_llm_client()
@@ -468,9 +527,11 @@ class BaseAgent:
             "model": MODEL,
             "messages": messages,
             "temperature": temperature,
-            "max_tokens": _max_tokens_for(self.agent_type, self.structured_output),
             "extra_body": _kimi_no_thinking_body(),
         }
+        cap = max_tokens or _max_tokens_for(self.agent_type, self.structured_output)
+        if cap:
+            kwargs["max_tokens"] = cap
         if tools:
             kwargs["tools"] = tools
             kwargs["tool_choice"] = "auto"
@@ -552,13 +613,90 @@ class BaseAgent:
             reasoning_tokens,
         )
         self._last_finish_reason = response.choices[0].finish_reason
+        _log_tokens(self.agent_type, usage, self._last_finish_reason, kwargs.get("max_tokens"))
         return message, content, usage
+
+    def complete_untruncated(
+        self,
+        messages: list[dict[str, Any]],
+        temperature: float = 0.2,
+    ) -> tuple[Any, str, dict[str, int]]:
+        """complete_llm, retried once with a larger budget if the reply hit the token cap."""
+        message, content, usage = self.complete_llm(
+            messages, tools=None, temperature=temperature
+        )
+        if getattr(self, "_last_finish_reason", None) != "length":
+            return message, content, usage
+        base = _max_tokens_for(self.agent_type, self.structured_output)
+        if not base:
+            logger.error("Reply hit the model's own output limit agent=%s", self.agent_type)
+            return message, content, usage
+        bigger = min(base * 2, int(os.getenv("AGENT_MAX_TOKENS_CEILING", "6000")))
+        logger.warning(
+            "Reply truncated agent=%s at %s tokens; retrying with %s",
+            self.agent_type,
+            base,
+            bigger,
+        )
+        message, content, usage2 = self.complete_llm(
+            messages, tools=None, temperature=temperature, max_tokens=bigger
+        )
+        usage = {k: usage.get(k, 0) + usage2.get(k, 0) for k in usage}
+        if getattr(self, "_last_finish_reason", None) == "length":
+            logger.error("Reply still truncated agent=%s after retry", self.agent_type)
+        return message, content, usage
+
+    def stream_with_continuation(
+        self, messages: list[dict[str, Any]], max_continuations: int = 2
+    ) -> Generator[str, None, None]:
+        """Stream a reply; if it stops at the token cap, ask the model to carry on."""
+        full = ""
+        total = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
+        convo = list(messages)
+        sep = ""
+        for attempt in range(max_continuations + 1):
+            self._last_raw = ""
+            self._last_finish_reason = None
+            for token in self.stream_llm(convo):
+                yield token
+            part = getattr(self, "_last_raw", "") or ""
+            used = getattr(self, "_last_usage", None) or {}
+            total = {k: total.get(k, 0) + used.get(k, 0) for k in total}
+            full = _join_continuation(full, part, sep) if attempt else part
+            if getattr(self, "_last_finish_reason", None) != "length" or not part.strip():
+                break
+            if attempt == max_continuations:
+                logger.error("Reply still truncated agent=%s after continuations", self.agent_type)
+                break
+            logger.warning(
+                "Reply truncated agent=%s; continuing (%s/%s)",
+                self.agent_type,
+                attempt + 1,
+                max_continuations,
+            )
+            full, sep = _drop_partial_word(full)
+            tail = " ".join(full.split()[-14:])
+            convo = [
+                *messages,
+                {"role": "assistant", "content": full.rstrip()},
+                {
+                    "role": "user",
+                    "content": (
+                        "Your previous message was cut off right after: "
+                        f"\u201c{tail}\u201d. Continue with the very next word, with no "
+                        "preamble and without repeating anything already written. Finish "
+                        "your thought and end naturally."
+                    ),
+                },
+            ]
+        self._last_raw = full
+        self._last_usage = total
 
     def generate_structured(
         self, messages: list[dict[str, Any]]
     ) -> Generator[str, None, tuple[str, dict[str, int]]]:
         """Non-stream generate JSON, then yield chunks for SSE UX."""
-        _, content, usage = self.complete_llm(messages, tools=None)
+        _, content, usage = self.complete_untruncated(messages)
         self._last_raw = content
         self._last_usage = usage
         # Fake-stream for frontend
@@ -579,7 +717,7 @@ class BaseAgent:
         """Generate, judge draft/plan output, retry once with the rejection reason, then stream."""
         from services import draft_judge
 
-        _, raw, usage = self.complete_llm(messages, tools=None)
+        _, raw, usage = self.complete_untruncated(messages)
         review: dict[str, Any] = {"outcome": "not_judged", "attempts": 1, "verdicts": []}
 
         def _parse(text: str) -> dict[str, Any] | None:
@@ -593,11 +731,14 @@ class BaseAgent:
         missing_draft = parsed is not None and draft_judge.expects_draft(
             user_input, self.agent_type, parsed
         )
-        if parsed is not None and (missing_draft or draft_judge.is_judged(parsed)):
+        too_long = draft_judge.length_violation(self.agent_type, parsed)
+        if parsed is not None and (missing_draft or too_long or draft_judge.is_judged(parsed)):
             client = get_llm_client()
             facts = draft_judge.build_facts(user_input, chat_history, avatar_memory, profile)
             if missing_draft:
                 verdict = dict(draft_judge.MISSING_DRAFT_VERDICT)
+            elif too_long:
+                verdict = draft_judge.length_verdict(too_long)
             else:
                 verdict = draft_judge.judge_output(client, user_input, parsed, facts)
             review["verdicts"].append(verdict)
@@ -606,7 +747,7 @@ class BaseAgent:
                 logger.info("draft rejected agent=%s reason=%s", self.agent_type, verdict.get("reason"))
                 yield {"event": "status", "data": {"stage": "revising", "agent": self.agent_type}}
                 retry_messages = draft_judge.build_retry_messages(messages, raw, verdict)
-                _, raw2, usage2 = self.complete_llm(retry_messages, tools=None, temperature=0.7)
+                _, raw2, usage2 = self.complete_untruncated(retry_messages, temperature=0.7)
                 usage = {k: usage.get(k, 0) + usage2.get(k, 0) for k in usage}
                 review["attempts"] = 2
                 parsed2 = _parse(raw2)
@@ -615,7 +756,11 @@ class BaseAgent:
                     review["fallback_verdict"] = verdict
                 else:
                     raw = raw2
-                    if missing_draft and not draft_judge.is_judged(parsed2):
+                    still_long = draft_judge.length_violation(self.agent_type, parsed2)
+                    if still_long:
+                        review["outcome"] = "fallback"
+                        review["fallback_verdict"] = draft_judge.length_verdict(still_long)
+                    elif missing_draft and not draft_judge.is_judged(parsed2):
                         review["outcome"] = "no_draft_after_retry"
                     elif draft_judge.is_judged(parsed2):
                         verdict2 = draft_judge.judge_output(client, user_input, parsed2, facts)
@@ -854,6 +999,16 @@ class BaseAgent:
                 if avatar_memory:
                     tools_used.append("avatar_memory")
 
+            competitor_style: dict[str, Any] | None = None
+            if agent_type in {"linkedin", "instagram"} and memory_avatar_id:
+                from services.competitor_style import load_competitor_post_style
+
+                competitor_style = load_competitor_post_style(
+                    avatar_id=memory_avatar_id, platform=agent_type
+                )
+                if competitor_style:
+                    tools_used.append("competitor_post_style")
+
             if agent_type == "instagram":
                 from services.content_plan import load_recent_content_performance
 
@@ -894,6 +1049,7 @@ class BaseAgent:
                 transcript_lessons=gathered.get("transcript_lessons"),
                 previous_performance=previous_performance,
                 avatar_memory=avatar_memory,
+                competitor_post_style=competitor_style,
             )
 
             system_prompt = get_system_prompt(
@@ -998,7 +1154,7 @@ class BaseAgent:
             else:
                 self._last_usage = usage
                 self._last_raw = ""
-                for token in self.stream_llm(messages):
+                for token in self.stream_with_continuation(messages):
                     yield {
                         "event": "token",
                         "data": {"token": strip_asterisks(token)},

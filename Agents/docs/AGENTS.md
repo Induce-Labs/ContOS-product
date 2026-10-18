@@ -162,8 +162,8 @@ contos-agents/
 | Chat / content LLM | `moonshotai/kimi-k2.6` via OpenRouter |
 | Embeddings | `openai/text-embedding-3-small` via OpenRouter (1536 dims) |
 | Streaming | SSE `status` → `token`* → `complete` / `error` |
-| Chatbot max tokens | `CHATBOT_MAX_TOKENS` (default 350) |
-| Platform agent max tokens | `AGENT_MAX_TOKENS` (default 2500) |
+| Chatbot max tokens | `CHATBOT_MAX_TOKENS` (default: no limit; if a limit is set, replies that hit it are continued automatically) |
+| Platform agent max tokens | `AGENT_MAX_TOKENS` (default: no limit; tokens are logged per call) |
 | Context token budget | `AGENT_MAX_CONTEXT_TOKENS` (default 3500) |
 
 ---
@@ -258,7 +258,7 @@ Optional open policies for local/dev if not using the **secret / service_role** 
 | `EMBEDDING_MODEL` | `openai/text-embedding-3-small` |
 | `LLM_ENV` | Environment label |
 | `PREFER_MOCK_DATA` | Must be `false` — tools use live Supabase only |
-| `CHATBOT_MAX_TOKENS` / `AGENT_MAX_TOKENS` | Cap completion length |
+| `CHATBOT_MAX_TOKENS` / `AGENT_MAX_TOKENS` | Optional cap on completion length (blank = no limit) |
 | `CORS_ORIGINS` | Allowed browser origins |
 
 `frontend/.env`:
@@ -307,7 +307,7 @@ npm run dev
 | Skip duplicate gather when avatar context exists | Cuts a second full RAG/embed pass (~5–15s) |
 | Lexical competitor rank (`fast=True`) | Avoids OpenRouter embedding round-trips |
 | Smaller context budget (`AGENT_MAX_CONTEXT_TOKENS=3500`) | Faster LLM prefill |
-| `AGENT_MAX_TOKENS` default 2500 | Faster structured JSON; fits credit budgets |
+| `AGENT_MAX_TOKENS` default unset | Limits are set by the backend team; on a 402 the call retries within the affordable budget |
 | 3–5 LinkedIn/Instagram ideas by default | Shorter generations |
 | Async `agent_calls` logging | Don’t block SSE close |
 

@@ -436,7 +436,8 @@
     "platformRedirect": {
       "ask": "要我切换到 {{platform}} 智能体吗？回复 yes 继续。",
       "switched": "已切换到 {{platform}}。可以问我策略、内容创意或竞品对比。",
-      "stayed": "好的 — 继续留在聊天。需要我帮你做什么？"
+      "stayed": "好的 — 继续留在聊天。需要我帮你做什么？",
+      "alreadyOn": "你已经在 {{platform}} 助手中了。"
     },
     "history": {
       "title": "之前的聊天",
@@ -499,6 +500,8 @@
       "ideas": "创意",
       "exampleDraft": "示例帖子 - 供您参考修改的起点",
       "weeklyPlan": "本周计划",
+      "suggestionHint": "加粗部分是建议。可以修改，或说“confirm”保留它们。",
+      "confirmedNote": "已确认。这是最终版本。发布前请核实每个细节都属实。",
       "day": "第 {{n}} 天",
       "competitorN": "竞争对手 {{n}}",
       "ideaN": "创意 {{n}}",

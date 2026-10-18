@@ -31,6 +31,7 @@ import {
   isStructuredAgentOutput,
 } from '../lib/agentOutputDisplay'
 import {
+  detectExplicitSwitchRequest,
   detectPlatformFromRedirectAsk,
   detectPlatformRedirectRequest,
   isAffirmativeReply,
@@ -38,6 +39,11 @@ import {
   platformLabel,
   type PlatformAgent,
 } from '../lib/agentPlatformRedirect'
+import {
+  confirmSuggestions,
+  isConfirmMessage,
+  outputHasSuggestions,
+} from '../lib/draftSuggestions'
 import contosMark from '../assets/contos-mark.png'
 import contosMarkDark from '../assets/image.png'
 import { ChatMessageBubble } from '../components/agents/ChatMessageBubble'
@@ -764,6 +770,47 @@ export function AgentsPage() {
       content: text,
       taggedAvatarIds: extraTaggedIds,
       taggedAvatarNames: taggedNames,
+    }
+
+    // Explicit "switch to X agent" works from any agent and switches immediately.
+    const explicitSwitch = detectExplicitSwitchRequest(text)
+    if (explicitSwitch) {
+      const label = platformLabel(explicitSwitch)
+      const alreadyThere = explicitSwitch === agentType
+      const assistantMessage: ChatMessage = {
+        id: newId(),
+        role: 'assistant',
+        content: alreadyThere
+          ? t('agents.platformRedirect.alreadyOn', { platform: label })
+          : t('agents.platformRedirect.switched', { platform: label }),
+        agentType: alreadyThere ? agentType : explicitSwitch,
+      }
+      setMessages((current) => [...current, userMessage, assistantMessage])
+      setPendingPlatformRedirect(null)
+      if (!alreadyThere) setAgentType(explicitSwitch)
+      return
+    }
+
+    // "confirm" turns the last draft's bold suggestions into normal text, with no model call.
+    if (!pendingPlatformRedirect && isConfirmMessage(text)) {
+      const lastDraft = [...messages]
+        .reverse()
+        .find(
+          (message) =>
+            message.role === 'assistant' && message.output && outputHasSuggestions(message.output),
+        )
+      if (lastDraft?.output) {
+        const confirmed = confirmSuggestions(lastDraft.output, t('agents.output.confirmedNote'))
+        const assistantMessage: ChatMessage = {
+          id: newId(),
+          role: 'assistant',
+          content: formatAgentOutput(confirmed),
+          output: confirmed,
+          agentType: lastDraft.agentType ?? agentType,
+        }
+        setMessages((current) => [...current, userMessage, assistantMessage])
+        return
+      }
     }
 
     // Chat → Instagram / LinkedIn handoff (confirm then auto-switch chip).
