@@ -351,13 +351,24 @@ class PostizPostsService:
         if not cleaned_content:
             raise PostizBadRequestError("Post content must not be empty.")
 
-        if post_type == "update":
-            if not post_id or not post_id.strip():
-                raise PostizBadRequestError("post_id is required when type is update.")
-        elif post_id is not None and post_id.strip():
-            raise PostizBadRequestError("post_id is only allowed when type is update.")
+        cleaned_post_id = post_id.strip() if isinstance(post_id, str) and post_id.strip() else None
+        if post_type == "update" and not cleaned_post_id:
+            raise PostizBadRequestError("post_id is required when type is update.")
+        if cleaned_post_id and post_type not in {"update", "now"}:
+            raise PostizBadRequestError(
+                "post_id is only allowed when type is update or now.",
+            )
 
         date_value = self._require_iso_datetime(publish_date, field_name="publish_date")
+        effective_type: PostType = post_type
+        if (
+            post_type == "update"
+            and cleaned_post_id
+            and self._iso_datetime_not_future(date_value)
+        ):
+            # Past/immediate save must publish, not leave a past QUEUE slot.
+            effective_type = "now"
+
         access_token, integration_id = self._require_connected_context(
             contos_user_id=contos_user_id,
             avatar_id=avatar_id,
@@ -382,16 +393,23 @@ class PostizPostsService:
                 for item in normalized_images
             ],
         }
-        if post_type == "update":
+        rearm_queue = False
+        if cleaned_post_id and effective_type in {"update", "now"}:
             owned = self._require_owned_post(
                 access_token=access_token,
                 integration_id=integration_id,
-                post_id=post_id.strip(),  # type: ignore[union-attr]
+                post_id=cleaned_post_id,
             )
+            if owned.state not in {"DRAFT", "QUEUE"}:
+                raise PostizBadRequestError(
+                    "Only draft and scheduled LinkedIn posts can be edited or published now. "
+                    f"This post is {owned.state}.",
+                )
             value_entry["id"] = owned.id
+            rearm_queue = effective_type == "update" and owned.state == "QUEUE"
 
         payload = {
-            "type": post_type,
+            "type": effective_type,
             "shortLink": False,
             "date": date_value,
             "tags": [],
@@ -406,14 +424,19 @@ class PostizPostsService:
         }
 
         result = self._client.create_post(access_token, payload)
+        if rearm_queue and cleaned_post_id:
+            # Postiz often keeps QUEUE after an update without re-firing the worker.
+            self._client.change_post_status(access_token, cleaned_post_id, "schedule")
         logger.info(
             "Created or updated Postiz post",
             extra={
                 "contos_user_id": str(contos_user_id),
                 "avatar_id": str(avatar_id),
-                "post_type": post_type,
-                "post_id": post_id.strip() if post_id else None,
+                "post_type": effective_type,
+                "requested_post_type": post_type,
+                "post_id": cleaned_post_id,
                 "image_count": len(normalized_images),
+                "rearmed_queue": rearm_queue,
             },
         )
         return result
@@ -436,21 +459,37 @@ class PostizPostsService:
         entry. Original text is sent to Postiz; emptiness and length use the trimmed text.
         Media is attached only to the first entry.
         """
-        updating = post_type == "update"
-        if updating:
-            if not post_id or not post_id.strip():
-                raise PostizBadRequestError("post_id is required when type is update.")
-            if thread is not None and (
-                len(thread) != 1 or thread[0] != content
-            ):
+        cleaned_post_id = post_id.strip() if isinstance(post_id, str) and post_id.strip() else None
+        if post_type == "update" and not cleaned_post_id:
+            raise PostizBadRequestError("post_id is required when type is update.")
+        if cleaned_post_id and post_type not in {"update", "now"}:
+            raise PostizBadRequestError(
+                "post_id is only allowed when type is update or now.",
+            )
+
+        date_value = self._require_iso_datetime(publish_date, field_name="publish_date")
+        effective_type: PostType = post_type
+        if (
+            post_type == "update"
+            and cleaned_post_id
+            and self._iso_datetime_not_future(date_value)
+        ):
+            effective_type = "now"
+
+        mutating_existing = cleaned_post_id is not None and effective_type in {
+            "update",
+            "now",
+        }
+        if mutating_existing:
+            if thread is not None and (len(thread) != 1 or thread[0] != content):
                 raise PostizBadRequestError(
                     "An X update edits the first post only. "
                     "content must equal that post, with no extra replies.",
                 )
-        elif post_id is not None and post_id.strip():
-            raise PostizBadRequestError("post_id is only allowed when type is update.")
+            entries = [content]
+        else:
+            entries = list(thread) if thread is not None else [content]
 
-        entries = [content] if updating else (list(thread) if thread is not None else [content])
         if not entries:
             raise PostizBadRequestError("X post must include at least one entry.")
         if thread is not None and content != entries[0]:
@@ -463,7 +502,6 @@ class PostizPostsService:
                     f"X thread entry {index + 1} must not be empty.",
                 )
 
-        date_value = self._require_iso_datetime(publish_date, field_name="publish_date")
         access_token, integration_id = self._require_x_context(
             contos_user_id=contos_user_id,
             avatar_id=avatar_id,
@@ -478,19 +516,21 @@ class PostizPostsService:
         )
 
         owned_id: str | None = None
-        if updating:
+        rearm_queue = False
+        if mutating_existing and cleaned_post_id:
             owned = self._require_owned_post(
                 access_token=access_token,
                 integration_id=integration_id,
-                post_id=post_id.strip(),  # type: ignore[union-attr]
+                post_id=cleaned_post_id,
                 channel_label="X",
             )
             if owned.state not in {"DRAFT", "QUEUE"}:
                 raise PostizBadRequestError(
-                    "Only draft and scheduled X posts can be edited. "
+                    "Only draft and scheduled X posts can be edited or published now. "
                     f"This post is {owned.state}.",
                 )
             owned_id = owned.id
+            rearm_queue = effective_type == "update" and owned.state == "QUEUE"
 
         settings_payload = self._client.get_integration_settings(
             access_token,
@@ -524,7 +564,7 @@ class PostizPostsService:
             for index, entry in enumerate(entries)
         ]
         payload = {
-            "type": post_type,
+            "type": effective_type,
             "shortLink": False,
             "date": date_value,
             "tags": [],
@@ -540,17 +580,21 @@ class PostizPostsService:
             ],
         }
         result = self._client.create_post(access_token, payload)
+        if rearm_queue and cleaned_post_id:
+            self._client.change_post_status(access_token, cleaned_post_id, "schedule")
         logger.info(
             "Created Postiz X post",
             extra={
                 "contos_user_id": str(contos_user_id),
                 "avatar_id": str(avatar_id),
-                "post_type": post_type,
+                "post_type": effective_type,
+                "requested_post_type": post_type,
                 "postiz_x_integration_id": integration_id,
                 "image_count": len(normalized_images),
                 "thread_entry_count": len(entries),
                 "content_length": len(entries[0].strip()),
                 "reported_max_length": limit,
+                "rearmed_queue": rearm_queue,
             },
         )
         return result
@@ -566,13 +610,21 @@ class PostizPostsService:
         if status not in {"draft", "schedule"}:
             raise PostizBadRequestError("status must be 'draft' or 'schedule'.")
 
-        access_token, integration_id = self._require_connected_context(
+        connection = self._require_avatar_connection(
             contos_user_id=contos_user_id,
             avatar_id=avatar_id,
         )
-        self._require_owned_post(
+        channel_ids = self._stored_channel_ids(connection)
+        if not channel_ids:
+            raise PostizNotConnectedError(
+                "Connect LinkedIn or X for this avatar before changing post status.",
+            )
+        access_token = self._oauth.decrypt_access_token(
+            connection["encrypted_access_token"],
+        )
+        self._require_owned_post_on_channels(
             access_token=access_token,
-            integration_id=integration_id,
+            channel_ids=channel_ids,
             post_id=post_id,
         )
         result = self._client.change_post_status(access_token, post_id, status)
@@ -618,6 +670,11 @@ class PostizPostsService:
             and owned.integration_id == x_integration_id.strip()
         )
         if is_x_post and owned.state not in {"DRAFT", "QUEUE", "ERROR"}:
+            if owned.state == "PUBLISHED":
+                raise PostizBadRequestError(
+                    "This X post is already published and cannot be deleted from ContOS. "
+                    "Refresh the calendar if it still shows as Not published.",
+                )
             raise PostizBadRequestError(
                 "Only draft, scheduled, and failed X posts can be deleted. "
                 f"This post is {owned.state}.",
@@ -1063,6 +1120,17 @@ class PostizPostsService:
                 f"{field_name} is not a valid ISO-8601 datetime: {cleaned!r}",
             ) from error
         return cleaned
+
+    @staticmethod
+    def _iso_datetime_not_future(value: str, *, now: datetime | None = None) -> bool:
+        """True when publish_date is at or before now (UTC)."""
+        parsed = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        clock = now if now is not None else datetime.now(timezone.utc)
+        if clock.tzinfo is None:
+            clock = clock.replace(tzinfo=timezone.utc)
+        return parsed <= clock
 
     @staticmethod
     def _normalize_publish_date(value: Any) -> str | None:

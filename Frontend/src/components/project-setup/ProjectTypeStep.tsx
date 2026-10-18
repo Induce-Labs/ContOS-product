@@ -152,6 +152,8 @@ export type ProjectTypeStepProps = {
   fieldError: string | null
   backControl: ReactNode
   stepLabel?: string
+  /** Types the user already has (New Project). Onboarding leaves this unset. */
+  disabledTypes?: ProjectType[]
 }
 
 export function ProjectTypeStep({
@@ -163,9 +165,11 @@ export function ProjectTypeStep({
   fieldError,
   backControl,
   stepLabel,
+  disabledTypes = [],
 }: ProjectTypeStepProps) {
   const { t } = useTranslation()
   const resolvedStepLabel = stepLabel ?? t('onboarding.projectType.stepLabel')
+  const disabledSet = new Set(disabledTypes)
 
   return (
     <div className="relative min-h-dvh overflow-auto bg-canvas font-sans text-ink antialiased selection:bg-ink selection:text-canvas">
@@ -207,21 +211,33 @@ export function ProjectTypeStep({
             <div className="mx-auto flex w-max items-stretch gap-5 px-2 py-1 sm:gap-6">
               {PROJECT_TYPE_OPTIONS.map((option) => {
                 const isSelected = selectedType === option.value
+                const isDisabled = disabledSet.has(option.value)
                 const keys = projectTypeOptionKeys(option.value)
 
                 return (
                   <button
                     key={option.value}
                     type="button"
-                    onClick={() => onSelect(option.value)}
+                    onClick={() => {
+                      if (isDisabled) return
+                      onSelect(option.value)
+                    }}
+                    disabled={isDisabled}
                     aria-pressed={isSelected}
-                    className={`contos-glow-card flex w-[min(100%,300px)] min-w-[260px] shrink-0 cursor-pointer flex-col rounded-[28px] bg-canvas-raised p-7 text-left transition-shadow duration-300 sm:w-[300px] sm:min-w-[280px] sm:p-8 ${
-                      isSelected
-                        ? 'contos-glow-card--selected border-2 border-ink shadow-[0_12px_32px_rgba(0,0,0,0.06)] dark:shadow-[0_12px_32px_rgba(0,0,0,0.35)]'
-                        : 'border border-transparent shadow-[0_8px_30px_rgba(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgba(0,0,0,0.28)]'
+                    aria-disabled={isDisabled}
+                    className={`contos-glow-card relative flex w-[min(100%,300px)] min-w-[260px] shrink-0 flex-col rounded-[28px] bg-canvas-raised p-7 text-left transition-shadow duration-300 sm:w-[300px] sm:min-w-[280px] sm:p-8 ${
+                      isDisabled
+                        ? 'cursor-not-allowed border border-border-hairline opacity-50 shadow-none'
+                        : isSelected
+                          ? 'contos-glow-card--selected cursor-pointer border-2 border-ink shadow-[0_12px_32px_rgba(0,0,0,0.06)] dark:shadow-[0_12px_32px_rgba(0,0,0,0.35)]'
+                          : 'cursor-pointer border border-transparent shadow-[0_8px_30px_rgba(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgba(0,0,0,0.28)]'
                     }`}
                   >
-                    {isSelected ? (
+                    {isDisabled ? (
+                      <span className="absolute right-5 top-5 z-[1] rounded-full bg-canvas px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-ink-muted">
+                        {t('onboarding.projectType.alreadyInUse')}
+                      </span>
+                    ) : isSelected ? (
                       <span className="absolute right-5 top-5 z-[1] flex h-6 w-6 items-center justify-center rounded-full bg-ink text-canvas">
                         <CheckIcon className="h-3.5 w-3.5" />
                       </span>

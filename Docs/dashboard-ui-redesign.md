@@ -8,6 +8,7 @@ Restyle the authenticated ContOS workspace to a premium editorial shell without 
 
 - UI and headings: **Inter** only (`font-sans` / `font-serif` both resolve to Inter)
 - Sidebar section labels: Inter with increased letter spacing
+- First-time onboarding (`/welcome`, `/onboarding/*`) and New Project (`/projects/new`, `/avatars/new`) use the same Inter tokens as the dashboard; no monospace chrome on those screens
 
 ## Scraping-first behavior
 
@@ -59,6 +60,8 @@ Agents chat sits flat on the page canvas (no nested raised chat card). Message b
 ## New Project from dashboard
 
 `/projects/new` (and `/avatars/new`) reuses the onboarding project-setup screens (`ProjectTypeStep` → `ProfilingStep` → `CompetitorsStep`) with local wizard state. It does not update `user_profiles` onboarding fields or call `completeOnboarding()`. After competitors submit, the user lands on `/dashboard/:avatarId` (scraping-first Overview). If the user **Save draft**s mid-profiling and later finishes via `/dashboard/:id/profiling`, competitor intake still appears when the project has zero competitors (same `CompetitorsStep` UI).
+
+On the New Project type step, workspace types the user already has (`personal_branding`, `business_1`, `business_2`; legacy `business` counts as Business 1) are disabled with an “Already in use” label so each of the three project slots is a distinct type. First-time onboarding still shows all three enabled.
 
 Signed-in new-project type, profiling, and competitors follow the account theme, matching dashboard resume (`/dashboard/:id/profiling`). First-time `/onboarding/*` stays light. Shared [`ProfilingQuestionField`](../Frontend/src/components/project-setup/ProfilingQuestionField.tsx) controls use theme tokens with bordered typed fields (text, URL, textarea, competitor names, “Other”) so placeholders and typed text stay visible in light and dark. **Save draft** appears beside **Next** on New Project and incomplete dashboard Profiling resume — not during first-time onboarding.
 

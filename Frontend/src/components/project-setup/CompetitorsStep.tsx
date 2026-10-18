@@ -404,7 +404,7 @@ export function CompetitorsStep({
                 >
                   <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
                     <div className="flex items-center justify-between gap-2 sm:justify-start">
-                      <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-canvas font-mono text-xs font-semibold text-ink-muted">
+                      <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-canvas font-sans text-xs font-semibold text-ink-muted">
                         {String(index + 1).padStart(2, '0')}
                       </span>
 
@@ -448,7 +448,7 @@ export function CompetitorsStep({
                               ? t('onboarding.competitors.placeholderTwitter')
                               : t('onboarding.competitors.placeholderInstagram')
                         }
-                        className="w-full rounded-xl border border-border-hairline bg-canvas px-4 py-2.5 font-mono text-xs text-ink placeholder:text-ink-muted transition-all focus:border-accent-primary focus:outline-none focus:ring-2 focus:ring-accent-primary/20 disabled:opacity-60 sm:text-sm"
+                        className="w-full rounded-xl border border-border-hairline bg-canvas px-4 py-2.5 font-sans text-xs text-ink placeholder:text-ink-muted transition-all focus:border-accent-primary focus:outline-none focus:ring-2 focus:ring-accent-primary/20 disabled:opacity-60 sm:text-sm"
                       />
                       {fieldError ? (
                         <p className="mt-1.5 text-xs text-red-600 dark:text-red-400">{fieldError}</p>
