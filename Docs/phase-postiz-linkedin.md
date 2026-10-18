@@ -43,7 +43,7 @@ Org-consent OAuth (`POST /api/postiz/oauth/callback`) is **deprecated** (HTTP 41
 | POST | `/api/postiz/claim` | Bearer Supabase JWT | LinkedIn list selection is rejected. X claim is unchanged |
 | GET | `/api/postiz/posts?avatar_id=&start_date=&end_date=` | Bearer | List calendar posts for this avatar’s LinkedIn only (includes `images`) |
 | POST | `/api/postiz/upload?avatar_id=` | Bearer | Multipart `file` — avatar-scoped proxy to Postiz `/upload` (images max 10 MB; `video/mp4` max 1 GB) |
-| POST | `/api/postiz/posts` | Bearer | Body `{ avatar_id, type, content, publish_date, post_id?, images? }` — `type`: `now` \| `schedule` \| `draft` \| `update`; `images` is the **complete final** MediaDto list (max 10) |
+| POST | `/api/postiz/posts` | Bearer | Body `{ avatar_id, type, content, publish_date, post_id?, images? }` — `type`: `now` \| `schedule` \| `draft` \| `update`; `post_id` required for `update`, optional for `now` (publish existing DRAFT/QUEUE); `images` is the **complete final** MediaDto list (max 10) |
 | PUT | `/api/postiz/posts/{post_id}/status` | Bearer | Body `{ avatar_id, status }` — `draft` \| `schedule` |
 | DELETE | `/api/postiz/posts/{post_id}?avatar_id=` | Bearer | Delete a post owned by this avatar’s integration |
 | DELETE | `/api/postiz/integration?avatar_id=` | Bearer | Disconnect LinkedIn for this avatar; keep Postiz org/token |
@@ -55,7 +55,7 @@ ContOS does **not** store posts or media blobs. It proxies to Postiz v2.23.0 `/a
 
 - `POST /upload` (multipart `file`) → `{ id, path, … }`
 - `GET /media/:id` (org-scoped ownership check)
-- `POST /posts` with `type: now | schedule | draft | update` and `value[].image: MediaDto[]`
+- `POST /posts` with `type: now | schedule | draft | update` and `value[].image: MediaDto[]`. ContOS may send `value[0].id` with `type: now` to publish an owned DRAFT/QUEUE post immediately. After a QUEUE `update` with a future date, ContOS calls `PUT .../status` with `schedule` to re-arm. An `update` whose `publish_date` is at or before now is coerced to `now`.
 - `GET /posts?startDate=&endDate=` (includes `image` for edit hydration)
 - `DELETE /posts/:id`
 - `PUT /posts/:id/status`
@@ -207,7 +207,7 @@ Apply all Postiz SQL migrations to ContOS Supabase before testing. Postiz must e
 
 - Calendar: `/dashboard/:projectId/calendar` — URL `projectId` is the ContOS avatar id; `CalendarPostizPanel` remounts with `key={avatarId}`
 - Month view loads posts only for that avatar; switching avatars clears events then refetches
-- Create / edit modal: text-only publish now, schedule, draft, update, status change, delete
+- Create / edit modal: publish now, schedule, draft, update (re-arms QUEUE after a future reschedule; past datetime coerces to publish now), status change, delete. Edit also offers Publish now for draft/scheduled LinkedIn and X posts.
 - Disconnect LinkedIn with explicit warning about Postiz removing that channel’s posts
 - Popup opens LinkedIn URL directly (no ContOS org-consent callback step)
 - `/auth/postiz/callback` shows a deprecated message if hit
@@ -215,7 +215,9 @@ Apply all Postiz SQL migrations to ContOS Supabase before testing. Postiz must e
 
 ### Calendar UI
 
-`CalendarPage.tsx` lays the page out as a header (title, subtitle, Create post), a left card (LinkedIn and X rows with the account name under the title and the Connected badge, Connect another account only while exactly one of those two is connected, Create post, upcoming posts for the visible month), and a right card (Today, Month / Week / Day, platform filter, Sunday-first grid). Event chips are LinkedIn or X and show Published, Scheduled, Not published, Draft, or Failed from the Postiz state. A queued post whose time has passed is Not published. Published posts stay on the day cell and are left out of Upcoming this month. Week and Day use the same chips for the visible range. Posts load only when at least one channel is connected. Connect, disconnect, create, edit, and delete still use the existing Postiz handlers. The create dialog is a shared composer for LinkedIn and X (platform cards, text toolbar, media drop zone). Publish now, schedule, and draft call the same handlers. No API or schema changes. Instagram is not a publishing channel.
+`CalendarPage.tsx` lays the page out as a header (title, subtitle, Create post), a left card (LinkedIn and X rows with the account name under the title and the Connected badge, Connect another account only while exactly one of those two is connected, Create post, upcoming posts for the visible month), and a right card (Today, Month / Week / Day, platform filter, Sunday-first grid). Event chips are LinkedIn or X and show Published, Scheduled, Not published, Draft, or Failed from the Postiz state. Opening a failed post shows Delete; confirming it calls the existing delete endpoint. A queued post whose time has passed is Not published. Published posts stay on the day cell and are left out of Upcoming this month. Week and Day use the same chips for the visible range. Posts load only when at least one channel is connected. Connect, disconnect, create, edit, and delete still use the existing Postiz handlers. The create dialog is a shared composer for LinkedIn and X (platform cards, text toolbar, media drop zone). Create offers publish now, schedule, and draft; edit offers Save changes and Publish now for draft/scheduled (including past-due QUEUE) LinkedIn and X posts. Instagram is not a publishing channel.
+
+Connect LinkedIn / Connect X opens a short prep dialog (`connectAccountHint`) that the authorization may use the account already signed into the browser; the tip is not shown as permanent copy under the account rows.
 
 ## Security
 

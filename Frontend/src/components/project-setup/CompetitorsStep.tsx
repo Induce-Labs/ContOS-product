@@ -314,7 +314,7 @@ export function CompetitorsStep({
     >
       <div
         aria-hidden="true"
-        className="pointer-events-none fixed inset-0 z-0 bg-[radial-gradient(ellipse_75%_55%_at_15%_10%,rgba(238,230,253,0.55)_0%,rgba(247,244,253,0.25)_45%,rgba(255,255,255,0)_75%),radial-gradient(ellipse_70%_50%_at_85%_90%,rgba(235,225,252,0.45)_0%,rgba(247,244,253,0.2)_40%,rgba(255,255,255,0)_70%)] dark:bg-[radial-gradient(ellipse_75%_55%_at_15%_10%,rgba(37,22,77,0.45)_0%,rgba(13,13,13,0.2)_45%,rgba(13,13,13,0)_75%),radial-gradient(ellipse_70%_50%_at_85%_90%,rgba(37,22,77,0.35)_0%,rgba(13,13,13,0.15)_40%,rgba(13,13,13,0)_70%)]"
+        className="pointer-events-none fixed inset-0 z-0 bg-[radial-gradient(ellipse_75%_55%_at_15%_10%,rgba(238,230,253,0.55)_0%,rgba(247,244,253,0.25)_45%,rgba(255,255,255,0)_75%),radial-gradient(ellipse_70%_50%_at_85%_90%,rgba(235,225,252,0.45)_0%,rgba(247,244,253,0.2)_40%,rgba(255,255,255,0)_70%)] dark:bg-[radial-gradient(ellipse_75%_55%_at_15%_10%,rgba(37,22,77,0.45)_0%,rgba(3,3,4,0.2)_45%,rgba(3,3,4,0)_75%),radial-gradient(ellipse_70%_50%_at_85%_90%,rgba(37,22,77,0.35)_0%,rgba(3,3,4,0.15)_40%,rgba(3,3,4,0)_70%)]"
       />
 
       <div
@@ -345,15 +345,22 @@ export function CompetitorsStep({
         <div className="mb-6 flex w-full flex-col justify-between gap-3 rounded-2xl border border-border-hairline bg-canvas-raised/80 p-4 text-xs backdrop-blur-sm sm:flex-row sm:items-center">
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-semibold text-ink">
-              {count} of {maxCompetitors}
+              {t('onboarding.competitors.countOf', {
+                count,
+                max: maxCompetitors,
+              })}
             </span>
             <span className="text-ink-muted" aria-hidden="true">
               •
             </span>
             <span className={atRecommended ? 'font-medium text-emerald-600 dark:text-signal-positive' : 'font-medium text-accent-primary-deep'}>
               {atRecommended
-                ? `${RECOMMENDED_COMPETITORS_PER_AVATAR}+`
-                : `Recommend ${RECOMMENDED_COMPETITORS_PER_AVATAR}`}
+                ? t('onboarding.competitors.recommendMet', {
+                    n: RECOMMENDED_COMPETITORS_PER_AVATAR,
+                  })
+                : t('onboarding.competitors.recommend', {
+                    n: RECOMMENDED_COMPETITORS_PER_AVATAR,
+                  })}
             </span>
           </div>
 
@@ -397,7 +404,7 @@ export function CompetitorsStep({
                 >
                   <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
                     <div className="flex items-center justify-between gap-2 sm:justify-start">
-                      <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-canvas font-mono text-xs font-semibold text-ink-muted">
+                      <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-canvas font-sans text-xs font-semibold text-ink-muted">
                         {String(index + 1).padStart(2, '0')}
                       </span>
 
@@ -441,7 +448,7 @@ export function CompetitorsStep({
                               ? t('onboarding.competitors.placeholderTwitter')
                               : t('onboarding.competitors.placeholderInstagram')
                         }
-                        className="w-full rounded-xl border border-border-hairline bg-canvas px-4 py-2.5 font-mono text-xs text-ink placeholder:text-ink-muted transition-all focus:border-accent-primary focus:outline-none focus:ring-2 focus:ring-accent-primary/20 disabled:opacity-60 sm:text-sm"
+                        className="w-full rounded-xl border border-border-hairline bg-canvas px-4 py-2.5 font-sans text-xs text-ink placeholder:text-ink-muted transition-all focus:border-accent-primary focus:outline-none focus:ring-2 focus:ring-accent-primary/20 disabled:opacity-60 sm:text-sm"
                       />
                       {fieldError ? (
                         <p className="mt-1.5 text-xs text-red-600 dark:text-red-400">{fieldError}</p>

@@ -1016,7 +1016,7 @@ function XChannelPanel({
       <ConfirmDialog
         open={connectPrepOpen}
         title={t('postiz.calendar.x.connectPrepTitle')}
-        description={t('postiz.calendar.x.connectPrepBody')}
+        description={t('postiz.calendar.connectAccountHint')}
         confirmLabel={t('postiz.calendar.x.connectPrepConfirm')}
         cancelLabel={t('common.cancel')}
         tone="default"
@@ -1346,9 +1346,6 @@ function CalendarPostizPanel({ avatarId }: { avatarId: string }) {
                 </>
               )}
             />
-            {uiState === 'disconnected' || uiState === 'connecting' ? (
-              <p className="text-xs leading-relaxed text-ink-muted">{t('postiz.calendar.switchAccountHint')}</p>
-            ) : null}
             <XChannelPanel
               avatarId={avatarId}
               onIntegrationChange={setXIntegration}
@@ -1423,7 +1420,7 @@ function CalendarPostizPanel({ avatarId }: { avatarId: string }) {
       <ConfirmDialog
         open={connectPrepOpen}
         title={t('postiz.calendar.connectPrepTitle')}
-        description={t('postiz.calendar.connectPrepBody')}
+        description={t('postiz.calendar.connectAccountHint')}
         confirmLabel={t('postiz.calendar.connectPrepConfirm')}
         cancelLabel={t('common.cancel')}
         tone="default"
@@ -1555,6 +1552,20 @@ function AvatarCalendarBoard({
     setError(null)
     setPosts([])
     setReloadToken((value) => value + 1)
+  }
+
+  /** Re-list the visible range so a past-due QUEUE badge is not used after Postiz published. */
+  async function refreshPostsInView(): Promise<PostizCalendarPost[]> {
+    const { startDate, endDate } = rangeBounds(fetchSpan.start, fetchSpan.end)
+    const next = await listPostizPosts(avatarId, startDate, endDate)
+    setPosts(next)
+    setError(null)
+    return next
+  }
+
+  async function resolveFreshPost(postId: string): Promise<PostizCalendarPost | null> {
+    const next = await refreshPostsInView()
+    return next.find((item) => item.id === postId) ?? null
   }
 
   function shiftAnchor(direction: -1 | 1) {
@@ -1718,14 +1729,13 @@ function AvatarCalendarBoard({
     return state === 'DRAFT' || state === 'QUEUE'
   }
 
-  function openEdit(post: PostizCalendarPost) {
+  function applyEditForm(post: PostizCalendarPost) {
     const xPost = isXPost(post)
     setComposerPlatform(xPost ? 'x' : 'linkedin')
     setModalMode(xPost && !xPostIsEditable(post) ? 'view' : 'edit')
     setEditingPost(post)
     setFormContent(post.content)
     setFormWhen(isoToLocalDateTimeInput(post.publish_date))
-    setFormError(null)
     clearAttachments()
     setAttachments(
       post.images.map((image) => ({
@@ -1737,7 +1747,29 @@ function AvatarCalendarBoard({
         media: image,
       })),
     )
+  }
+
+  function openEdit(post: PostizCalendarPost) {
+    setFormError(null)
+    applyEditForm(post)
     setModalOpen(true)
+    void (async () => {
+      try {
+        const fresh = await resolveFreshPost(post.id)
+        if (fresh == null) {
+          setFormError(t('postiz.calendar.postGone'))
+          setModalOpen(false)
+          setEditingPost(null)
+          return
+        }
+        applyEditForm(fresh)
+        if (fresh.state.toUpperCase() === 'PUBLISHED' && post.state.toUpperCase() !== 'PUBLISHED') {
+          setFormError(t('postiz.calendar.alreadyPublished'))
+        }
+      } catch (err) {
+        setFormError(userFacingMessage(err, t('postiz.calendar.postsLoadFailed')))
+      }
+    })()
   }
 
   function addFiles(fileList: FileList | null) {
@@ -1944,7 +1976,7 @@ function AvatarCalendarBoard({
     }
   }
 
-  async function submitUpdate() {
+  async function submitExistingPost(type: 'update' | 'now') {
     if (!editingPost) {
       return
     }
@@ -1953,11 +1985,13 @@ function AvatarCalendarBoard({
     try {
       // Complete final image array (including [] if all removed).
       const images = await resolveFinalImages()
+      const publishDate =
+        type === 'now' ? nowAsOffsetIso() : localDateTimeToOffsetIso(formWhen)
       await createPostizPost({
         avatarId,
-        type: 'update',
+        type,
         content: formContent,
-        publishDate: localDateTimeToOffsetIso(formWhen),
+        publishDate,
         postId: editingPost.id,
         images,
         ...(composerPlatform === 'x' ? { platform: 'x' as const } : {}),
@@ -1970,6 +2004,24 @@ function AvatarCalendarBoard({
     } finally {
       setSaving(false)
     }
+  }
+
+  async function submitUpdate() {
+    if (!editingPost) {
+      return
+    }
+    let publishInFuture = false
+    try {
+      publishInFuture = new Date(localDateTimeToOffsetIso(formWhen)).getTime() > Date.now()
+    } catch {
+      publishInFuture = false
+    }
+    // Past or immediate wall time must publish now so Postiz does not keep a past QUEUE.
+    await submitExistingPost(publishInFuture ? 'update' : 'now')
+  }
+
+  async function submitPublishNowExisting() {
+    await submitExistingPost('now')
   }
 
   async function submitStatus(status: 'draft' | 'schedule') {
@@ -1994,13 +2046,28 @@ function AvatarCalendarBoard({
       return
     }
     setDeleting(true)
+    setFormError(null)
     try {
+      const fresh = await resolveFreshPost(editingPost.id)
+      if (fresh == null) {
+        setDeleteOpen(false)
+        setModalOpen(false)
+        setEditingPost(null)
+        return
+      }
+      if (isXPost(fresh) && fresh.state.toUpperCase() === 'PUBLISHED') {
+        applyEditForm(fresh)
+        setDeleteOpen(false)
+        setFormError(t('postiz.calendar.alreadyPublished'))
+        return
+      }
       await deletePostizPost(avatarId, editingPost.id)
       setDeleteOpen(false)
       setModalOpen(false)
       setEditingPost(null)
       beginPostsReload()
     } catch (err) {
+      setDeleteOpen(false)
       setFormError(userFacingMessage(err, t('postiz.calendar.deleteFailed')))
     } finally {
       setDeleting(false)
@@ -2341,7 +2408,7 @@ function AvatarCalendarBoard({
                       className={`flex min-w-[8.5rem] items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium text-ink ${
                         composerPlatform === 'linkedin'
                           ? 'border-[#c4b5fd] bg-[#f7f3ff] ring-1 ring-[#c4b5fd] dark:bg-[#2a2238]'
-                          : 'border-border-hairline bg-white hover:bg-[#faf9fc] dark:bg-canvas'
+                          : 'border-border-hairline bg-white hover:bg-[#faf9fc] dark:bg-canvas dark:hover:bg-[#222126]'
                       }`}
                     >
                       <LinkedInMark className="h-8 w-8" />
@@ -2354,7 +2421,7 @@ function AvatarCalendarBoard({
                       className={`flex min-w-[8.5rem] items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium text-ink ${
                         composerPlatform === 'x'
                           ? 'border-[#c4b5fd] bg-[#f7f3ff] ring-1 ring-[#c4b5fd] dark:bg-[#2a2238]'
-                          : 'border-border-hairline bg-white hover:bg-[#faf9fc] dark:bg-canvas'
+                          : 'border-border-hairline bg-white hover:bg-[#faf9fc] dark:bg-canvas dark:hover:bg-[#222126]'
                       }`}
                     >
                       <XMark className="h-8 w-8" />
@@ -2641,6 +2708,16 @@ function AvatarCalendarBoard({
                 {modalMode === 'view' ? t('common.close') : t('common.cancel')}
               </button>
               <div className="flex flex-wrap justify-end gap-2">
+                {modalMode === 'view' && editingPost?.state.toUpperCase() === 'ERROR' ? (
+                  <button
+                    type="button"
+                    disabled={saving || deleting}
+                    className={COMPOSER_SECONDARY_BTN}
+                    onClick={() => setDeleteOpen(true)}
+                  >
+                    {t('common.delete')}
+                  </button>
+                ) : null}
                 {modalMode === 'create' ? (
                   <>
                     <button
@@ -2689,22 +2766,26 @@ function AvatarCalendarBoard({
                     <button
                       type="button"
                       disabled={saving || !formContent.trim() || !formWhen || mediaBlocksSave}
-                      className={COMPOSER_PRIMARY_BTN}
+                      className={COMPOSER_SECONDARY_BTN}
                       onClick={() => void submitUpdate()}
                     >
                       {t('postiz.calendar.saveChanges')}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={saving || !formContent.trim() || mediaBlocksSave}
+                      className={COMPOSER_PRIMARY_BTN}
+                      onClick={() => void submitPublishNowExisting()}
+                    >
+                      <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" className="h-4 w-4">
+                        <path d="M21 3 10.5 13.5" />
+                        <path d="m21 3-7 18-3.5-7.5L3 10z" />
+                      </svg>
+                      {t('postiz.calendar.publishNow')}
                     </button>
                   </>
                 ) : modalMode === 'edit' ? (
                   <>
-                    <button
-                      type="button"
-                      disabled={saving || !formContent.trim() || !formWhen || mediaBlocksSave}
-                      className={COMPOSER_PRIMARY_BTN}
-                      onClick={() => void submitUpdate()}
-                    >
-                      {t('postiz.calendar.saveChanges')}
-                    </button>
                     <button
                       type="button"
                       disabled={saving}
@@ -2728,6 +2809,26 @@ function AvatarCalendarBoard({
                       onClick={() => setDeleteOpen(true)}
                     >
                       {t('common.delete')}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={saving || !formContent.trim() || !formWhen || mediaBlocksSave}
+                      className={COMPOSER_SECONDARY_BTN}
+                      onClick={() => void submitUpdate()}
+                    >
+                      {t('postiz.calendar.saveChanges')}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={saving || !formContent.trim() || mediaBlocksSave}
+                      className={COMPOSER_PRIMARY_BTN}
+                      onClick={() => void submitPublishNowExisting()}
+                    >
+                      <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" className="h-4 w-4">
+                        <path d="M21 3 10.5 13.5" />
+                        <path d="m21 3-7 18-3.5-7.5L3 10z" />
+                      </svg>
+                      {t('postiz.calendar.publishNow')}
                     </button>
                   </>
                 ) : null}

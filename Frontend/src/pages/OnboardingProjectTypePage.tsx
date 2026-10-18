@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { OnboardingStepGuard } from '../components/OnboardingStepGuard'
 import { ProjectTypeStep } from '../components/project-setup/ProjectTypeStep'
 import {
@@ -13,6 +14,7 @@ import { setLastUsedProjectId } from '../lib/projects'
 import type { ProjectType } from '../types/contos'
 
 function OnboardingProjectTypeContent() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const [selectedType, setSelectedType] = useState<ProjectType | null>(null)
   const [fieldError, setFieldError] = useState<string | null>(null)
@@ -23,7 +25,7 @@ function OnboardingProjectTypeContent() {
     setErrorMessage(null)
 
     if (!selectedType) {
-      setFieldError('Select a workspace type to continue.')
+      setFieldError(t('onboarding.projectType.selectTypeError'))
       return
     }
 
@@ -45,7 +47,7 @@ function OnboardingProjectTypeContent() {
       setErrorMessage(
         userFacingMessage(
           error,
-          `Failed to create avatar (max ${MAX_AVATARS} on Basic plan).`,
+          t('onboarding.projectType.createAvatarFailed', { max: MAX_AVATARS }),
         ),
       )
       setIsSubmitting(false)
@@ -69,7 +71,7 @@ function OnboardingProjectTypeContent() {
           onClick={() => void advanceOnboardingStep('welcome')}
           className="inline-flex items-center gap-1.5 text-sm font-medium text-neutral-500 transition-colors hover:text-neutral-900"
         >
-          ← Back to ContOS Overview
+          {t('onboarding.projectType.backToOverview')}
         </Link>
       }
     />

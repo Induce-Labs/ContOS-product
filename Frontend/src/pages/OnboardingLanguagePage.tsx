@@ -114,7 +114,7 @@ export function OnboardingLanguagePage() {
   }
 
   return (
-    <div className="flex min-h-dvh items-center justify-center bg-canvas px-4 py-10">
+    <div className="flex min-h-dvh items-center justify-center bg-canvas px-4 py-10 font-sans text-ink antialiased">
       <div className="w-full max-w-lg rounded-[2rem] border border-border-hairline bg-canvas-raised p-6 shadow-[0_16px_40px_rgba(28,27,41,0.06)] sm:p-8">
         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-accent-primary">
           {t('onboarding.language.eyebrow')}

@@ -74,30 +74,22 @@ export async function translateTextsChunked(params: {
   }
 
   const out: string[] = []
-  const chunks: string[][] = []
+  let chunkIndex = 0
   for (let offset = 0; offset < texts.length; offset += TRANSLATE_CHUNK_SIZE) {
-    chunks.push(texts.slice(offset, offset + TRANSLATE_CHUNK_SIZE))
-  }
-
-  const translatedChunks = await Promise.all(
-    chunks.map((chunk) =>
-      translateChunkOnce({
-        texts: chunk,
-        targetLang,
-        sourceLang,
-      }),
-    ),
-  )
-
-  translatedChunks.forEach((translated, index) => {
-    const chunk = chunks[index]
+    const chunk = texts.slice(offset, offset + TRANSLATE_CHUNK_SIZE)
+    const translated = await translateChunkOnce({
+      texts: chunk,
+      targetLang,
+      sourceLang,
+    })
     if (translated.length !== chunk.length) {
       throw new Error(
-        `Translate chunk returned ${translated.length} texts for ${chunk.length} inputs (chunk ${index}).`,
+        `Translate chunk returned ${translated.length} texts for ${chunk.length} inputs (chunk ${chunkIndex}).`,
       )
     }
     out.push(...translated)
-  })
+    chunkIndex += 1
+  }
   return out
 }
 

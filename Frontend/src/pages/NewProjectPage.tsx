@@ -1,6 +1,7 @@
 import type { FormEvent } from 'react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { ProjectTypeStep } from '../components/project-setup/ProjectTypeStep'
 import { CompetitorsStep } from '../components/project-setup/CompetitorsStep'
 import {
@@ -17,8 +18,18 @@ import {
   type Avatar,
 } from '../lib/avatars'
 import { logDevError, userFacingMessage } from '../lib/devLog'
-import { setLastUsedProjectId } from '../lib/projects'
+import { fetchUserProjects, setLastUsedProjectId } from '../lib/projects'
 import type { ProjectType } from '../types/contos'
+
+/** Map stored avatar types to the selectable New Project cards. */
+function selectableTypeFromProjectType(type: string): ProjectType | null {
+  if (type === 'personal_branding' || type === 'business_1' || type === 'business_2') {
+    return type
+  }
+  // Legacy `business` shares the Business 1 profiling family.
+  if (type === 'business') return 'business_1'
+  return null
+}
 
 type WizardStep = 'type' | 'profiling' | 'competitors'
 
@@ -31,6 +42,7 @@ function NewProjectProfiling({
   onBackToType: () => void
   onFinished: () => void
 }) {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const [isSavingDraft, setIsSavingDraft] = useState(false)
   const {
@@ -86,7 +98,7 @@ function NewProjectProfiling({
   if (!avatar || questions.length === 0) {
     return (
       <ProfilingStepUnavailable
-        message={errorMessage ?? 'Profiling questions are unavailable.'}
+        message={errorMessage ?? t('onboarding.profiling.questionsUnavailable')}
       />
     )
   }
@@ -114,6 +126,7 @@ function NewProjectProfiling({
 }
 
 export function NewProjectPage() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const [step, setStep] = useState<WizardStep>('type')
   const [selectedType, setSelectedType] = useState<ProjectType | null>(null)
@@ -121,6 +134,7 @@ export function NewProjectPage() {
   const [fieldError, setFieldError] = useState<string | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isCreatingAvatar, setIsCreatingAvatar] = useState(false)
+  const [disabledTypes, setDisabledTypes] = useState<ProjectType[]>([])
 
   const {
     competitorInputs,
@@ -136,11 +150,45 @@ export function NewProjectPage() {
     maxCompetitors,
   } = useCompetitorIntake()
 
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadUsedTypes() {
+      try {
+        const projects = await fetchUserProjects()
+        if (cancelled) return
+        const used = new Set<ProjectType>()
+        for (const project of projects) {
+          const selectable = selectableTypeFromProjectType(project.type)
+          if (selectable) used.add(selectable)
+        }
+        const next = Array.from(used)
+        setDisabledTypes(next)
+        setSelectedType((current) => (current && used.has(current) ? null : current))
+      } catch (error) {
+        logDevError('new project load used types', {
+          error: error instanceof Error ? error.message : String(error),
+        })
+      }
+    }
+
+    void loadUsedTypes()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   async function handleTypeContinue() {
     setErrorMessage(null)
 
     if (!selectedType) {
-      setFieldError('Select a workspace type to continue.')
+      setFieldError(t('onboarding.projectType.selectTypeError'))
+      return
+    }
+
+    if (disabledTypes.includes(selectedType)) {
+      setFieldError(t('onboarding.projectType.alreadyInUse'))
+      setSelectedType(null)
       return
     }
 
@@ -162,7 +210,7 @@ export function NewProjectPage() {
       setErrorMessage(
         userFacingMessage(
           error,
-          `Failed to create avatar (max ${MAX_AVATARS} on Basic plan).`,
+          t('onboarding.projectType.createAvatarFailed', { max: MAX_AVATARS }),
         ),
       )
     } finally {
@@ -191,6 +239,7 @@ export function NewProjectPage() {
       <ProjectTypeStep
         selectedType={selectedType}
         onSelect={(type) => {
+          if (disabledTypes.includes(type)) return
           setSelectedType(type)
           setFieldError(null)
         }}
@@ -198,13 +247,14 @@ export function NewProjectPage() {
         isSubmitting={isCreatingAvatar}
         errorMessage={errorMessage}
         fieldError={fieldError}
-        stepLabel="New Project"
+        disabledTypes={disabledTypes}
+        stepLabel={t('onboarding.projectType.newProjectStepLabel')}
         backControl={
           <Link
             to="/dashboard"
             className="inline-flex items-center gap-1.5 text-sm font-medium text-ink-muted transition-colors hover:text-ink"
           >
-            ← Cancel
+            {t('onboarding.projectType.cancel')}
           </Link>
         }
       />
@@ -214,7 +264,7 @@ export function NewProjectPage() {
   if (step === 'profiling') {
     if (!avatar) {
       return (
-        <ProfilingStepUnavailable message="Avatar is missing. Return to project type selection." />
+        <ProfilingStepUnavailable message={t('onboarding.competitors.missingAvatar')} />
       )
     }
 

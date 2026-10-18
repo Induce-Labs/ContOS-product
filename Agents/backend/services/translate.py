@@ -7,6 +7,7 @@ import json
 import logging
 import os
 import re
+import threading
 import time
 from typing import Any
 
@@ -22,6 +23,9 @@ TRANSLATION_MAX_CHARS_PER_TEXT = 4000
 TRANSLATION_MAX_TOTAL_CHARS = 24000
 # Smaller LLM batches are more reliable (fewer dropped JSON keys under load).
 OPENROUTER_BATCH_SIZE = int(os.getenv("TRANSLATION_OPENROUTER_BATCH_SIZE", "12"))
+# One in-flight OpenRouter translation per process. Parallel HTTP chunks were
+# failing together (502) when the model was asked for several batches at once.
+_openrouter_lock = threading.Lock()
 
 
 class TranslationError(Exception):
@@ -217,6 +221,23 @@ def _call_openrouter_batch(
     source_lang: str,
     target_lang: str,
 ) -> dict[str, str]:
+    _openrouter_lock.acquire()
+    try:
+        return _call_openrouter_batch_locked(
+            texts_by_key=texts_by_key,
+            source_lang=source_lang,
+            target_lang=target_lang,
+        )
+    finally:
+        _openrouter_lock.release()
+
+
+def _call_openrouter_batch_locked(
+    *,
+    texts_by_key: dict[str, str],
+    source_lang: str,
+    target_lang: str,
+) -> dict[str, str]:
     source_name = LANGUAGE_DISPLAY_NAMES[source_lang]
     target_name = LANGUAGE_DISPLAY_NAMES[target_lang]
     payload = json.dumps(texts_by_key, ensure_ascii=False)
@@ -231,7 +252,6 @@ def _call_openrouter_batch(
         f"to {target_name} ({target_lang}).\n\n"
         f"Input JSON:\n{payload}"
     )
-
     last_error: BaseException | None = None
     for attempt in range(1, TRANSLATION_MAX_RETRIES + 1):
         try:

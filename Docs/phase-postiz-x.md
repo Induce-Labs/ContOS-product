@@ -41,7 +41,7 @@ This is the limit Postiz currently reports. It is not a live X Premium check. Co
 
 An omitted `posts` field keeps a single `value` item. When `posts` is set, each entry is checked with `len(entry.strip())` against that same limit. The Postiz payload stores the original string, including surrounding spaces. An entry that trims to empty is rejected. LinkedIn rejects `posts`.
 
-`type=update` for X is allowed only when the owned post state is `DRAFT` or `QUEUE`. Published posts are rejected before the settings fetch. A draft or scheduled update still fetches `maxLength` once, sends the original content, and sets `value[0].id` to that post id so Postiz keeps the existing state.
+`type=update` for X is allowed only when the owned post state is `DRAFT` or `QUEUE`. Published posts are rejected before the settings fetch. A draft or scheduled update still fetches `maxLength` once, sends the original content, and sets `value[0].id` to that post id. After a `QUEUE` update with a future `publish_date`, ContOS calls Postiz `PUT .../status` with `schedule` so the worker re-arms (including earlier-but-still-future times). If `update` arrives with `publish_date` at or before now, ContOS coerces to `type: now` with that `post_id`. Edit also accepts `type: now` with `post_id` to publish a draft or scheduled post immediately.
 
 ## Configuration
 
@@ -53,7 +53,7 @@ The Calendar page keeps the LinkedIn connection card and adds a separate X card 
 
 The composer defaults to LinkedIn, including edit. Choosing X sends `platform: "x"` for publish now, schedule, and draft. The dialog layout is shared with LinkedIn; X create still starts as one text box and can add, remove, and reorder entries. Media still attaches to the first post only. Each entry shows `content.length` and does not block at 280 or 4000. Submit stays disabled while any entry trims to empty, media is uploading, or media is invalid. The request sends `content` as the first entry's original text and `posts` as every entry's original text. Media validation uses 4 images XOR 1 MP4 on the first entry only. Postiz-reported `maxLength` remains the backend limit, measured on trimmed text.
 
-X posts on the shared calendar are the ones whose `integration_id` matches this avatar's connected X integration. A day shows three posts, and "+N more" expands that day so the rest can be opened. Clicking a published X post opens a read-only view. Clicking a draft (`DRAFT`) or scheduled (`QUEUE`) X post opens an editor for that root post's content, media, and date. The update uses Postiz `type: "update"` and the X integration id, so the draft or scheduled state is kept. Reply text is not in the calendar payload and is not edited. Delete and status changes stay LinkedIn-only.
+X posts on the shared calendar are the ones whose `integration_id` matches this avatar's connected X integration. A day shows three posts, and "+N more" expands that day so the rest can be opened. Clicking a published X post opens a read-only view. Clicking a draft (`DRAFT`) or scheduled (`QUEUE`, including past-due Not published) X post opens an editor for that root post's content, media, and date. Save changes uses `type: "update"` (and re-arms schedule when needed); Publish now uses `type: "now"` with `post_id`. Reply text is not in the calendar payload and is not edited. Delete works for X draft/scheduled/failed posts. Published X posts cannot be deleted from ContOS. Opening edit or confirming delete re-fetches the visible calendar range so a past-due `QUEUE` badge is not kept after Postiz has already moved the post to `PUBLISHED`. Mark scheduled / mark draft remain LinkedIn-only in the UI; ContOS may still call status `schedule` after an X reschedule to re-arm Postiz.
 
 ## List and upload
 
@@ -67,5 +67,5 @@ X posts on the shared calendar are the ones whose `integration_id` matches this 
 
 ## Limitations
 
-- X threads are one Postiz post: `value[0]` is the tweet and later `value` items are replies. ContOS does not schedule replies itself. Later entries cannot carry media. Draft (`DRAFT`) and scheduled (`QUEUE`) X posts can be edited as the root post and deleted. Published X posts stay view-only and cannot be deleted. Quotes and analytics are not supported.
+- X threads are one Postiz post: `value[0]` is the tweet and later `value` items are replies. ContOS does not schedule replies itself. Later entries cannot carry media. Draft (`DRAFT`) and scheduled (`QUEUE`) X posts can be edited as the root post and deleted. Failed (`ERROR`) X posts stay view-only and can be deleted from that dialog. Published X posts stay view-only and cannot be deleted. Quotes and analytics are not supported.
 - Live X publish is not covered by these tests

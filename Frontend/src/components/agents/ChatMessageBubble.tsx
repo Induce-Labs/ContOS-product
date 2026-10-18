@@ -1,6 +1,7 @@
 import contosMark from '../../assets/contos-mark.png'
 import contosMarkDark from '../../assets/image.png'
 import { AgentOutputRenderer } from './AgentOutputRenderer'
+import { FormattedAssistantText } from './FormattedAssistantText'
 import type { AgentType } from '../../lib/agentsApi'
 
 type ChatMessageBubbleProps = {
@@ -22,9 +23,9 @@ export function ChatMessageBubble({
 
   const bubble = (
     <div
-      className={`max-w-[min(100%,36rem)] rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap text-ink ${
+      className={`max-w-[min(100%,36rem)] rounded-2xl px-4 py-3 text-sm leading-relaxed text-ink ${
         isUser
-          ? 'bg-accent-primary-soft'
+          ? 'whitespace-pre-wrap bg-accent-primary-soft'
           : 'border border-border-hairline bg-canvas-raised'
       }`}
     >
@@ -42,8 +43,10 @@ export function ChatMessageBubble({
       ) : null}
       {structuredOutput ? (
         <AgentOutputRenderer agentType={agentType} output={structuredOutput} />
-      ) : (
+      ) : isUser ? (
         content
+      ) : (
+        <FormattedAssistantText text={content} />
       )}
     </div>
   )

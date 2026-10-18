@@ -2,14 +2,13 @@ import { useMemo, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
 import type { AgentType } from '../../lib/agentsApi'
-import {
-  buildInstagramDisplaySections,
-} from '../../lib/agentOutputDisplay'
+import { buildInstagramDisplaySections } from '../../lib/agentOutputDisplay'
 import {
   outputHasSuggestions,
   splitSuggestions,
   stripSuggestionMarkers,
 } from '../../lib/draftSuggestions'
+import { FormattedAssistantText } from './FormattedAssistantText'
 
 type UnknownRecord = Record<string, unknown>
 
@@ -597,9 +596,7 @@ function StrategistHeader({ output }: { output: UnknownRecord }) {
 
   return (
     <div className="space-y-3">
-      {reply ? (
-        <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink">{reply}</p>
-      ) : null}
+      {reply ? <FormattedAssistantText text={reply} /> : null}
       {thesis ? (
         <Section title={t('agents.output.thesis')}>
           <p className="text-sm text-ink">{thesis}</p>
@@ -641,7 +638,7 @@ export function AgentOutputRenderer({
   const { t } = useTranslation()
 
   if (typeof output === 'string' && output.trim()) {
-    return <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink">{output}</p>
+    return <FormattedAssistantText text={output} />
   }
 
   const record = asRecord(output)
@@ -704,9 +701,7 @@ export function AgentOutputRenderer({
   }
 
   if (streamingText?.trim()) {
-    return (
-      <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink">{streamingText}</p>
-    )
+    return <FormattedAssistantText text={streamingText} />
   }
 
   return <p className="text-sm text-ink-muted">{t('agents.output.noResponseYet')}</p>

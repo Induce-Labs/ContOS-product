@@ -119,6 +119,52 @@ export function buildInstagramDisplaySections(output: unknown): DisplaySection[]
   return sections
 }
 
+export type PublishablePost = {
+  hook?: string
+  body?: string
+  cta?: string
+}
+
+/** One paste-ready post. The hook is not repeated when the body already opens with it. */
+export function composePublishablePost(post: PublishablePost): string {
+  const hook = (post.hook ?? '').trim()
+  const body = (post.body ?? '').trim()
+  const cta = (post.cta ?? '').trim()
+  let text = body
+  if (hook) {
+    const firstLine = text.split('\n')[0]?.trim() ?? ''
+    if (firstLine !== hook) text = text ? `${hook}\n${text}` : hook
+  }
+  if (cta && !text.trimEnd().endsWith(cta)) {
+    text = text ? `${text}\n${cta}` : cta
+  }
+  // Model bodies often put a blank line between every sentence; keep single newlines only.
+  return text.replace(/\n{2,}/g, '\n').trim()
+}
+
+/** Ordered list of non-empty drafts for on-screen rendering. */
+export function composePublishablePostList(posts: PublishablePost[]): string[] {
+  return posts.map((post) => composePublishablePost(post).trim()).filter(Boolean)
+}
+
+/** Several posts joined for saved/history text (no dash divider). */
+export function composePublishablePosts(posts: PublishablePost[]): string {
+  return composePublishablePostList(posts).join('\n\n')
+}
+
+function formatSections(sections: DisplaySection[]): string {
+  return sections
+    .map((section) => {
+      const lines = [`## ${section.title}`]
+      if (section.body) lines.push(section.body)
+      if (section.items?.length) {
+        for (const item of section.items) lines.push(`- ${item}`)
+      }
+      return lines.join('\n')
+    })
+    .join('\n\n')
+}
+
 /** Flatten sections to plain text (never a JSON dump of the whole payload). */
 /** Reply, thesis, ideas and the full draft text, so the next turn can build on them. */
 function formatStrategistOutput(record: Record<string, unknown>): string {
@@ -168,30 +214,47 @@ export function formatStructuredAgentOutput(output: unknown): string {
 
   if (!sections.length && (agent === 'linkedin' || Array.isArray(record.post_ideas))) {
     const ideas = Array.isArray(record.post_ideas) ? record.post_ideas : []
-    const ideaLines = ideas
-      .slice(0, 6)
-      .map((raw, i) => {
+    const composed = composePublishablePosts(
+      ideas.map((raw) => {
         const idea = asRecord(raw) ?? {}
-        const topic = asString(idea.topic) || `Idea ${i + 1}`
-        const hook = asString(idea.hook)
-        return hook ? `${topic}: ${hook}` : topic
-      })
-      .filter(Boolean)
-    if (ideaLines.length) sections.push({ title: 'LinkedIn ideas', items: ideaLines })
+        return {
+          hook: asString(idea.hook),
+          body: asString(idea.post_structure),
+          cta: asString(idea.cta),
+        }
+      }),
+    )
+    const extras: DisplaySection[] = []
     const themes = asStringList(record.thought_leadership_themes)
-    if (themes.length) sections.push({ title: 'Themes', items: themes })
+    if (themes.length) extras.push({ title: 'Themes', items: themes })
+    const hookFormulas = asStringList(record.hook_formulas)
+    if (hookFormulas.length) extras.push({ title: 'Hook formulas', items: hookFormulas })
+    const postingFrequency = asString(record.posting_frequency)
+    if (postingFrequency) extras.push({ title: 'Posting cadence', body: postingFrequency })
+    const extra = extras.length ? formatSections(extras) : ''
+    if (composed || extra) return [composed, extra].filter(Boolean).join('\n\n')
   }
 
   if (!sections.length && (agent === 'twitter' || Array.isArray(record.tweet_ideas))) {
     const tweets = Array.isArray(record.tweet_ideas) ? record.tweet_ideas : []
-    const lines = tweets
-      .slice(0, 6)
-      .map((raw) => {
-        const t = asRecord(raw) ?? {}
-        return asString(t.full_tweet) || asString(t.hook)
-      })
-      .filter(Boolean)
-    if (lines.length) sections.push({ title: 'Tweet ideas', items: lines })
+    const composed = composePublishablePosts(
+      tweets.map((raw) => {
+        const tweet = asRecord(raw) ?? {}
+        return {
+          hook: asString(tweet.hook),
+          body: asString(tweet.full_tweet),
+        }
+      }),
+    )
+    const extras: DisplaySection[] = []
+    const formulas = asStringList(record.hook_formulas)
+    if (formulas.length) extras.push({ title: 'Hook formulas', items: formulas })
+    const tactics = asStringList(record.engagement_tactics)
+    if (tactics.length) extras.push({ title: 'Engagement tactics', items: tactics })
+    const postingFrequency = asString(record.posting_frequency)
+    if (postingFrequency) extras.push({ title: 'Posting cadence', body: postingFrequency })
+    const extra = extras.length ? formatSections(extras) : ''
+    if (composed || extra) return [composed, extra].filter(Boolean).join('\n\n')
   }
 
   if (
@@ -214,14 +277,5 @@ export function formatStructuredAgentOutput(output: unknown): string {
     }
     return ''
   }
-  return sections
-    .map((section) => {
-      const lines = [`## ${section.title}`]
-      if (section.body) lines.push(section.body)
-      if (section.items?.length) {
-        for (const item of section.items) lines.push(`- ${item}`)
-      }
-      return lines.join('\n')
-    })
-    .join('\n\n')
+  return formatSections(sections)
 }

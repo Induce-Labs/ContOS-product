@@ -1697,7 +1697,7 @@ class TestPostizMediaPosts:
             avatar_id=AVATAR_A,
             post_type="update",
             content="Updated",
-            publish_date="2026-09-23T15:30:00Z",
+            publish_date="2099-01-01T15:30:00Z",
             post_id="pa",
             images=[
                 MediaRef(id="A", path="https://cdn.example.com/A.jpg"),
@@ -1708,6 +1708,7 @@ class TestPostizMediaPosts:
         images = client.create_post.call_args.args[1]["posts"][0]["value"][0]["image"]
         assert [item["id"] for item in images] == ["A", "C", "D"]
         assert client.create_post.call_args.args[1]["posts"][0]["value"][0]["id"] == "pa"
+        assert client.create_post.call_args.args[1]["type"] == "update"
 
         # Remove all → images: []
         client.create_post.reset_mock()
@@ -1717,7 +1718,7 @@ class TestPostizMediaPosts:
             avatar_id=AVATAR_A,
             post_type="update",
             content="No media",
-            publish_date="2026-09-23T15:30:00Z",
+            publish_date="2099-01-01T15:30:00Z",
             post_id="pa",
             images=[],
         )
@@ -2653,6 +2654,7 @@ class TestPostizX:
 
         for state in ("DRAFT", "QUEUE"):
             client.create_post.reset_mock()
+            client.change_post_status.reset_mock()
             client.get_integration_settings.reset_mock()
             client.list_posts.return_value = listed(state)
             service.create_x_post(
@@ -2660,7 +2662,7 @@ class TestPostizX:
                 avatar_id=AVATAR_A,
                 post_type="update",
                 content="  Edited  ",
-                publish_date="2026-09-23T15:30:00Z",
+                publish_date="2099-01-01T15:30:00Z",
                 post_id="px",
             )
             client.get_integration_settings.assert_called_once_with("pos_token_a", "x-a")
@@ -2675,6 +2677,14 @@ class TestPostizX:
                 "who_can_reply_post": "everyone",
             }
             assert payload["posts"][0]["integration"]["id"] == "x-a"
+            if state == "QUEUE":
+                client.change_post_status.assert_called_once_with(
+                    "pos_token_a",
+                    "px",
+                    "schedule",
+                )
+            else:
+                client.change_post_status.assert_not_called()
 
         client.create_post.reset_mock()
         client.get_integration_settings.reset_mock()
@@ -2685,7 +2695,7 @@ class TestPostizX:
                 avatar_id=AVATAR_A,
                 post_type="update",
                 content="Edit",
-                publish_date="2026-09-23T15:30:00Z",
+                publish_date="2099-01-01T15:30:00Z",
                 post_id="px",
             )
         client.get_integration_settings.assert_not_called()
@@ -2697,7 +2707,7 @@ class TestPostizX:
                 avatar_id=AVATAR_A,
                 post_type="update",
                 content="Edit",
-                publish_date="2026-09-23T15:30:00Z",
+                publish_date="2099-01-01T15:30:00Z",
             )
         with pytest.raises(PostizBadRequestError, match="first post only"):
             service.create_x_post(
@@ -2705,16 +2715,105 @@ class TestPostizX:
                 avatar_id=AVATAR_A,
                 post_type="update",
                 content="Edit",
-                publish_date="2026-09-23T15:30:00Z",
+                publish_date="2099-01-01T15:30:00Z",
                 post_id="px",
                 thread=("Edit", "Reply"),
             )
 
-    def test_x_delete_allows_draft_and_scheduled_only(self) -> None:
+    def test_x_now_with_post_id_publishes_existing_queue_post(self) -> None:
+        service, client, _repository, _settings_obj = self._ready()
+        client.list_posts.return_value = [
+            _raw_post(
+                post_id="px",
+                content="Old",
+                integration_id="x-a",
+                state="QUEUE",
+            ),
+        ]
+        service.create_x_post(
+            contos_user_id=USER_A,
+            avatar_id=AVATAR_A,
+            post_type="now",
+            content="Go live",
+            publish_date="2026-10-18T12:00:00Z",
+            post_id="px",
+        )
+        payload = client.create_post.call_args.args[1]
+        assert payload["type"] == "now"
+        assert payload["posts"][0]["value"][0]["id"] == "px"
+        assert payload["posts"][0]["value"][0]["content"] == "Go live"
+        client.change_post_status.assert_not_called()
+
+    def test_x_update_with_past_publish_date_coerces_to_now(self) -> None:
+        service, client, _repository, _settings_obj = self._ready()
+        client.list_posts.return_value = [
+            _raw_post(
+                post_id="px",
+                content="Old",
+                integration_id="x-a",
+                state="QUEUE",
+            ),
+        ]
+        service.create_x_post(
+            contos_user_id=USER_A,
+            avatar_id=AVATAR_A,
+            post_type="update",
+            content="Immediate",
+            publish_date="2020-01-01T00:00:00Z",
+            post_id="px",
+        )
+        payload = client.create_post.call_args.args[1]
+        assert payload["type"] == "now"
+        assert payload["posts"][0]["value"][0]["id"] == "px"
+        client.change_post_status.assert_not_called()
+
+    def test_linkedin_update_rearms_queue_and_now_with_post_id(self) -> None:
+        settings = _settings()
+        client = MagicMock()
+        repository = MagicMock()
+        repository.get_connection.return_value = _connection(
+            settings=settings,
+            avatar_id=AVATAR_A,
+            integration_id="li-a",
+            token=b"pos_token_a",
+        )
+        service = _posts_service(settings=settings, client=client, repository=repository)
+        client.list_posts.return_value = [
+            _raw_post(post_id="pa", content="A", integration_id="li-a", state="QUEUE"),
+        ]
+        client.create_post.return_value = [{"postId": "pa"}]
+
+        service.create_or_update_post(
+            contos_user_id=USER_A,
+            avatar_id=AVATAR_A,
+            post_type="update",
+            content="Rescheduled",
+            publish_date="2099-06-01T12:00:00Z",
+            post_id="pa",
+        )
+        assert client.create_post.call_args.args[1]["type"] == "update"
+        client.change_post_status.assert_called_once_with("pos_token_a", "pa", "schedule")
+
+        client.create_post.reset_mock()
+        client.change_post_status.reset_mock()
+        service.create_or_update_post(
+            contos_user_id=USER_A,
+            avatar_id=AVATAR_A,
+            post_type="now",
+            content="Publish existing",
+            publish_date="2026-10-18T12:00:00Z",
+            post_id="pa",
+        )
+        payload = client.create_post.call_args.args[1]
+        assert payload["type"] == "now"
+        assert payload["posts"][0]["value"][0]["id"] == "pa"
+        client.change_post_status.assert_not_called()
+
+    def test_x_delete_allows_draft_scheduled_and_failed(self) -> None:
         service, client, _repository, _settings_obj = self._ready()
         client.delete_post.return_value = {"id": "px"}
 
-        for state in ("DRAFT", "QUEUE"):
+        for state in ("DRAFT", "QUEUE", "ERROR"):
             client.delete_post.reset_mock()
             client.list_posts.return_value = [
                 _raw_post(
@@ -2740,7 +2839,7 @@ class TestPostizX:
                 state="PUBLISHED",
             ),
         ]
-        with pytest.raises(PostizBadRequestError, match="Only draft and scheduled"):
+        with pytest.raises(PostizBadRequestError, match="already published"):
             service.delete_post(
                 contos_user_id=USER_A,
                 avatar_id=AVATAR_A,
