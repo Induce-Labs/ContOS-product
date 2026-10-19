@@ -219,6 +219,10 @@ Apply all Postiz SQL migrations to ContOS Supabase before testing. Postiz must e
 
 Connect LinkedIn / Connect X opens a short prep dialog (`connectAccountHint`) that the authorization may use the account already signed into the browser; the tip is not shown as permanent copy under the account rows.
 
+### Agents chat (LinkedIn plain drafts)
+
+Plain single LinkedIn drafts in Agents chat can be edited, attach media, save as draft, schedule, or publish now via the same Postiz APIs (`createPostizPost`, `uploadPostizMedia`, `getPostizStatus`, `startPostizConnect`). See `Frontend/docs/agent-output-rendering.md`.
+
 ## Security
 
 - Ownership: `verify_avatar_owner` before every connect/status/claim/posts/disconnect

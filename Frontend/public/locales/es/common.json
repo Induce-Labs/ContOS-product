@@ -421,6 +421,13 @@
     "sendAria": "Enviar",
     "sendingAria": "Enviando",
     "respondingAria": "ContOS está respondiendo",
+    "waitingMessages": {
+      "oneMoment": "Un momento…",
+      "workingOnThat": "Trabajando en eso…",
+      "findingAngle": "Buscando el ángulo adecuado…",
+      "puttingTogether": "Montando la respuesta…",
+      "almostReady": "Casi listo…"
+    },
     "chatSyncPrefix": "Sincronización de chat: {{message}}",
     "sorryPrefix": "Lo siento — {{message}}",
     "backToDashboard": "Volver al panel",
@@ -540,7 +547,28 @@
       }
     },
     "translating": "Traduciendo…",
-    "translationFailed": "Error de traducción. Mostrando el original en inglés."
+    "translationFailed": "Error de traducción. Mostrando el original en inglés.",
+    "draftComposer": {
+      "editLabel": "Editar borrador de la publicación",
+      "placeholder": "Edita tu publicación…",
+      "saveDraft": "Guardar borrador",
+      "schedule": "Programar",
+      "schedulePost": "Programar publicación",
+      "publishNow": "Publicar ahora",
+      "date": "Fecha",
+      "time": "Hora",
+      "connectBeforeSchedule": "Conecta una plataforma de publicación antes de programar.",
+      "connecting": "Conectando…",
+      "contentRequired": "Añade texto antes de guardar o programar.",
+      "whenRequired": "Elige una fecha y hora para programar.",
+      "savedDraft": "Borrador guardado.",
+      "scheduled": "Publicación programada.",
+      "publishedNow": "Publicación publicada.",
+      "viewCalendar": "Ver en el calendario",
+      "timezoneShown": "Horarios en {{zone}}.",
+      "charCountOf": "{{count}}/{{limit}}",
+      "xSoftLimitHint": "En X suele funcionar mejor con menos de {{limit}} caracteres."
+    }
   },
   "profiling": {
     "loadingQuestions": "Cargando preguntas de perfilado…",

@@ -47,6 +47,7 @@ import {
 } from '../lib/draftSuggestions'
 import contosMark from '../assets/contos-mark.png'
 import contosMarkDark from '../assets/image.png'
+import { AgentRespondingIndicator } from '../components/agents/AgentRespondingIndicator'
 import { ChatMessageBubble } from '../components/agents/ChatMessageBubble'
 import { buildChatHistoryForInvoke } from '../lib/agentChatMemory'
 import { resolveInvokeTaggedAvatarIds } from '../lib/agentMentions'
@@ -208,6 +209,19 @@ export function AgentsPage() {
   tRef.current = t
 
   const showResponding = streaming || awaitingCatchUp
+  const latestAssistant = (() => {
+    for (let i = messages.length - 1; i >= 0; i -= 1) {
+      if (messages[i]?.role === 'assistant') {
+        return messages[i]
+      }
+    }
+    return null
+  })()
+  const hasMeaningfulAssistantContent = Boolean(
+    latestAssistant &&
+      (resolveAssistantOutput(latestAssistant) || latestAssistant.content.trim().length > 0),
+  )
+  const showWaitingIndicator = showResponding && !hasMeaningfulAssistantContent
 
   useEffect(() => {
     try {
@@ -1284,31 +1298,18 @@ export function AgentsPage() {
                       taggedAvatarNames={message.taggedAvatarNames}
                       agentType={message.agentType}
                       structuredOutput={structuredOutput}
+                      avatarId={projectId}
                     />
                   </div>
                 )
               })}
-            {showResponding ? (
-              <div
-                className="flex items-center gap-2.5 px-4 py-0.5 sm:px-8"
-                aria-live="polite"
-                aria-label={t('agents.respondingAria')}
-              >
-                <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-canvas-raised shadow-[0_2px_8px_rgba(28,27,41,0.06)] ring-1 ring-border-hairline">
-                  <img
-                    src={contosMark}
-                    alt=""
-                    aria-hidden="true"
-                    className="contos-mark-loading h-5 w-5 object-contain dark:hidden"
-                  />
-                  <img
-                    src={contosMarkDark}
-                    alt=""
-                    aria-hidden="true"
-                    className="contos-mark-loading hidden h-5 w-5 object-contain dark:block"
-                  />
-                </span>
-              </div>
+            {showWaitingIndicator ? (
+              <AgentRespondingIndicator
+                active={showWaitingIndicator}
+                markSrc={contosMark}
+                markDarkSrc={contosMarkDark}
+                ariaLabel={t('agents.respondingAria')}
+              />
             ) : null}
             <div ref={bottomRef} />
           </div>

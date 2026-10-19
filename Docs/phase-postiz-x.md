@@ -47,6 +47,10 @@ An omitted `posts` field keeps a single `value` item. When `posts` is set, each 
 
 X app credentials stay on the Postiz host (`X_API_KEY`, `X_API_SECRET`, `X_URL`). They are not added to ContOS.
 
+## Agents chat (X plain drafts)
+
+Plain single X drafts in Agents chat can be edited, attach media (4 images XOR 1 MP4), save as draft, schedule, or publish now using `platform: "x"` on the existing Postiz create endpoint. Connection uses the X OAuth popup (`platform=x`). Soft character hint at 280; no hard frontend block. See `Frontend/docs/agent-output-rendering.md`.
+
 ## Calendar UI
 
 The Calendar page keeps the LinkedIn connection card and adds a separate X card for the same avatar. Switching avatars reloads both. Disconnect X calls `DELETE /api/postiz/integration?platform=x` and does not disconnect LinkedIn.

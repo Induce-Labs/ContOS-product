@@ -8,6 +8,8 @@ import {
   splitSuggestions,
   stripSuggestionMarkers,
 } from '../../lib/draftSuggestions'
+import { plainDraftPrefillText } from '../../lib/chatDraftPrefill'
+import { ChatDraftComposer } from './ChatDraftComposer'
 import { FormattedAssistantText } from './FormattedAssistantText'
 
 type UnknownRecord = Record<string, unknown>
@@ -380,13 +382,28 @@ function linkedInDraftText(idea: UnknownRecord): string {
   return asString(idea.post_structure) || asString(idea.hook)
 }
 
-function LinkedInPlainDraft({ output }: { output: UnknownRecord }) {
+function LinkedInPlainDraft({
+  output,
+  avatarId,
+}: {
+  output: UnknownRecord
+  avatarId?: string
+}) {
   const { t } = useTranslation()
   const ideas = Array.isArray(output.post_ideas) ? output.post_ideas : []
   const first = asRecord(ideas[0]) ?? {}
   const copy = linkedInDraftText(first)
   const [copied, setCopied] = useState(false)
   if (!copy) return null
+  if (avatarId) {
+    return (
+      <ChatDraftComposer
+        avatarId={avatarId}
+        platform="linkedin"
+        initialContent={plainDraftPrefillText('linkedin', output)}
+      />
+    )
+  }
   return (
     <div className="space-y-3">
       <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink">
@@ -523,13 +540,28 @@ function twitterDraftText(tweet: UnknownRecord): string {
   return asString(tweet.full_tweet) || asString(tweet.hook)
 }
 
-function TwitterPlainDraft({ output }: { output: UnknownRecord }) {
+function TwitterPlainDraft({
+  output,
+  avatarId,
+}: {
+  output: UnknownRecord
+  avatarId?: string
+}) {
   const { t } = useTranslation()
   const tweets = Array.isArray(output.tweet_ideas) ? output.tweet_ideas : []
   const first = asRecord(tweets[0]) ?? {}
   const copy = twitterDraftText(first)
   const [copied, setCopied] = useState(false)
   if (!copy) return null
+  if (avatarId) {
+    return (
+      <ChatDraftComposer
+        avatarId={avatarId}
+        platform="x"
+        initialContent={plainDraftPrefillText('twitter', output)}
+      />
+    )
+  }
   return (
     <div className="space-y-3">
       <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink">
@@ -693,13 +725,19 @@ function PlatformDraftBody({
   agent,
   output,
   plain,
+  avatarId,
 }: {
   agent: 'instagram' | 'linkedin' | 'twitter'
   output: UnknownRecord
   plain: boolean
+  avatarId?: string
 }) {
-  if (plain && agent === 'linkedin') return <LinkedInPlainDraft output={output} />
-  if (plain && agent === 'twitter') return <TwitterPlainDraft output={output} />
+  if (plain && agent === 'linkedin') {
+    return <LinkedInPlainDraft output={output} avatarId={avatarId} />
+  }
+  if (plain && agent === 'twitter') {
+    return <TwitterPlainDraft output={output} avatarId={avatarId} />
+  }
   if (plain && agent === 'instagram') {
     return <InstagramRichOutputView output={{ ...output, presentation_mode: 'copy' }} />
   }
@@ -712,10 +750,12 @@ export function AgentOutputRenderer({
   agentType,
   output,
   streamingText,
+  avatarId,
 }: {
   agentType?: AgentType
   output: unknown
   streamingText?: string
+  avatarId?: string
 }) {
   const { t } = useTranslation()
 
@@ -755,9 +795,15 @@ export function AgentOutputRenderer({
           : draftKind === 'plan'
             ? t('agents.output.weeklyPlan')
             : ''
-      const intro = <StrategistIntro output={record} />
-      const hasIntro = Boolean(asString(record.reply) || (Array.isArray(record.ideas) && record.ideas.length))
+      // Plain single drafts: hide the strategist reply essay; show editable draft only.
+      const showIntro = !plain
+      const intro = showIntro ? <StrategistIntro output={record} /> : null
+      const hasIntro = Boolean(
+        showIntro &&
+          (asString(record.reply) || (Array.isArray(record.ideas) && record.ideas.length)),
+      )
       const nextQuestion = asString(record.next_question)
+      const showSuggestionHint = showBody && !plain && outputHasSuggestions(record)
 
       return (
         <div className="space-y-4">
@@ -769,9 +815,14 @@ export function AgentOutputRenderer({
             </p>
           ) : null}
           {showBody ? (
-            <PlatformDraftBody agent={agent} output={record} plain={plain} />
+            <PlatformDraftBody
+              agent={agent}
+              output={record}
+              plain={plain}
+              avatarId={avatarId}
+            />
           ) : null}
-          {showBody && outputHasSuggestions(record) ? (
+          {showSuggestionHint ? (
             <p className="text-xs text-ink-muted">{t('agents.output.suggestionHint')}</p>
           ) : null}
           {showBody && nextQuestion ? <Hairline /> : null}

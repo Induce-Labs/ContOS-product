@@ -421,6 +421,13 @@
     "sendAria": "भेजें",
     "sendingAria": "भेजा जा रहा है",
     "respondingAria": "ContOS उत्तर दे रहा है",
+    "waitingMessages": {
+      "oneMoment": "एक क्षण…",
+      "workingOnThat": "इस पर काम हो रहा है…",
+      "findingAngle": "सही कोण ढूँढ रहे हैं…",
+      "puttingTogether": "इसे जोड़ रहे हैं…",
+      "almostReady": "लगभग तैयार…"
+    },
     "chatSyncPrefix": "चैट सिंक: {{message}}",
     "sorryPrefix": "क्षमा करें — {{message}}",
     "backToDashboard": "डैशबोर्ड पर वापस जाएं",
@@ -540,7 +547,28 @@
       }
     },
     "translating": "अनुवाद कर रहा है…",
-    "translationFailed": "अनुवाद विफल। मूल अंग्रेजी दिखा रहा है।"
+    "translationFailed": "अनुवाद विफल। मूल अंग्रेजी दिखा रहा है।",
+    "draftComposer": {
+      "editLabel": "पोस्ट ड्राफ्ट संपादित करें",
+      "placeholder": "अपनी पोस्ट संपादित करें…",
+      "saveDraft": "ड्राफ्ट सहेजें",
+      "schedule": "शेड्यूल",
+      "schedulePost": "पोस्ट शेड्यूल करें",
+      "publishNow": "अभी प्रकाशित करें",
+      "date": "तारीख",
+      "time": "समय",
+      "connectBeforeSchedule": "शेड्यूल करने से पहले एक प्रकाशन प्लेटफ़ॉर्म कनेक्ट करें।",
+      "connecting": "कनेक्ट हो रहा है…",
+      "contentRequired": "सहेजने या शेड्यूल करने से पहले पोस्ट टेक्स्ट जोड़ें।",
+      "whenRequired": "शेड्यूल के लिए तारीख और समय चुनें।",
+      "savedDraft": "ड्राफ्ट सहेजा गया।",
+      "scheduled": "पोस्ट शेड्यूल हो गई।",
+      "publishedNow": "पोस्ट प्रकाशित हो गई।",
+      "viewCalendar": "कैलेंडर में देखें",
+      "timezoneShown": "समय {{zone}} में दिखाए गए हैं।",
+      "charCountOf": "{{count}}/{{limit}}",
+      "xSoftLimitHint": "X पर आमतौर पर {{limit}} अक्षरों से कम बेहतर रहता है।"
+    }
   },
   "profiling": {
     "loadingQuestions": "प्रोफाइलिंग प्रश्न लोड हो रहे हैं…",

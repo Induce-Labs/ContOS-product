@@ -38,7 +38,7 @@
 - Name comes from Supabase auth metadata (`full_name` / `name` / `given_name`), else the email local-part
 - Not rendered as a chat bubble; conversation bubbles appear after the first user message
 - Empty threads refresh the greeting on open so the time-of-day line stays current
-- While the agent is responding, pipeline stages (e.g. `calling_llm`) are hidden; a pulsing ContOS mark is shown instead
+- While the agent is responding and no assistant content has arrived yet, pipeline stages (e.g. `calling_llm`) are hidden; a pulsing ContOS mark is shown with rotating waiting messages (localized, ~2.5s fade). The indicator is removed as soon as the first meaningful content or structured output appears, or when the stream/errors end.
 - In **Chat**, saying `Instagram` / `LinkedIn` asks for confirmation; `yes` auto-switches the agent chip
 - `isAgentsWelcomeMessage` keeps personalized (and legacy) welcome text out of LLM history
 

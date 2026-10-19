@@ -434,6 +434,28 @@ body {
   animation: contos-mark-pulse 1.1s ease-in-out infinite;
 }
 
+.agent-waiting-message {
+  transition: opacity 280ms ease;
+}
+
+.agent-waiting-message--in {
+  opacity: 1;
+}
+
+.agent-waiting-message--out {
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-waiting-message {
+    transition: none;
+  }
+
+  .agent-waiting-message--out {
+    opacity: 1;
+  }
+}
+
 @property --welcome-card-angle {
   syntax: "<angle>";
   inherits: false;

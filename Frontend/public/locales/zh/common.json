@@ -421,6 +421,13 @@
     "sendAria": "发送",
     "sendingAria": "正在发送",
     "respondingAria": "ContOS 正在响应",
+    "waitingMessages": {
+      "oneMoment": "稍等片刻…",
+      "workingOnThat": "正在处理…",
+      "findingAngle": "正在找合适的角度…",
+      "puttingTogether": "正在整理回复…",
+      "almostReady": "马上就好…"
+    },
     "chatSyncPrefix": "聊天同步: {{message}}",
     "sorryPrefix": "抱歉 — {{message}}",
     "backToDashboard": "返回仪表板",
@@ -540,7 +547,28 @@
       }
     },
     "translating": "正在翻译…",
-    "translationFailed": "翻译失败。显示原始英语。"
+    "translationFailed": "翻译失败。显示原始英语。",
+    "draftComposer": {
+      "editLabel": "编辑帖子草稿",
+      "placeholder": "编辑你的帖子…",
+      "saveDraft": "保存草稿",
+      "schedule": "排期",
+      "schedulePost": "排期发布",
+      "publishNow": "立即发布",
+      "date": "日期",
+      "time": "时间",
+      "connectBeforeSchedule": "排期前请先连接发布平台。",
+      "connecting": "正在连接…",
+      "contentRequired": "保存或排期前请填写帖子正文。",
+      "whenRequired": "请选择排期的日期和时间。",
+      "savedDraft": "草稿已保存。",
+      "scheduled": "帖子已排期。",
+      "publishedNow": "帖子已发布。",
+      "viewCalendar": "在日历中查看",
+      "timezoneShown": "时间显示为 {{zone}}。",
+      "charCountOf": "{{count}}/{{limit}}",
+      "xSoftLimitHint": "X 上通常不超过 {{limit}} 个字符效果更好。"
+    }
   },
   "profiling": {
     "loadingQuestions": "正在加载分析问题…",

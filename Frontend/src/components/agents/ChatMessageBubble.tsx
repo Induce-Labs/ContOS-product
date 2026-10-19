@@ -10,6 +10,7 @@ type ChatMessageBubbleProps = {
   taggedAvatarNames?: string[]
   agentType?: AgentType
   structuredOutput?: unknown | null
+  avatarId?: string
 }
 
 export function ChatMessageBubble({
@@ -18,6 +19,7 @@ export function ChatMessageBubble({
   taggedAvatarNames,
   agentType,
   structuredOutput,
+  avatarId,
 }: ChatMessageBubbleProps) {
   const isUser = role === 'user'
 
@@ -42,7 +44,11 @@ export function ChatMessageBubble({
         </div>
       ) : null}
       {structuredOutput ? (
-        <AgentOutputRenderer agentType={agentType} output={structuredOutput} />
+        <AgentOutputRenderer
+          agentType={agentType}
+          output={structuredOutput}
+          avatarId={avatarId}
+        />
       ) : isUser ? (
         content
       ) : (

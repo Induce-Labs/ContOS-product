@@ -421,6 +421,13 @@
     "sendAria": "Send",
     "sendingAria": "Sending",
     "respondingAria": "ContOS is responding",
+    "waitingMessages": {
+      "oneMoment": "One moment…",
+      "workingOnThat": "Working on that…",
+      "findingAngle": "Finding the right angle…",
+      "puttingTogether": "Putting this together…",
+      "almostReady": "Almost ready…"
+    },
     "chatSyncPrefix": "Chat sync: {{message}}",
     "sorryPrefix": "Sorry — {{message}}",
     "backToDashboard": "Back to dashboard",
@@ -540,7 +547,28 @@
       }
     },
     "translating": "Translating…",
-    "translationFailed": "Translation failed. Showing original English."
+    "translationFailed": "Translation failed. Showing original English.",
+    "draftComposer": {
+      "editLabel": "Edit post draft",
+      "placeholder": "Edit your post…",
+      "saveDraft": "Save draft",
+      "schedule": "Schedule",
+      "schedulePost": "Schedule post",
+      "publishNow": "Publish now",
+      "date": "Date",
+      "time": "Time",
+      "connectBeforeSchedule": "Connect a publishing platform before scheduling.",
+      "connecting": "Connecting…",
+      "contentRequired": "Add post text before saving or scheduling.",
+      "whenRequired": "Choose a date and time to schedule.",
+      "savedDraft": "Draft saved.",
+      "scheduled": "Post scheduled.",
+      "publishedNow": "Post published.",
+      "viewCalendar": "View in Calendar",
+      "timezoneShown": "Times shown in {{zone}}.",
+      "charCountOf": "{{count}}/{{limit}}",
+      "xSoftLimitHint": "X typically fits best under {{limit}} characters."
+    }
   },
   "profiling": {
     "loadingQuestions": "Loading profiling questions…",

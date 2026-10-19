@@ -421,6 +421,13 @@
     "sendAria": "Envoyer",
     "sendingAria": "Envoi",
     "respondingAria": "ContOS est en train de répondre",
+    "waitingMessages": {
+      "oneMoment": "Un instant…",
+      "workingOnThat": "J'y travaille…",
+      "findingAngle": "Je cherche le bon angle…",
+      "puttingTogether": "J'assemble la réponse…",
+      "almostReady": "Presque prêt…"
+    },
     "chatSyncPrefix": "Synchronisation de chat : {{message}}",
     "sorryPrefix": "Désolé — {{message}}",
     "backToDashboard": "Retour au tableau de bord",
@@ -540,7 +547,28 @@
       }
     },
     "translating": "Traduction en cours…",
-    "translationFailed": "Échec de la traduction. Affichage de l'anglais original."
+    "translationFailed": "Échec de la traduction. Affichage de l'anglais original.",
+    "draftComposer": {
+      "editLabel": "Modifier le brouillon",
+      "placeholder": "Modifiez votre publication…",
+      "saveDraft": "Enregistrer le brouillon",
+      "schedule": "Programmer",
+      "schedulePost": "Programmer la publication",
+      "publishNow": "Publier maintenant",
+      "date": "Date",
+      "time": "Heure",
+      "connectBeforeSchedule": "Connectez une plateforme de publication avant de programmer.",
+      "connecting": "Connexion…",
+      "contentRequired": "Ajoutez du texte avant d'enregistrer ou de programmer.",
+      "whenRequired": "Choisissez une date et une heure pour programmer.",
+      "savedDraft": "Brouillon enregistré.",
+      "scheduled": "Publication programmée.",
+      "publishedNow": "Publication publiée.",
+      "viewCalendar": "Voir dans le calendrier",
+      "timezoneShown": "Horaires indiqués en {{zone}}.",
+      "charCountOf": "{{count}}/{{limit}}",
+      "xSoftLimitHint": "Sur X, moins de {{limit}} caractères fonctionne généralement mieux."
+    }
   },
   "profiling": {
     "loadingQuestions": "Chargement des questions de profilage…",
