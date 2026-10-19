@@ -33,6 +33,39 @@ Rules on suggestions:
 - **Hidden in the UI:** thesis / Angle, per-item and playbook reasoning, and the AI-generated draft disclaimer footer. The backend no longer injects the disclaimer.
 - **Language consistency (en / hi / es / fr / zh):** RESPONSE LANGUAGE rules ban English ContOS jargon in non-English prose; `suggestionHint` and confirm detection use localized confirm verbs; content-type badges are translated via `agents.output.contentTypes`.
 
+## Locked reply format (Shape A & Shape B)
+
+All agent responses now enforce one of two strict format shapes to maintain consistency and clarity:
+
+**Shape A (Draft responses):**
+- Short intro sentence acknowledging the request (e.g., "Got it, LinkedIn. Here's a draft...")
+- Hairline divider (`---`)
+- Plain draft body with NO "POST IDEAS" or content-type badge chrome
+- Hairline divider (`---`)
+- Follow-up question in left-border quote style
+
+**Shape B (Strategy/Insights responses):**
+- Short intro sentence
+- Scannable body with **bold labels:** followed by bullets or short sentences
+- Brief synthesis sentence
+- Follow-up question
+
+**Strict eliminations:**
+- No thesis blocks or reasoning paragraphs in replies
+- No disclaimer text
+- No em dashes (`—`) or en dashes (`–`) anywhere
+- No ellipsis (`...`) or dot dividers (`···`)
+
+**Platform redirect messages:**
+Concise switch indicators across all 5 languages:
+- **en:** `Agent switched to {{platform}}`
+- **hi:** `एजेंट {{platform}} पर स्विच किया गया`
+- **es:** `Cambiado a {{platform}}`
+- **fr:** `Basculé vers {{platform}}`
+- **zh:** `已切换至 {{platform}} 助手`
+
+These rules are locked in all backend prompts (`strategist_core.py`, `chatbot.py`, `linkedin.py`, `instagram.py`, `twitter.py`) and enforced regardless of user queries. The model cannot deflect or override these format requirements.
+
 ## Other behavior
 
 - **Weekly plan:** 2-3 posts, each a full draft with its own opening and closing line.

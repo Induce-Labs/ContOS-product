@@ -439,7 +439,7 @@
     },
     "platformRedirect": {
       "ask": "Voulez-vous que je vous bascule vers l'agent {{platform}} ? Répondez yes pour continuer.",
-      "switched": "Basculé vers {{platform}}. Demandez-moi des stratégies, idées de contenu ou comparaisons.",
+      "switched": "Basculé vers {{platform}}",
       "stayed": "D'accord — on reste en Chat. Comment puis-je vous aider ?",
       "alreadyOn": "Vous êtes déjà sur l'agent {{platform}}."
     },

@@ -376,6 +376,37 @@ function InstagramOutputView({ output }: { output: UnknownRecord }) {
   return <InstagramRichOutputView output={output} />
 }
 
+function linkedInDraftText(idea: UnknownRecord): string {
+  return asString(idea.post_structure) || asString(idea.hook)
+}
+
+function LinkedInPlainDraft({ output }: { output: UnknownRecord }) {
+  const { t } = useTranslation()
+  const ideas = Array.isArray(output.post_ideas) ? output.post_ideas : []
+  const first = asRecord(ideas[0]) ?? {}
+  const copy = linkedInDraftText(first)
+  const [copied, setCopied] = useState(false)
+  if (!copy) return null
+  return (
+    <div className="space-y-3">
+      <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink">
+        <DraftText text={copy} />
+      </p>
+      <button
+        type="button"
+        className="text-xs text-accent-primary"
+        onClick={() => {
+          void navigator.clipboard.writeText(stripSuggestionMarkers(copy))
+          setCopied(true)
+          window.setTimeout(() => setCopied(false), 1200)
+        }}
+      >
+        {copied ? t('agents.output.copied') : t('agents.output.copyPost')}
+      </button>
+    </div>
+  )
+}
+
 function LinkedInOutputView({ output }: { output: UnknownRecord }) {
   const { t } = useTranslation()
   const ideas = Array.isArray(output.post_ideas) ? output.post_ideas : []
@@ -488,6 +519,37 @@ function PlaybookOutputView({ output }: { output: UnknownRecord }) {
   )
 }
 
+function twitterDraftText(tweet: UnknownRecord): string {
+  return asString(tweet.full_tweet) || asString(tweet.hook)
+}
+
+function TwitterPlainDraft({ output }: { output: UnknownRecord }) {
+  const { t } = useTranslation()
+  const tweets = Array.isArray(output.tweet_ideas) ? output.tweet_ideas : []
+  const first = asRecord(tweets[0]) ?? {}
+  const copy = twitterDraftText(first)
+  const [copied, setCopied] = useState(false)
+  if (!copy) return null
+  return (
+    <div className="space-y-3">
+      <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink">
+        <DraftText text={copy} />
+      </p>
+      <button
+        type="button"
+        className="text-xs text-accent-primary"
+        onClick={() => {
+          void navigator.clipboard.writeText(stripSuggestionMarkers(copy))
+          setCopied(true)
+          window.setTimeout(() => setCopied(false), 1200)
+        }}
+      >
+        {copied ? t('agents.output.copied') : t('agents.output.copyPost')}
+      </button>
+    </div>
+  )
+}
+
 function TwitterOutputView({ output }: { output: UnknownRecord }) {
   const { t } = useTranslation()
   const tweets = Array.isArray(output.tweet_ideas) ? output.tweet_ideas : []
@@ -565,12 +627,43 @@ function hasPlatformContent(output: UnknownRecord): boolean {
   )
 }
 
-function StrategistHeader({ output }: { output: UnknownRecord }) {
+function platformItemCount(output: UnknownRecord, agent: AgentType): number {
+  if (agent === 'linkedin') {
+    return Array.isArray(output.post_ideas) ? output.post_ideas.length : 0
+  }
+  if (agent === 'twitter') {
+    return Array.isArray(output.tweet_ideas) ? output.tweet_ideas.length : 0
+  }
+  if (agent === 'instagram') {
+    return Array.isArray(output.content_calendar) ? output.content_calendar.length : 0
+  }
+  return 0
+}
+
+/** Single finished draft: plain body, no POST IDEAS / TEXT chrome. */
+function isPlainSingleDraft(output: UnknownRecord, agent: AgentType): boolean {
+  const kind = asString(output.draft_kind)
+  if (kind !== 'draft' && kind !== 'example') return false
+  return platformItemCount(output, agent) === 1
+}
+
+function Hairline() {
+  return <hr className="border-0 border-t border-border-hairline" />
+}
+
+function NextQuestion({ text }: { text: string }) {
+  if (!text.trim()) return null
+  return (
+    <p className="border-l-2 border-accent-primary pl-3 text-sm text-ink">{text}</p>
+  )
+}
+
+/** Reply + optional idea list only. Follow-up renders after the draft. */
+function StrategistIntro({ output }: { output: UnknownRecord }) {
   const { t } = useTranslation()
   const reply = asString(output.reply)
-  const nextQuestion = asString(output.next_question)
   const ideas = Array.isArray(output.ideas) ? output.ideas : []
-  if (!reply && !nextQuestion && ideas.length === 0) return null
+  if (!reply && ideas.length === 0) return null
 
   return (
     <div className="space-y-3">
@@ -592,11 +685,27 @@ function StrategistHeader({ output }: { output: UnknownRecord }) {
           </ol>
         </Section>
       ) : null}
-      {nextQuestion ? (
-        <p className="border-l-2 border-accent-primary pl-3 text-sm text-ink">{nextQuestion}</p>
-      ) : null}
     </div>
   )
+}
+
+function PlatformDraftBody({
+  agent,
+  output,
+  plain,
+}: {
+  agent: 'instagram' | 'linkedin' | 'twitter'
+  output: UnknownRecord
+  plain: boolean
+}) {
+  if (plain && agent === 'linkedin') return <LinkedInPlainDraft output={output} />
+  if (plain && agent === 'twitter') return <TwitterPlainDraft output={output} />
+  if (plain && agent === 'instagram') {
+    return <InstagramRichOutputView output={{ ...output, presentation_mode: 'copy' }} />
+  }
+  if (agent === 'instagram') return <InstagramOutputView output={output} />
+  if (agent === 'linkedin') return <LinkedInOutputView output={output} />
+  return <TwitterOutputView output={output} />
 }
 
 export function AgentOutputRenderer({
@@ -638,14 +747,7 @@ export function AgentOutputRenderer({
     if (agent === 'playbook') return <PlaybookOutputView output={record} />
     if (agent === 'instagram' || agent === 'linkedin' || agent === 'twitter') {
       const showBody = hasPlatformContent(record) || !asString(record.reply)
-      const view =
-        agent === 'instagram' ? (
-          <InstagramOutputView output={record} />
-        ) : agent === 'linkedin' ? (
-          <LinkedInOutputView output={record} />
-        ) : (
-          <TwitterOutputView output={record} />
-        )
+      const plain = isPlainSingleDraft(record, agent)
       const draftKind = asString(record.draft_kind)
       const draftLabel =
         draftKind === 'example'
@@ -653,18 +755,27 @@ export function AgentOutputRenderer({
           : draftKind === 'plan'
             ? t('agents.output.weeklyPlan')
             : ''
+      const intro = <StrategistIntro output={record} />
+      const hasIntro = Boolean(asString(record.reply) || (Array.isArray(record.ideas) && record.ideas.length))
+      const nextQuestion = asString(record.next_question)
+
       return (
         <div className="space-y-4">
-          <StrategistHeader output={record} />
-          {showBody && draftLabel && hasPlatformContent(record) ? (
+          {intro}
+          {showBody && hasIntro ? <Hairline /> : null}
+          {showBody && draftLabel && !plain && hasPlatformContent(record) ? (
             <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">
               {draftLabel}
             </p>
           ) : null}
-          {showBody ? view : null}
+          {showBody ? (
+            <PlatformDraftBody agent={agent} output={record} plain={plain} />
+          ) : null}
           {showBody && outputHasSuggestions(record) ? (
             <p className="text-xs text-ink-muted">{t('agents.output.suggestionHint')}</p>
           ) : null}
+          {showBody && nextQuestion ? <Hairline /> : null}
+          <NextQuestion text={nextQuestion} />
         </div>
       )
     }

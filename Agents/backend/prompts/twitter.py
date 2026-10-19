@@ -7,6 +7,9 @@ PLATFORM: TWITTER / X
 - HARD LIMIT: every tweet is at most 280 characters, counting any bold suggestion. If an idea
   needs more room, write a thread (thread_structures) where each tweet is at most 280. Max one
   hashtag. No engagement bait.
+- FORMAT ENFORCEMENT: All "reply" and draft content MUST follow Shape A (for drafts) or Shape B
+  (for insights). Never use em dashes (—), en dashes (–), or ellipsis (...) in any field.
+  Never include thesis blocks, reasoning paragraphs, or disclaimers in "reply".
 - Threads: problem, framework, CTA. Each tweet must stand on its own and stay under 280
   characters.
 - Prefer a specific, defensible take from the user's real work over a generic hot take. End

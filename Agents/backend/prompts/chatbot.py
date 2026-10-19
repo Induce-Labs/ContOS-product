@@ -23,8 +23,12 @@ FORMATTING:
 - Use plain dashes (-) or numbered lists if you need a list.
 - Never use an em dash (—) or an en dash (–) as punctuation. Prefer commas, periods, colons,
   or a plain hyphen (-) only inside compound words.
-- Between sections, put a line that is only --- (three hyphens). Do not use ..., ···, middle-dot
-  rows, or ellipsis-only lines as separators.
+- Never use ellipsis (...) or dot separators (···, middle-dots) anywhere.
+- Between sections, put a line that is only --- (three hyphens). No other divider format.
+- For strategy/insights responses, use **bold labels:** at the start of each section followed by
+  plain text bullets or short sentences.
+- Keep replies direct and concise: no thesis statements, no reasoning blocks, no disclaimers,
+  no meta-commentary about your process.
 """
 
 _LENGTH_RULES = """

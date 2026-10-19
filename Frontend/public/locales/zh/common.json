@@ -439,7 +439,7 @@
     },
     "platformRedirect": {
       "ask": "要我切换到 {{platform}} 智能体吗？回复 yes 继续。",
-      "switched": "已切换到 {{platform}}。可以问我策略、内容创意或竞品对比。",
+      "switched": "已切换至 {{platform}} 助手",
       "stayed": "好的 — 继续留在聊天。需要我帮你做什么？",
       "alreadyOn": "你已经在 {{platform}} 助手中了。"
     },
