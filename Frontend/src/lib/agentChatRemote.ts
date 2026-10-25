@@ -87,6 +87,24 @@ export async function upsertRemoteChatStore(
 }
 
 /**
+ * Delete every chat-history row for this user. RLS limits the delete to their rows.
+ * Raises AgentChatRemoteError with the Supabase message on failure.
+ */
+export async function deleteRemoteChatStores(userId: string): Promise<void> {
+  const id = userId.trim()
+  if (!id) {
+    throw new AgentChatRemoteError('user_id is required to delete chat history.')
+  }
+  const { error } = await supabase.from('agent_chat_stores').delete().eq('user_id', id)
+  if (error) {
+    throw new AgentChatRemoteError(
+      `Failed to delete chat history from Supabase (user_id=${id}): ${error.message}`,
+      error,
+    )
+  }
+}
+
+/**
  * Push every local agent chat store for this user to Supabase before sign-out.
  * Skips empty welcome-only stores. Raises on the first failed upsert.
  */

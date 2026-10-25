@@ -64,19 +64,60 @@ export function detectExplicitSwitchRequest(text: string): PlatformAgent | null 
   return null
 }
 
+const PLATFORM_PLAN_ORDER: PlatformAgent[] = ['linkedin', 'instagram', 'twitter']
+
+/**
+ * Platforms named in the message, in plan order (LinkedIn, Instagram, X).
+ * Empty when none are named.
+ */
+export function detectNamedPlatforms(text: string): PlatformAgent[] {
+  const trimmed = text.trim()
+  if (!trimmed) return []
+  const found = new Set<PlatformAgent>()
+  if (/\blinkedin\b/i.test(trimmed)) found.add('linkedin')
+  if (/\b(instagram|insta|ig)\b/i.test(trimmed)) found.add('instagram')
+  if (/\btwitter\b/i.test(trimmed) || /\bx\b/i.test(trimmed)) found.add('twitter')
+  return PLATFORM_PLAN_ORDER.filter((platform) => found.has(platform))
+}
+
 /**
  * When Chat is active and the message names exactly one platform, return that agent.
  * Zero or multiple named platforms (e.g. LinkedIn vs Instagram) returns null.
  */
 export function detectSingleNamedPlatform(text: string): PlatformAgent | null {
-  const trimmed = text.trim()
-  if (!trimmed) return null
-  const found = new Set<PlatformAgent>()
-  if (/\b(instagram|insta|ig)\b/i.test(trimmed)) found.add('instagram')
-  if (/\blinkedin\b/i.test(trimmed)) found.add('linkedin')
-  if (/\btwitter\b/i.test(trimmed) || /\bx\b/i.test(trimmed)) found.add('twitter')
-  if (found.size !== 1) return null
-  return [...found][0]
+  const named = detectNamedPlatforms(text)
+  return named.length === 1 ? named[0] : null
+}
+
+const MULTI_PLAN_AGENTS: ReadonlySet<string> = new Set([
+  'chatbot',
+  'linkedin',
+  'instagram',
+  'twitter',
+])
+
+/**
+ * Ordered platforms for a sequential plan when Chat or a content agent is
+ * selected and the message names two or more platforms. Otherwise null.
+ */
+export function multiPlanPlatforms(current: string, text: string): PlatformAgent[] | null {
+  if (!MULTI_PLAN_AGENTS.has(current)) return null
+  const named = detectNamedPlatforms(text)
+  return named.length >= 2 ? named : null
+}
+
+const CONTENT_AGENTS: ReadonlySet<string> = new Set(['linkedin', 'instagram', 'twitter'])
+
+/**
+ * When a content agent is selected and the message names exactly one other
+ * platform, return that platform so the chip and invoke switch to it.
+ * Same platform, none, two or more, or a non-content agent returns null.
+ */
+export function redirectTarget(current: string, text: string): PlatformAgent | null {
+  if (!CONTENT_AGENTS.has(current)) return null
+  const named = detectSingleNamedPlatform(text)
+  if (!named || named === current) return null
+  return named
 }
 
 export function isAffirmativeReply(text: string): boolean {

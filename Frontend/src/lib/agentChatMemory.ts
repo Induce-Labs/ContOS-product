@@ -31,16 +31,34 @@ function assistantMemoryText(message: MemorySourceMessage): string {
   return clip(message.content || '', MAX_ASSISTANT_CHARS)
 }
 
+const PLATFORM_AGENTS: ReadonlySet<AgentType> = new Set(['linkedin', 'instagram', 'twitter'])
+
+function isOtherPlatformSpecialist(
+  turnAgent: AgentType | undefined,
+  target: AgentType,
+): boolean {
+  if (!turnAgent || !PLATFORM_AGENTS.has(target) || !PLATFORM_AGENTS.has(turnAgent)) {
+    return false
+  }
+  return turnAgent !== target
+}
+
 /**
  * Build prior turns for the Agents invoke body (excludes the message about to be sent).
  * Skips the seeded welcome bubble and empty / error-only assistants.
+ * A specialist call drops turns that belong to a different specialist. Chat turns and
+ * turns with no agent stay. Chat itself keeps every turn.
  */
 export function buildChatHistoryForInvoke(
   messages: MemorySourceMessage[],
+  agentType?: AgentType,
 ): ChatHistoryTurn[] {
   const turns: ChatHistoryTurn[] = []
 
   for (const message of messages) {
+    if (agentType && isOtherPlatformSpecialist(message.agentType, agentType)) {
+      continue
+    }
     if (message.role === 'assistant' && isAgentsWelcomeMessage(message.content)) {
       continue
     }

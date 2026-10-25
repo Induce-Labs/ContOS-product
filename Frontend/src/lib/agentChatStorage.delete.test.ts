@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  canPersistChatForProject,
   deleteChatSession,
   type ChatStore,
   type StoredChatMessage,
@@ -76,5 +77,15 @@ describe('deleteChatSession', () => {
     expect(() => deleteChatSession(store, 'missing', welcome)).toThrow(
       'Chat session not found: missing',
     )
+  })
+})
+
+describe('canPersistChatForProject', () => {
+  it('allows persist only when the bound project matches the route', () => {
+    expect(canPersistChatForProject('avatar-a', 'avatar-a')).toBe(true)
+    expect(canPersistChatForProject('avatar-a', 'avatar-b')).toBe(false)
+    expect(canPersistChatForProject(null, 'avatar-a')).toBe(false)
+    expect(canPersistChatForProject('avatar-a', null)).toBe(false)
+    expect(canPersistChatForProject(undefined, undefined)).toBe(false)
   })
 })

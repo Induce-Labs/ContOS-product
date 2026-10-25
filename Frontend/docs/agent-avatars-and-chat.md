@@ -39,7 +39,9 @@
 - Not rendered as a chat bubble; conversation bubbles appear after the first user message
 - Empty threads refresh the greeting on open so the time-of-day line stays current
 - While the agent is responding and no assistant content has arrived yet, pipeline stages (e.g. `calling_llm`) are hidden; a pulsing ContOS mark is shown with rotating waiting messages (localized, ~2.5s fade). The indicator is removed as soon as the first meaningful content or structured output appears, or when the stream/errors end.
-- In **Chat**, saying `Instagram` / `LinkedIn` asks for confirmation; `yes` auto-switches the agent chip
+- In **Chat**, naming exactly one of LinkedIn, Instagram, or X switches to that agent. Naming one other platform while LinkedIn, Instagram, or X is already selected switches to that agent the same way and answers with that platform's competitors. After a chip switch, the next specialist call does not receive the other platform's replies. Naming two or more, from Chat or from a content agent, switches the chip to general Chat and drafts each platform with its specialist, in order (LinkedIn, Instagram, X), as separate replies under a short plan line.
+- Switching projects keeps the loading shell until that project's new empty chat is ready, so the previous project's thread is not painted in between. Previous threads stay in that project's Previous chats and are not copied to another project. The agent chip resets to general Chat.
+- One-time reset: the first Agents load after this change deletes this user's local chat cache and their `agent_chat_stores` rows, then sets `localStorage` key `contos_agents_chat_reset_v1`. The flag is written only after the remote delete succeeds. Later visits do not wipe history.
 - `isAgentsWelcomeMessage` keeps personalized (and legacy) welcome text out of LLM history
 
 ### New chat / Previous chats

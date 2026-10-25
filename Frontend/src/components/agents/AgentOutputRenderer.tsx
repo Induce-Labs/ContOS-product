@@ -795,9 +795,13 @@ export function AgentOutputRenderer({
           : draftKind === 'plan'
             ? t('agents.output.weeklyPlan')
             : ''
-      // Plain single drafts: hide the strategist reply essay; show editable draft only.
-      const showIntro = !plain
-      const intro = showIntro ? <StrategistIntro output={record} /> : null
+      // Plain single drafts hide the reply essay. An idea list still shows, including when a
+      // draft was attached, so the follow-up cannot refer to angles the user never saw.
+      const ideas = Array.isArray(record.ideas) ? record.ideas : []
+      const showIntro = !plain || ideas.length > 0
+      const intro = showIntro ? (
+        <StrategistIntro output={plain ? { ...record, reply: '' } : record} />
+      ) : null
       const hasIntro = Boolean(
         showIntro &&
           (asString(record.reply) || (Array.isArray(record.ideas) && record.ideas.length)),

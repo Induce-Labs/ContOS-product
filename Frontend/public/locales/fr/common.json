@@ -447,6 +447,7 @@
     "platformRedirect": {
       "ask": "Voulez-vous que je vous bascule vers l'agent {{platform}} ? Répondez yes pour continuer.",
       "switched": "Basculé vers {{platform}}",
+      "multiPlan": "Plan pour {{platforms}}.",
       "stayed": "D'accord — on reste en Chat. Comment puis-je vous aider ?",
       "alreadyOn": "Vous êtes déjà sur l'agent {{platform}}."
     },

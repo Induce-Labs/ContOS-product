@@ -17,10 +17,10 @@ PLATFORM: LINKEDIN
 - In "draft" mode return exactly ONE item in post_ideas: topic, hook (the opening line),
   post_structure (the full paste-ready post, with line breaks), content_type, cta (may be
   empty), reasoning (one or two sentences tied to memory, the profile or competitor signals).
-- In "idea" mode return exactly ONE post_ideas item: the full draft of the strongest idea.
+- In "idea" mode leave post_ideas empty. The ideas live only in "ideas".
 - In "plan" mode return one post_ideas item per weekly slot (2-3 items), each a full draft with
   topic "<Day> - <purpose>".
-- In "chat" and "critique" mode, and for monthly visions, leave post_ideas empty. Leave
+- In "chat" and "critique" mode, and for a month or longer, leave post_ideas empty. Leave
   thought_leadership_themes, hook_formulas, posting_frequency and content_mix empty unless the
   user asks about cadence or mix.
 - LANGUAGE: follow RESPONSE LANGUAGE for reply, thesis, next_question, ideas, hook,

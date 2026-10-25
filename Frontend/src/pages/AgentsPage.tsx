@@ -37,7 +37,9 @@ import {
   detectSingleNamedPlatform,
   isAffirmativeReply,
   isNegativeReply,
+  multiPlanPlatforms,
   platformLabel,
+  redirectTarget,
   type PlatformAgent,
 } from '../lib/agentPlatformRedirect'
 import {
@@ -53,12 +55,15 @@ import { buildChatHistoryForInvoke } from '../lib/agentChatMemory'
 import { resolveInvokeTaggedAvatarIds } from '../lib/agentMentions'
 import { resolveUiLanguage } from '../lib/profilingLocaleCore'
 import {
+  deleteRemoteChatStores,
   fetchRemoteChatStore,
   upsertRemoteChatStore,
 } from '../lib/agentChatRemote'
 import {
   createEmptyStore,
   deleteChatSession,
+  canPersistChatForProject,
+  clearAgentChatsForUser,
   getActiveSession,
   loadChatStore,
   saveChatStore,
@@ -188,6 +193,7 @@ export function AgentsPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [chatStore, setChatStore] = useState<ChatStore | null>(null)
   const [streaming, setStreaming] = useState(false)
+  const [multiPlanActive, setMultiPlanActive] = useState(false)
   const [awaitingCatchUp, setAwaitingCatchUp] = useState(() => {
     const pending = getPendingAgentCatchUp()
     return Boolean(pending)
@@ -201,6 +207,11 @@ export function AgentsPage() {
     useState<PlatformAgent | null>(null)
   const bottomRef = useRef<HTMLDivElement | null>(null)
   const chatStoreRef = useRef<ChatStore | null>(null)
+  /** Project id the in-memory store was loaded for. Persist must match the route. */
+  const boundProjectIdRef = useRef<string | null>(null)
+  const loadedProjectRef = useRef<string | null>(null)
+  const openFreshOnLoadRef = useRef(false)
+  const suppressAgentChipSyncRef = useRef(false)
   const skipPersistRef = useRef(false)
   const remoteSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const inputRef = useRef<HTMLInputElement | null>(null)
@@ -208,7 +219,7 @@ export function AgentsPage() {
   const tRef = useRef(t)
   tRef.current = t
 
-  const showResponding = streaming || awaitingCatchUp
+  const showResponding = streaming || awaitingCatchUp || multiPlanActive
   const latestAssistant = (() => {
     for (let i = messages.length - 1; i >= 0; i -= 1) {
       if (messages[i]?.role === 'assistant') {
@@ -222,6 +233,36 @@ export function AgentsPage() {
       (resolveAssistantOutput(latestAssistant) || latestAssistant.content.trim().length > 0),
   )
   const showWaitingIndicator = showResponding && !hasMeaningfulAssistantContent
+
+  // Project switch: drop the previous thread before paint so it cannot be saved
+  // under the new project id. A fresh session is opened once that project's store loads.
+  if (projectId && loadedProjectRef.current !== projectId) {
+    const previousProjectId = loadedProjectRef.current
+    loadedProjectRef.current = projectId
+    boundProjectIdRef.current = projectId
+    if (previousProjectId != null) {
+      openFreshOnLoadRef.current = true
+      skipPersistRef.current = true
+      chatStoreRef.current = null
+      if (remoteSaveTimerRef.current) {
+        clearTimeout(remoteSaveTimerRef.current)
+        remoteSaveTimerRef.current = null
+      }
+      setMessages([])
+      setChatStore(null)
+      setInput('')
+      setSendError(null)
+      setPendingPlatformRedirect(null)
+      setIsLoading(true)
+      setStreaming(false)
+      setAwaitingCatchUp(false)
+      setMultiPlanActive(false)
+      const pending = getPendingAgentCatchUp()
+      if (!(pending && pending.projectId === projectId && isUiAgentType(pending.agentType))) {
+        setAgentType('chatbot')
+      }
+    }
+  }
 
   useEffect(() => {
     try {
@@ -341,6 +382,7 @@ export function AgentsPage() {
 
     async function load() {
       const translate = tRef.current
+      const openFresh = openFreshOnLoadRef.current
       if (!projectId) {
         setLoadError(translate('agents.missingProjectId'))
         setIsLoading(false)
@@ -350,6 +392,14 @@ export function AgentsPage() {
       setIsLoading(true)
       setLoadError(null)
       setSyncError(null)
+      if (openFresh) {
+        const liveForeign = getActiveAgentStream()
+        if (liveForeign && liveForeign.projectId !== projectId) {
+          abortActiveAgentStream()
+          setStreaming(false)
+          setAwaitingCatchUp(false)
+        }
+      }
 
       try {
         const projectCompetitors = await fetchCompetitorsForProject(projectId)
@@ -360,6 +410,20 @@ export function AgentsPage() {
 
         const firstName = getUserFirstName(user)
         const welcome = makeWelcomeMessage(firstName, translate) as StoredChatMessage
+
+        // One-time wipe of leaked copies that were written into every project.
+        // The flag is set only after the remote delete succeeds, so a failed wipe retries.
+        if (
+          user?.id &&
+          typeof localStorage !== 'undefined' &&
+          localStorage.getItem('contos_agents_chat_reset_v1') !== '1'
+        ) {
+          clearAgentChatsForUser(user.id)
+          await deleteRemoteChatStores(user.id)
+          if (!mounted) return
+          localStorage.setItem('contos_agents_chat_reset_v1', '1')
+        }
+
         let store = user?.id
           ? loadChatStore(user.id, projectId, welcome)
           : createEmptyStore(welcome)
@@ -368,43 +432,70 @@ export function AgentsPage() {
         // that made a fresh empty local store look "newer" than cloud history
         // after logout wiped localStorage.
 
-        skipPersistRef.current = true
-        chatStoreRef.current = store
-        setChatStore(store)
-        const storedMessages = getActiveSession(store).messages as ChatMessage[]
         const live = getActiveAgentStream()
-        if (live && live.projectId === projectId) {
-          // Remount mid-stream: keep the live assistant bubble instead of
-          // clobbering it with a stale localStorage snapshot.
-          const hasAssistant = storedMessages.some((m) => m.id === live.assistantId)
-          setMessages(
-            hasAssistant
-              ? storedMessages.map((m) =>
-                  m.id === live.assistantId
-                    ? {
-                        ...m,
-                        content: live.content || m.content,
-                        agentType: live.agentType as AgentType,
-                      }
-                    : m,
-                )
-              : [
-                  ...storedMessages,
-                  {
-                    id: live.assistantId,
-                    role: 'assistant' as const,
-                    content: live.content,
-                    agentType: live.agentType as AgentType,
-                  },
-                ],
-          )
-          setStreaming(live.streaming)
-        } else {
-          setMessages(storedMessages)
+        const keepLiveThread = Boolean(
+          live && live.projectId === projectId && (live.streaming || live.runId),
+        )
+        // Project switch stays on the loading shell until the fresh welcome
+        // session is the only thread committed to the screen.
+        const deferPaint = openFresh && !keepLiveThread
+
+        function commitStore(next: ChatStore) {
+          skipPersistRef.current = true
+          boundProjectIdRef.current = projectId ?? null
+          chatStoreRef.current = next
+          setChatStore(next)
+          setMessages(getActiveSession(next).messages as ChatMessage[])
         }
-        setIsLoading(false)
+
+        if (!deferPaint) {
+          skipPersistRef.current = true
+          boundProjectIdRef.current = projectId
+          chatStoreRef.current = store
+          setChatStore(store)
+          const storedMessages = getActiveSession(store).messages as ChatMessage[]
+          if (live && live.projectId === projectId) {
+            // Remount mid-stream: keep the live assistant bubble instead of
+            // clobbering it with a stale localStorage snapshot.
+            const hasAssistant = storedMessages.some((m) => m.id === live.assistantId)
+            setMessages(
+              hasAssistant
+                ? storedMessages.map((m) =>
+                    m.id === live.assistantId
+                      ? {
+                          ...m,
+                          content: live.content || m.content,
+                          agentType: live.agentType as AgentType,
+                        }
+                      : m,
+                  )
+                : [
+                    ...storedMessages,
+                    {
+                      id: live.assistantId,
+                      role: 'assistant' as const,
+                      content: live.content,
+                      agentType: live.agentType as AgentType,
+                    },
+                  ],
+            )
+            setStreaming(live.streaming)
+          } else {
+            setMessages(storedMessages)
+          }
+          setIsLoading(false)
+        } else {
+          skipPersistRef.current = true
+          boundProjectIdRef.current = projectId
+          chatStoreRef.current = null
+        }
 
         if (!user?.id) {
+          if (deferPaint) {
+            commitStore(startNewChatSession(store, welcome))
+            setIsLoading(false)
+            openFreshOnLoadRef.current = false
+          }
           return
         }
 
@@ -425,30 +516,46 @@ export function AgentsPage() {
                 // Keep local in-memory thread while SSE is still running.
               } else {
                 store = remote.store
-                skipPersistRef.current = true
-                chatStoreRef.current = store
-                setChatStore(store)
-                setMessages(getActiveSession(store).messages as ChatMessage[])
-                saveChatStore(user.id, projectId, store)
+                if (!deferPaint) {
+                  skipPersistRef.current = true
+                  boundProjectIdRef.current = projectId
+                  chatStoreRef.current = store
+                  setChatStore(store)
+                  setMessages(getActiveSession(store).messages as ChatMessage[])
+                  saveChatStore(user.id, projectId, store)
+                }
               }
-            } else if (storeHasUserMessages(store)) {
+            } else if (storeHasUserMessages(store) && !deferPaint) {
               await upsertRemoteChatStore(user.id, projectId, store)
             }
-          } else if (storeHasUserMessages(store)) {
+          } else if (storeHasUserMessages(store) && !deferPaint) {
             await upsertRemoteChatStore(user.id, projectId, store)
           }
 
-          // Refresh greeting only after remote merge, and only on empty threads.
-          if (!sessionHasUserMessages(getActiveSession(store).messages)) {
+          const liveNow = getActiveAgentStream()
+          const keepLiveThread = Boolean(
+            liveNow && liveNow.projectId === projectId && (liveNow.streaming || liveNow.runId),
+          )
+          const shouldOpenFresh = openFresh && !keepLiveThread
+          // Project switch always opens a new thread. Empty threads still refresh the greeting.
+          if (shouldOpenFresh || !sessionHasUserMessages(getActiveSession(store).messages)) {
             store = startNewChatSession(store, welcome)
-            skipPersistRef.current = true
-            chatStoreRef.current = store
-            setChatStore(store)
-            setMessages(getActiveSession(store).messages as ChatMessage[])
+            commitStore(store)
+            if (deferPaint && mounted) setIsLoading(false)
             saveChatStore(user.id, projectId, store)
+            if (shouldOpenFresh) {
+              await upsertRemoteChatStore(user.id, projectId, store)
+            }
+          } else if (deferPaint) {
+            commitStore(store)
+            saveChatStore(user.id, projectId, store)
+            if (mounted) setIsLoading(false)
           }
 
-          if (mounted) setSyncError(null)
+          if (mounted) {
+            openFreshOnLoadRef.current = false
+            setSyncError(null)
+          }
         } catch (error) {
           if (mounted) {
             logDevError('agents chat sync load', {
@@ -456,14 +563,26 @@ export function AgentsPage() {
             })
             setSyncError(userFacingMessage(error, translate('agents.syncFromFailed')))
           }
-          // Still refresh empty greeting when remote sync fails.
-          if (!sessionHasUserMessages(getActiveSession(store).messages)) {
+          const liveNow = getActiveAgentStream()
+          const keepLiveThread = Boolean(
+            liveNow && liveNow.projectId === projectId && (liveNow.streaming || liveNow.runId),
+          )
+          if (
+            (openFresh && !keepLiveThread) ||
+            !sessionHasUserMessages(getActiveSession(store).messages)
+          ) {
             store = startNewChatSession(store, welcome)
-            skipPersistRef.current = true
-            chatStoreRef.current = store
-            setChatStore(store)
-            setMessages(getActiveSession(store).messages as ChatMessage[])
+            commitStore(store)
+            if (user?.id) {
+              saveChatStore(user.id, projectId, store)
+            }
+          } else if (deferPaint) {
+            commitStore(store)
           }
+          if (deferPaint && mounted) {
+            setIsLoading(false)
+          }
+          if (mounted) openFreshOnLoadRef.current = false
         }
       } catch (error) {
         if (mounted) {
@@ -496,7 +615,7 @@ export function AgentsPage() {
           if (pending && pending.projectId === projectId) {
             setAwaitingCatchUp(true)
             setStreaming(false)
-            if (isUiAgentType(pending.agentType)) {
+            if (isUiAgentType(pending.agentType) && !suppressAgentChipSyncRef.current) {
               setAgentType(pending.agentType)
             }
           } else {
@@ -508,7 +627,7 @@ export function AgentsPage() {
       }
       setStreaming(snapshot.streaming)
       setAwaitingCatchUp(Boolean(snapshot.streaming || snapshot.runId))
-      if (isUiAgentType(snapshot.agentType)) {
+      if (isUiAgentType(snapshot.agentType) && !suppressAgentChipSyncRef.current) {
         setAgentType(snapshot.agentType)
       }
       setMessages((current) => {
@@ -590,7 +709,7 @@ export function AgentsPage() {
     const pending = getPendingAgentCatchUp()
     if (pending && pending.projectId === projectId) {
       setAwaitingCatchUp(true)
-      if (isUiAgentType(pending.agentType)) {
+      if (isUiAgentType(pending.agentType) && !suppressAgentChipSyncRef.current) {
         setAgentType(pending.agentType)
       }
     }
@@ -602,6 +721,9 @@ export function AgentsPage() {
 
   useEffect(() => {
     if (!user?.id || !projectId || !chatStoreRef.current) {
+      return
+    }
+    if (!canPersistChatForProject(boundProjectIdRef.current, projectId)) {
       return
     }
     if (skipPersistRef.current) {
@@ -800,6 +922,7 @@ export function AgentsPage() {
           : t('agents.platformRedirect.switched', { platform: label }),
         agentType: alreadyThere ? agentType : explicitSwitch,
       }
+      userMessage.agentType = alreadyThere ? agentType : explicitSwitch
       setMessages((current) => [...current, userMessage, assistantMessage])
       setPendingPlatformRedirect(null)
       if (!alreadyThere) setAgentType(explicitSwitch)
@@ -823,9 +946,123 @@ export function AgentsPage() {
           output: confirmed,
           agentType: lastDraft.agentType ?? agentType,
         }
+        userMessage.agentType = lastDraft.agentType ?? agentType
         setMessages((current) => [...current, userMessage, assistantMessage])
         return
       }
+    }
+
+    // Two or more platforms: switch to Chat and draft each specialist in order.
+    const namedPlatforms = multiPlanPlatforms(agentType, text)
+    if (namedPlatforms) {
+      setAgentType('chatbot')
+      setPendingPlatformRedirect(null)
+      const platformsLabel = namedPlatforms.map((platform) => platformLabel(platform)).join(', ')
+      const introMessage: ChatMessage = {
+        id: newId(),
+        role: 'assistant',
+        content: t('agents.platformRedirect.multiPlan', { platforms: platformsLabel }),
+        agentType: 'chatbot',
+      }
+      userMessage.agentType = 'chatbot'
+      setMessages((current) => [...current, userMessage, introMessage])
+      const planProjectId = projectId
+      suppressAgentChipSyncRef.current = true
+      setMultiPlanActive(true)
+      setStreaming(true)
+      setAwaitingCatchUp(true)
+      try {
+        for (const platform of namedPlatforms) {
+          if (boundProjectIdRef.current !== planProjectId) break
+          const assistantId = newId()
+          const chatHistory = buildChatHistoryForInvoke(messages, platform)
+          setMessages((current) => [
+            ...current,
+            { id: assistantId, role: 'assistant', content: '', agentType: platform },
+          ])
+          try {
+            await runAgentStream({
+              projectId: planProjectId,
+              assistantId,
+              agentType: platform,
+              body: {
+                avatar_id: planProjectId,
+                agent_type: platform,
+                user_input: text,
+                chatbot_context_on: true,
+                tagged_avatar_ids: extraTaggedIds.length > 0 ? extraTaggedIds : undefined,
+                chat_history: chatHistory.length > 0 ? chatHistory : undefined,
+                response_language: resolveUiLanguage(i18n.language),
+              },
+              handlers: {
+                onComplete: (data) => {
+                  const output = data.output
+                  const formatted = formatAgentOutput(output)
+                  setMessages((current) =>
+                    current.map((message) => {
+                      if (message.id !== assistantId) return message
+                      if (isStructuredAgentOutput(output)) {
+                        return {
+                          ...message,
+                          content: formatted || message.content,
+                          output,
+                          agentType: platform,
+                        }
+                      }
+                      if (typeof output === 'string' && output.trim()) {
+                        return { ...message, content: output, agentType: platform }
+                      }
+                      if (formatted) {
+                        return { ...message, content: formatted, agentType: platform }
+                      }
+                      return { ...message, agentType: platform }
+                    }),
+                  )
+                },
+                onError: (message) => {
+                  const streamError = userFacingMessage(
+                    new AgentsApiError(message, 500),
+                    t('errors.agentsApi.streamFailed'),
+                  )
+                  setSendError(streamError)
+                  setMessages((current) =>
+                    current.map((entry) =>
+                      entry.id === assistantId && !entry.content.trim()
+                        ? { ...entry, content: t('agents.sorryPrefix', { message: streamError }) }
+                        : entry,
+                    ),
+                  )
+                },
+              },
+            })
+          } catch (error) {
+            if ((error as Error).name === 'AbortError') break
+            const message = userFacingMessage(error, t('agents.reachFailed'))
+            setSendError(message)
+            setMessages((current) =>
+              current.map((entry) =>
+                entry.id === assistantId && !entry.content.trim()
+                  ? { ...entry, content: t('agents.sorryPrefix', { message }) }
+                  : entry,
+              ),
+            )
+          }
+          if (boundProjectIdRef.current !== planProjectId) break
+        }
+      } finally {
+        suppressAgentChipSyncRef.current = false
+        setMultiPlanActive(false)
+        setAgentType('chatbot')
+        const pending = getPendingAgentCatchUp()
+        if (pending && pending.projectId === planProjectId) {
+          setStreaming(false)
+          setAwaitingCatchUp(true)
+        } else {
+          setStreaming(false)
+          setAwaitingCatchUp(false)
+        }
+      }
+      return
     }
 
     // Chat → platform agent: auto-switch when exactly one platform is named.
@@ -851,6 +1088,7 @@ export function AgentsPage() {
           content: t('agents.platformRedirect.switched', { platform: label }),
           agentType: inferredPending,
         }
+        userMessage.agentType = inferredPending
         setMessages((current) => [...current, userMessage, assistantMessage])
         setPendingPlatformRedirect(null)
         setAgentType(inferredPending)
@@ -864,6 +1102,7 @@ export function AgentsPage() {
           content: t('agents.platformRedirect.stayed'),
           agentType: 'chatbot',
         }
+        userMessage.agentType = 'chatbot'
         setMessages((current) => [...current, userMessage, assistantMessage])
         setPendingPlatformRedirect(null)
         return
@@ -879,6 +1118,7 @@ export function AgentsPage() {
           content: t('agents.platformRedirect.switched', { platform: label }),
           agentType: barePlatform,
         }
+        userMessage.agentType = barePlatform
         setMessages((current) => [...current, userMessage, assistantMessage])
         setPendingPlatformRedirect(null)
         setAgentType(barePlatform)
@@ -896,7 +1136,14 @@ export function AgentsPage() {
       }
     }
 
-    const chatHistory = buildChatHistoryForInvoke(messages)
+    const nextPlatform = redirectTarget(agentType, text)
+    if (nextPlatform) {
+      setAgentType(nextPlatform)
+      invokeAgentType = nextPlatform
+    }
+
+    userMessage.agentType = invokeAgentType
+    const chatHistory = buildChatHistoryForInvoke(messages, invokeAgentType)
     const assistantId = newId()
     setMessages((current) => [
       ...current,

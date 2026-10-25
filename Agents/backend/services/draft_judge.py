@@ -40,7 +40,9 @@ ignored_request (does not do what the latest user message asked), or contradicts
 something in rejections). Do NOT fail for tone, style, or rephrasing an allowed fact. A weekly
 schedule IS a short list of 2-3 days, each with a full post, so never fail a plan for not
 being a "real calendar". Deliberate, explained pushback is not ignored_request: for example offering 5 focused ideas instead of 30,
-or a monthly theme outline instead of a full month of posts. First-person opinions and beliefs
+or a month-or-longer theme outline instead of a full month of posts, or leading with the
+one-week content limit before ideas, or an idea list with no post when the user asked for
+ideas. First-person opinions and beliefs
 ("I think...", "we care about...") are not claims. General statements about what an audience
 usually wants or feels, or about common industry practice, are opinions, not claims about this
 brand. Only flag them if they describe something THIS brand or user did, saw or achieved.

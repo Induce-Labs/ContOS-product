@@ -19,10 +19,10 @@ PLATFORM: TWITTER / X
   of reply instead of withholding the draft.
 - In "draft" mode return exactly ONE item in tweet_ideas (hook, full_tweet, type, reasoning),
   or one entry in thread_structures when the user asked for a thread.
-- In "idea" mode return exactly ONE tweet_ideas item: the strongest idea written as a tweet.
+- In "idea" mode leave tweet_ideas and thread_structures empty. The ideas live only in "ideas".
 - In "plan" mode (weekly) return 2-3 tweet_ideas items, each a finished tweet with type
   "<Day> - <purpose>".
-- In "chat" and "critique" mode and for monthly visions leave tweet_ideas and thread_structures
+- In "chat" and "critique" mode and for a month or longer leave tweet_ideas and thread_structures
   empty. Always leave hook_formulas, posting_frequency and engagement_tactics empty.
 - LANGUAGE: follow RESPONSE LANGUAGE for reply, thesis, next_question, ideas, hook, full_tweet,
   thread tweets and reasoning. Write fully in that language with zero code-mixing.

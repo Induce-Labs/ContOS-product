@@ -46,4 +46,23 @@ describe('strategist output in chat history', () => {
     const assistant = history.find((turn) => turn.role === 'assistant')
     expect(assistant?.content).toContain('**A suggested detail.**')
   })
+
+  it('omits another specialist when the target is Instagram and keeps Instagram turns', () => {
+    const history = buildChatHistoryForInvoke(
+      [
+        { role: 'user', content: 'what should I post on X', agentType: 'twitter' },
+        { role: 'assistant', content: 'Your competitors on X chase engagement.', agentType: 'twitter' },
+        { role: 'user', content: 'ideas for this week', agentType: 'instagram' },
+        { role: 'assistant', content: 'Your Instagram competitors lead with the product.', agentType: 'instagram' },
+        { role: 'assistant', content: 'A general note from Chat.', agentType: 'chatbot' },
+      ],
+      'instagram',
+    )
+    const text = history.map((turn) => turn.content).join('\n')
+    expect(text).not.toContain('competitors on X')
+    expect(text).not.toContain('post on X')
+    expect(text).toContain('Instagram competitors')
+    expect(text).toContain('ideas for this week')
+    expect(text).toContain('general note from Chat')
+  })
 })

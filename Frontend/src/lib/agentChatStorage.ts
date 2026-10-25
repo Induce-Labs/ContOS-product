@@ -34,6 +34,18 @@ function storageKey(userId: string, projectId: string): string {
   return `${STORAGE_PREFIX}:${userId}:${projectId}`
 }
 
+/**
+ * Persist only when the in-memory thread was loaded for this route project.
+ * A project switch must not write the previous project's messages under the new id.
+ */
+export function canPersistChatForProject(
+  boundProjectId: string | null | undefined,
+  routeProjectId: string | null | undefined,
+): boolean {
+  if (!boundProjectId || !routeProjectId) return false
+  return boundProjectId === routeProjectId
+}
+
 function newSessionId(): string {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
     return crypto.randomUUID()

@@ -68,8 +68,9 @@ These rules are locked in all backend prompts (`strategist_core.py`, `chatbot.py
 
 ## Other behavior
 
-- **Weekly plan:** 2-3 posts, each a full draft with its own opening and closing line.
-- **Monthly request:** a vision of 4 weekly themes only, with no month of posts. The full monthly schedule is v2.
+- **Ideas:** 3-5 new titles with a one-line reason, and no post. The follow-up may only name titles from that list. A post is written when the user asks for one.
+- **Weekly plan:** 2-3 posts for this week only, each a full draft with its own opening and closing line.
+- **Month or longer:** the reply opens, in the user's language, by saying only one week of content will be created and another week can be planned after this week is over. Then themes or ideas only (a month is 4 weekly themes). No posts until the user asks for this week.
 - **X (Twitter):** a hard limit of 280 characters per tweet, checked in code. An over-long tweet triggers one retry.
 - **Fresh posts:** drafts must not reuse openings or closing lines from earlier drafts in the same conversation.
 - **Memory:** the assistant never saves its own suggestions as facts about the user.
@@ -89,9 +90,9 @@ These rules are locked in all backend prompts (`strategist_core.py`, `chatbot.py
 - Live runs on the real model, using the test avatar with real competitors:
   - A LinkedIn post of about 231 words (competitor typical: 226) with no brackets.
   - A user edit of the first bold part was applied correctly.
-  - Ideas turns included a full draft.
+  - An ideas request listed 3-5 ideas and no post.
   - Weekly plans gave 3 full drafts.
-  - A monthly request gave an outline only.
+  - A month-or-longer request opened with the one-week limit, then themes only, and no posts.
   - A tweet fit within 280 characters.
 
 ## Known gaps
@@ -112,4 +113,4 @@ These rules are locked in all backend prompts (`strategist_core.py`, `chatbot.py
 4. Press Copy. The pasted text should contain no `**`.
 5. Ask the X agent for a tweet. It should be 280 characters or fewer.
 6. Ask for a weekly plan. It should show 2-3 full posts, each with its own opening and closing line.
-7. Ask for a monthly plan. It should show 4 weekly themes and no posts.
+7. Ask for a monthly plan. The first sentence should say only one week of content will be created, and that another week can be planned after this week is over. Then 4 weekly themes and no posts.

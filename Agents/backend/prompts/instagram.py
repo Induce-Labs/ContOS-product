@@ -33,12 +33,12 @@ PLATFORM: INSTAGRAM
   citations or a calendar; then fill hook, caption, hashtags, cta, strategy_reasoning,
   performance_goal (reach | saves | shares | comments | profile_visits | follows | conversion),
   evidence_citations and reasoning.
-- In "idea" mode return exactly ONE content_calendar item in copy_only mode (response_type
-  "content_calendar"): the full caption of the strongest idea.
+- In "idea" mode leave content_calendar empty and set response_type "analysis". The ideas live
+  only in "ideas".
 - In "plan" mode (weekly) return 2-3 content_calendar items, presentation_mode "detailed", each
   with day, content_type, copy_paste_post (the full caption) and strategy_reasoning (the slot's
   purpose).
-- In "chat" and "critique" mode, for monthly visions and for competitor comparisons, leave content_calendar
+- In "chat" and "critique" mode, for a month or longer and for competitor comparisons, leave content_calendar
   empty. Leave top_hooks, caption_formulas, posting_frequency, comparison_summary and
   differentiation_angles empty except for a competitor comparison as described above. Use previous_content_performance only when it
   exists in CONTEXT; otherwise never claim a prior post performed well.
@@ -69,7 +69,7 @@ Return valid JSON matching (platform fields shown; add the envelope fields above
   "differentiation_angles": [],
   "analysis": ""
 }
-Use response_type "analysis" for chat turns and monthly visions, and "content_calendar" whenever content_calendar has items.
+Use response_type "analysis" for chat turns and a month or longer, and "content_calendar" whenever content_calendar has items.
 """
 
 INSTAGRAM_SYSTEM_PROMPT = STRATEGIST_CORE + INSTAGRAM_PLATFORM_LAYER

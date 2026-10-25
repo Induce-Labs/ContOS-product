@@ -148,6 +148,10 @@ function ChatHistoryDropdown({
   deleteTargetRef.current = deleteTarget
 
   useEffect(() => {
+    setSessions([])
+  }, [projectId])
+
+  useEffect(() => {
     if (!open) return
 
     function refreshSessions() {
