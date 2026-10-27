@@ -7,6 +7,20 @@ const STORE_VERSION = 2 as const
 
 export type StoredChatRole = 'assistant' | 'user'
 
+/** The message a user tagged before sending. Excerpt is clipped plain text. */
+export type ReplyTarget = {
+  messageId: string
+  role: StoredChatRole
+  excerpt: string
+}
+
+/** The draft attached with Add to chat. Excerpt is the opening of that post. */
+export type DraftPreview = {
+  postId: string
+  platform: 'linkedin' | 'instagram' | 'x'
+  excerpt: string
+}
+
 export type StoredChatMessage = {
   id: string
   role: StoredChatRole
@@ -15,6 +29,11 @@ export type StoredChatMessage = {
   output?: unknown
   taggedAvatarIds?: string[]
   taggedAvatarNames?: string[]
+  /** Set on a refine reply so it is not extracted as another draft card. */
+  proposalForPostId?: string
+  replyTo?: ReplyTarget
+  /** Set on the instruction that revises one attached draft. */
+  draftPreview?: DraftPreview
 }
 
 export type ChatSession = {
@@ -51,6 +70,30 @@ function newSessionId(): string {
     return crypto.randomUUID()
   }
   return `chat-${Date.now()}-${Math.random().toString(16).slice(2)}`
+}
+
+function compactDraftPreview(value: DraftPreview | undefined): DraftPreview | undefined {
+  if (!value) return undefined
+  if (value.platform !== 'linkedin' && value.platform !== 'instagram' && value.platform !== 'x') {
+    return undefined
+  }
+  if (typeof value.postId !== 'string' || value.postId.trim().length === 0 || value.postId.length > 80) {
+    return undefined
+  }
+  if (typeof value.excerpt !== 'string') return undefined
+  const excerpt = value.excerpt.trim().slice(0, 280)
+  if (!excerpt) return undefined
+  return { postId: value.postId.trim(), platform: value.platform, excerpt }
+}
+
+function compactReplyTo(value: ReplyTarget | undefined): ReplyTarget | undefined {
+  if (!value) return undefined
+  if (value.role !== 'user' && value.role !== 'assistant') return undefined
+  if (typeof value.messageId !== 'string' || value.messageId.trim().length === 0) return undefined
+  if (typeof value.excerpt !== 'string') return undefined
+  const excerpt = value.excerpt.replace(/\s+/g, ' ').trim().slice(0, 140)
+  if (!excerpt) return undefined
+  return { messageId: value.messageId, role: value.role, excerpt }
 }
 
 function isStoredMessage(item: unknown): item is StoredChatMessage {
@@ -95,6 +138,78 @@ export function sessionHasUserMessages(messages: StoredChatMessage[]): boolean {
 /** True when any session in the store has a user message. */
 export function storeHasUserMessages(store: ChatStore): boolean {
   return store.sessions.some((session) => sessionHasUserMessages(session.messages))
+}
+
+export type ChatSyncChoice = {
+  store: ChatStore
+  /** Write `store` to Supabase. */
+  uploadLocal: boolean
+}
+
+/** Union sessions from both browsers. The same session id keeps the newer copy. */
+export function mergeChatStores(local: ChatStore, remote: ChatStore): ChatStore {
+  const byId = new Map<string, ChatSession>()
+  for (const session of [...remote.sessions, ...local.sessions]) {
+    if (!sessionHasUserMessages(session.messages)) continue
+    const existing = byId.get(session.id)
+    const existingTs = existing ? new Date(existing.updatedAt).getTime() : Number.NEGATIVE_INFINITY
+    const nextTs = new Date(session.updatedAt).getTime()
+    if (!existing || (!Number.isNaN(nextTs) && nextTs >= existingTs)) {
+      byId.set(session.id, session)
+    }
+  }
+
+  const sessions = [...byId.values()]
+    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+    .slice(0, MAX_SESSIONS)
+
+  if (sessions.length === 0) {
+    return storeUpdatedAtMs(local) >= storeUpdatedAtMs(remote) ? local : remote
+  }
+
+  const newer = storeUpdatedAtMs(local) >= storeUpdatedAtMs(remote) ? local : remote
+  const newerActive = getActiveSession(newer)
+  if (!sessionHasUserMessages(newerActive.messages)) {
+    return {
+      version: STORE_VERSION,
+      activeSessionId: newerActive.id,
+      sessions: [newerActive, ...sessions.filter((session) => session.id !== newerActive.id)].slice(
+        0,
+        MAX_SESSIONS,
+      ),
+    }
+  }
+
+  const activeSessionId = sessions.some((session) => session.id === newer.activeSessionId)
+    ? newer.activeSessionId
+    : sessions[0].id
+
+  return {
+    version: STORE_VERSION,
+    activeSessionId,
+    sessions,
+  }
+}
+
+/**
+ * Supabase is the account copy. Sessions from this browser and the account
+ * are kept together. A browser with no chats does not delete account history.
+ */
+export function resolveChatStoreSync(
+  local: ChatStore,
+  remote: { store: ChatStore; updatedAt: string } | null,
+): ChatSyncChoice {
+  if (!remote) {
+    return { store: local, uploadLocal: storeHasUserMessages(local) }
+  }
+
+  const merged = mergeChatStores(local, remote.store)
+  const changed =
+    JSON.stringify(compactChatStore(merged)) !== JSON.stringify(compactChatStore(remote.store))
+  return {
+    store: merged,
+    uploadLocal: changed && (storeHasUserMessages(merged) || storeHasUserMessages(local)),
+  }
 }
 
 /**
@@ -252,6 +367,11 @@ export function compactChatStore(store: ChatStore): ChatStore {
         if (message.output != null) {
           compact.output = message.output
         }
+        if (message.proposalForPostId) compact.proposalForPostId = message.proposalForPostId
+        const replyTo = compactReplyTo(message.replyTo)
+        if (replyTo) compact.replyTo = replyTo
+        const draftPreview = compactDraftPreview(message.draftPreview)
+        if (draftPreview) compact.draftPreview = draftPreview
         return compact
       }),
     })),

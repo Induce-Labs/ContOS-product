@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { avatarTypeLabel, MAX_AVATARS } from '../lib/avatars'
@@ -47,15 +47,43 @@ import {
   isConfirmMessage,
   outputHasSuggestions,
 } from '../lib/draftSuggestions'
+import { commitReviewPost, postizRequestFromReview, type ScheduleRow } from '../lib/draftSchedule'
+import { createPostizPost, listPostizPosts, PostizApiError } from '../lib/postiz'
+import {
+  acceptRevision,
+  collectReviewPosts,
+  draftPreviewText,
+  extractRevision,
+  hideReviewPost,
+  literalReplacement,
+  parseAgentPayload,
+  patchReviewPost,
+  preserveReviewPosts,
+  refineInstruction,
+  reviewPlatformForAgent,
+  stampMissingReviewPosts,
+  type ReviewPost,
+} from '../lib/reviewableDrafts'
 import contosMark from '../assets/contos-mark.png'
 import contosMarkDark from '../assets/image.png'
 import { AgentRespondingIndicator } from '../components/agents/AgentRespondingIndicator'
 import { ChatMessageBubble } from '../components/agents/ChatMessageBubble'
-import { buildChatHistoryForInvoke } from '../lib/agentChatMemory'
+import { DraftsSidebar, type AcceptedDraftRevision } from '../components/agents/DraftsSidebar'
+import { buildChatHistoryForInvoke, replyTargetForMessage, userTextWithReply } from '../lib/agentChatMemory'
+import type { DraftPreview, ReplyTarget } from '../lib/agentChatStorage'
+import {
+  collectTranscripts,
+  getSpeechRecognition,
+  speechFailure,
+  speechLanguageTag,
+  applyDictationResult,
+  type DictationCursor,
+  type SpeechHost,
+  type SpeechRecognitionLike,
+} from '../lib/speechInput'
 import { resolveInvokeTaggedAvatarIds } from '../lib/agentMentions'
 import { resolveUiLanguage } from '../lib/profilingLocaleCore'
 import {
-  deleteRemoteChatStores,
   fetchRemoteChatStore,
   upsertRemoteChatStore,
 } from '../lib/agentChatRemote'
@@ -63,14 +91,12 @@ import {
   createEmptyStore,
   deleteChatSession,
   canPersistChatForProject,
-  clearAgentChatsForUser,
   getActiveSession,
   loadChatStore,
+  resolveChatStoreSync,
   saveChatStore,
   sessionHasUserMessages,
   startNewChatSession,
-  storeHasUserMessages,
-  storeUpdatedAtMs,
   switchChatSession,
   updateActiveSessionMessages,
   CHAT_DELETE_EVENT,
@@ -90,6 +116,9 @@ type ChatMessage = {
   output?: unknown
   taggedAvatarIds?: string[]
   taggedAvatarNames?: string[]
+  proposalForPostId?: string
+  replyTo?: ReplyTarget
+  draftPreview?: DraftPreview
 }
 
 function newId(): string {
@@ -137,14 +166,17 @@ function formatAgentOutput(output: unknown): string {
 }
 
 function tryParseStructuredContent(content: string): unknown | null {
-  const trimmed = content.trim()
-  if (!trimmed.startsWith('{')) return null
-  try {
-    const parsed: unknown = JSON.parse(trimmed)
-    return isStructuredAgentOutput(parsed) ? parsed : null
-  } catch {
-    return null
-  }
+  const parsed = parseAgentPayload(content)
+  return parsed && isStructuredAgentOutput(parsed) ? parsed : null
+}
+
+function draftPlatformName(
+  platform: DraftPreview['platform'],
+  t: (key: string) => string,
+): string {
+  if (platform === 'x') return t('agents.drafts.platformX')
+  if (platform === 'instagram') return t('agents.drafts.platformInstagram')
+  return t('agents.drafts.platformLinkedin')
 }
 
 function resolveAssistantOutput(message: ChatMessage): unknown | null {
@@ -190,6 +222,9 @@ export function AgentsPage() {
     return 'chatbot'
   })
   const [input, setInput] = useState('')
+  const [replyTarget, setReplyTarget] = useState<ReplyTarget | null>(null)
+  const [draftTargetId, setDraftTargetId] = useState<string | null>(null)
+  const [acceptedRevision, setAcceptedRevision] = useState<AcceptedDraftRevision | null>(null)
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [chatStore, setChatStore] = useState<ChatStore | null>(null)
   const [streaming, setStreaming] = useState(false)
@@ -199,13 +234,31 @@ export function AgentsPage() {
     return Boolean(pending)
   })
   const [sendError, setSendError] = useState<string | null>(null)
+  const [draftsOpen, setDraftsOpen] = useState(false)
+  const [scheduling, setScheduling] = useState(false)
+  const [proposal, setProposal] = useState<{
+    messageId: string
+    postId: string
+    text: string
+    entries: string[] | null
+  } | null>(null)
+  const [dismissedProposalIds, setDismissedProposalIds] = useState<Set<string>>(() => new Set())
+  const [scheduleReport, setScheduleReport] = useState<{
+    succeeded: ScheduleRow[]
+    failed: ScheduleRow[]
+    skipped: ScheduleRow[]
+    uncertain: ScheduleRow[]
+  } | null>(null)
   const [syncError, setSyncError] = useState<string | null>(null)
   const [taggedAvatarIds, setTaggedAvatarIds] = useState<string[]>([])
   const [mentionOpen, setMentionOpen] = useState(false)
   const [mentionQuery, setMentionQuery] = useState('')
   const [pendingPlatformRedirect, setPendingPlatformRedirect] =
     useState<PlatformAgent | null>(null)
-  const bottomRef = useRef<HTMLDivElement | null>(null)
+  const messageListRef = useRef<HTMLDivElement | null>(null)
+  /** True until the user scrolls away from the latest messages. */
+  const stickToBottomRef = useRef(true)
+  const positionedSessionRef = useRef<string | null>(null)
   const chatStoreRef = useRef<ChatStore | null>(null)
   /** Project id the in-memory store was loaded for. Persist must match the route. */
   const boundProjectIdRef = useRef<string | null>(null)
@@ -213,13 +266,41 @@ export function AgentsPage() {
   const openFreshOnLoadRef = useRef(false)
   const suppressAgentChipSyncRef = useRef(false)
   const skipPersistRef = useRef(false)
+  const schedulingRef = useRef(false)
   const remoteSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const inputRef = useRef<HTMLInputElement | null>(null)
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null)
+  const dictationFieldRef = useRef('')
+  const dictationCursorRef = useRef<DictationCursor>({ appliedFinals: '', lastInterim: '' })
+  const dictationStopRequestedRef = useRef(false)
+  const speechErrorRef = useRef<'permission' | 'empty' | 'unavailable' | 'failed' | null>(null)
+  const stopDictationRef = useRef<(mode?: 'stop' | 'abort') => void>(() => {})
+  const [listening, setListening] = useState(false)
   const handleNewChatRef = useRef<() => void>(() => {})
   const tRef = useRef(t)
   tRef.current = t
 
   const showResponding = streaming || awaitingCatchUp || multiPlanActive
+
+  useEffect(() => {
+    if (showResponding) stopDictationRef.current('abort')
+  }, [showResponding])
+
+  useEffect(() => {
+    return () => {
+      const recognition = recognitionRef.current
+      recognitionRef.current = null
+      if (!recognition) return
+      recognition.onresult = null
+      recognition.onerror = null
+      recognition.onend = null
+      try {
+        recognition.abort()
+      } catch {
+        // The session was already stopped.
+      }
+    }
+  }, [])
   const latestAssistant = (() => {
     for (let i = messages.length - 1; i >= 0; i -= 1) {
       if (messages[i]?.role === 'assistant') {
@@ -411,19 +492,6 @@ export function AgentsPage() {
         const firstName = getUserFirstName(user)
         const welcome = makeWelcomeMessage(firstName, translate) as StoredChatMessage
 
-        // One-time wipe of leaked copies that were written into every project.
-        // The flag is set only after the remote delete succeeds, so a failed wipe retries.
-        if (
-          user?.id &&
-          typeof localStorage !== 'undefined' &&
-          localStorage.getItem('contos_agents_chat_reset_v1') !== '1'
-        ) {
-          clearAgentChatsForUser(user.id)
-          await deleteRemoteChatStores(user.id)
-          if (!mounted) return
-          localStorage.setItem('contos_agents_chat_reset_v1', '1')
-        }
-
         let store = user?.id
           ? loadChatStore(user.id, projectId, welcome)
           : createEmptyStore(welcome)
@@ -503,33 +571,24 @@ export function AgentsPage() {
           const remote = await fetchRemoteChatStore(user.id, projectId, welcome)
           if (!mounted) return
 
-          if (remote) {
-            const localEmpty = !storeHasUserMessages(store)
-            const remoteHasHistory = storeHasUserMessages(remote.store)
-            const localTs = storeUpdatedAtMs(store)
-            const remoteTs = new Date(remote.updatedAt).getTime()
-            // Prefer cloud when local is welcome-only (e.g. post-logout), even if
-            // a local welcome refresh made updatedAt look newer.
-            if ((localEmpty && remoteHasHistory) || remoteTs >= localTs) {
-              const liveAfterRemote = getActiveAgentStream()
-              if (liveAfterRemote?.projectId === projectId && liveAfterRemote.streaming) {
-                // Keep local in-memory thread while SSE is still running.
-              } else {
-                store = remote.store
-                if (!deferPaint) {
-                  skipPersistRef.current = true
-                  boundProjectIdRef.current = projectId
-                  chatStoreRef.current = store
-                  setChatStore(store)
-                  setMessages(getActiveSession(store).messages as ChatMessage[])
-                  saveChatStore(user.id, projectId, store)
-                }
-              }
-            } else if (storeHasUserMessages(store) && !deferPaint) {
+          const choice = resolveChatStoreSync(store, remote)
+          const liveAfterRemote = getActiveAgentStream()
+          const streamingHere = Boolean(
+            liveAfterRemote?.projectId === projectId && liveAfterRemote.streaming,
+          )
+          if (!streamingHere) {
+            store = choice.store
+            if (!deferPaint) {
+              skipPersistRef.current = true
+              boundProjectIdRef.current = projectId
+              chatStoreRef.current = store
+              setChatStore(store)
+              setMessages(getActiveSession(store).messages as ChatMessage[])
+              saveChatStore(user.id, projectId, store)
+            }
+            if (choice.uploadLocal && !deferPaint) {
               await upsertRemoteChatStore(user.id, projectId, store)
             }
-          } else if (storeHasUserMessages(store) && !deferPaint) {
-            await upsertRemoteChatStore(user.id, projectId, store)
           }
 
           const liveNow = getActiveAgentStream()
@@ -632,46 +691,55 @@ export function AgentsPage() {
       }
       setMessages((current) => {
         const hasAssistant = current.some((m) => m.id === snapshot.assistantId)
-        const formatted =
+        const parsedOutput =
           snapshot.output != null && isStructuredAgentOutput(snapshot.output)
-            ? formatStructuredAgentOutput(snapshot.output)
-            : ''
+            ? snapshot.output
+            : parseAgentPayload(snapshot.output ?? snapshot.content)
+        const structured =
+          parsedOutput && isStructuredAgentOutput(parsedOutput) ? parsedOutput : null
+        const formatted = structured ? formatStructuredAgentOutput(structured) : ''
+        const readable =
+          formatted.trim() ||
+          (typeof snapshot.output === 'string' && !snapshot.output.trim().startsWith('{')
+            ? snapshot.output.trim()
+            : '')
         const apply = (message: ChatMessage): ChatMessage => {
           if (message.id !== snapshot.assistantId) return message
-          const nextContent =
-            typeof snapshot.output === 'string' && snapshot.output.trim()
-              ? snapshot.output
-              : formatted.trim()
-                ? formatted
-                : snapshot.content || message.content
+          if (message.proposalForPostId) {
+            const revision = extractRevision(
+              snapshot.output ?? snapshot.content,
+              reviewPlatformForAgent(message.agentType),
+            )
+            if (!revision || revision.text.trim().startsWith('{')) {
+              return { ...message, output: undefined }
+            }
+            return { ...message, content: revision.text, output: undefined }
+          }
+          const nextContent = readable || snapshot.content || message.content
           const next: ChatMessage = {
             ...message,
             content: nextContent,
             agentType: snapshot.agentType as AgentType,
           }
-          if (snapshot.output != null && isStructuredAgentOutput(snapshot.output)) {
-            next.output = snapshot.output
+          if (structured) {
+            next.output = preserveReviewPosts(message.output, structured)
           }
           return next
         }
         if (hasAssistant) {
           return current.map(apply)
         }
+        if (!current.some((message) => message.role === 'user')) {
+          return current
+        }
         return [
           ...current,
           {
             id: snapshot.assistantId,
             role: 'assistant',
-            content:
-              typeof snapshot.output === 'string' && snapshot.output.trim()
-                ? snapshot.output
-                : formatted.trim()
-                  ? formatted
-                  : snapshot.content,
+            content: readable || snapshot.content,
             agentType: snapshot.agentType as AgentType,
-            ...(snapshot.output != null && isStructuredAgentOutput(snapshot.output)
-              ? { output: snapshot.output }
-              : {}),
+            ...(structured ? { output: structured } : {}),
           },
         ]
       })
@@ -715,9 +783,17 @@ export function AgentsPage() {
     }
   }, [projectId])
 
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, showResponding])
+  useLayoutEffect(() => {
+    const list = messageListRef.current
+    if (!list) return
+    const sessionKey = `${projectId ?? ''}:${chatStore?.activeSessionId ?? ''}`
+    if (positionedSessionRef.current !== sessionKey) {
+      stickToBottomRef.current = true
+      positionedSessionRef.current = sessionKey
+    }
+    if (!stickToBottomRef.current) return
+    list.scrollTop = list.scrollHeight
+  }, [messages, showResponding, projectId, chatStore?.activeSessionId])
 
   useEffect(() => {
     if (!user?.id || !projectId || !chatStoreRef.current) {
@@ -742,6 +818,18 @@ export function AgentsPage() {
       queueRemoteSave(user.id, projectId, next)
     }
   }, [messages, user?.id, projectId, showResponding])
+
+  useEffect(() => {
+    if (showResponding) return
+    const stamped = stampMissingReviewPosts(messages, newId)
+    if (!stamped.changed) return
+    const before = new Set(collectReviewPosts(messages).map((post) => post.messageId))
+    const added = collectReviewPosts(stamped.messages).filter((post) => !before.has(post.messageId))
+    const counts = new Map<string, number>()
+    for (const post of added) counts.set(post.messageId, (counts.get(post.messageId) ?? 0) + 1)
+    if ([...counts.values()].some((count) => count >= 2)) setDraftsOpen(true)
+    setMessages(stamped.messages)
+  }, [messages, showResponding])
 
   useEffect(() => {
     const sessionId = searchParams.get('session')
@@ -800,8 +888,16 @@ export function AgentsPage() {
     chatStoreRef.current = next
     setChatStore(next)
     setMessages(getActiveSession(next).messages as ChatMessage[])
+    setDraftsOpen(false)
+    setProposal(null)
+    setDismissedProposalIds(new Set())
+    setAcceptedRevision(null)
+    setScheduleReport(null)
     setSendError(null)
     setPendingPlatformRedirect(null)
+    setReplyTarget(null)
+    setDraftTargetId(null)
+    stopDictationRef.current('abort')
     if (user?.id && projectId) {
       saveChatStore(user.id, projectId, next)
       window.dispatchEvent(
@@ -811,6 +907,87 @@ export function AgentsPage() {
     }
   }
   handleNewChatRef.current = handleNewChat
+
+  useEffect(() => {
+    if (!replyTarget) return
+    if (messages.some((message) => message.id === replyTarget.messageId)) return
+    setReplyTarget(null)
+  }, [messages, replyTarget])
+
+  useEffect(() => {
+    if (!draftTargetId) return
+    if (collectReviewPosts(messages).some((post) => post.id === draftTargetId)) return
+    setDraftTargetId(null)
+  }, [draftTargetId, messages])
+
+  useEffect(() => {
+    const failure = t('agents.drafts.proposalFailed')
+    setMessages((current) => {
+      let changed = false
+      const posts = collectReviewPosts(current)
+      const next = current.map((message, index) => {
+        if (message.role === 'user' && !message.draftPreview) {
+          const following = current[index + 1]
+          const post = following?.proposalForPostId
+            ? posts.find((item) => item.id === following.proposalForPostId)
+            : undefined
+          if (post) {
+            changed = true
+            return {
+              ...message,
+              draftPreview: {
+                postId: post.id,
+                platform: post.platform,
+                excerpt: draftPreviewText(post.text),
+              },
+            }
+          }
+        }
+        if (message.role !== 'assistant' || !message.proposalForPostId) return message
+        const raw = message.content.trim().startsWith('{')
+        const failed = message.content === failure
+        if (!raw && !failed) return message
+        const revision = extractRevision(
+          message.output ?? message.content,
+          reviewPlatformForAgent(message.agentType),
+        )
+        if (!revision || revision.text.trim().startsWith('{')) return message
+        changed = true
+        return { ...message, content: revision.text, output: undefined }
+      })
+      return changed ? next : current
+    })
+  }, [messages, t])
+
+  useEffect(() => {
+    const failure = t('agents.drafts.proposalFailed')
+    const latest = [...messages].reverse().find((message) => message.proposalForPostId)
+    if (!latest?.proposalForPostId || dismissedProposalIds.has(latest.id)) return
+    if (proposal?.messageId === latest.id) return
+    const revision = extractRevision(
+      latest.output ?? latest.content,
+      reviewPlatformForAgent(latest.agentType),
+    )
+    const text =
+      revision?.text ??
+      (latest.content.trim() && !latest.content.trim().startsWith('{') && latest.content !== failure
+        ? latest.content
+        : '')
+    if (!text || text.trim().startsWith('{')) return
+    setProposal({
+      messageId: latest.id,
+      postId: latest.proposalForPostId,
+      text,
+      entries: revision?.entries ?? null,
+    })
+  }, [dismissedProposalIds, messages, proposal, t])
+
+  function jumpToMessage(messageId: string) {
+    const node = document.getElementById(`chat-msg-${messageId}`)
+    if (!node) return
+    stickToBottomRef.current = false
+    node.scrollIntoView({ block: 'center', behavior: 'auto' })
+  }
 
   // Refresh empty-state welcome when the UI language changes.
   useEffect(() => {
@@ -854,6 +1031,7 @@ export function AgentsPage() {
 
   function handleInputChange(value: string) {
     setInput(value)
+    dictationFieldRef.current = value
     const atIndex = value.lastIndexOf('@')
     if (atIndex >= 0) {
       const after = value.slice(atIndex + 1)
@@ -871,7 +1049,9 @@ export function AgentsPage() {
     toggleTaggedAvatar(avatar.id)
     const atIndex = input.lastIndexOf('@')
     if (atIndex >= 0) {
-      setInput(`${input.slice(0, atIndex)}@${avatar.name} `)
+      const nextValue = `${input.slice(0, atIndex)}@${avatar.name} `
+      dictationFieldRef.current = nextValue
+      setInput(nextValue)
     }
     setMentionOpen(false)
     setMentionQuery('')
@@ -889,8 +1069,31 @@ export function AgentsPage() {
       return
     }
 
+    const activeReply = replyTarget
+    const recognition = recognitionRef.current
+    recognitionRef.current = null
+    if (recognition) {
+      recognition.onresult = null
+      recognition.onerror = null
+      recognition.onend = null
+      try {
+        recognition.abort()
+      } catch {
+        // The session was already stopped.
+      }
+    }
+    setListening(false)
     setSendError(null)
     setInput('')
+    setReplyTarget(null)
+    const attachedDraft = draftTargetId
+      ? reviewPosts.find((post) => post.id === draftTargetId) ?? null
+      : null
+    setDraftTargetId(null)
+    if (attachedDraft) {
+      void refinePost(attachedDraft, text)
+      return
+    }
     const invokeAvatarIds = resolveInvokeTaggedAvatarIds({
       activeAvatarId: projectId,
       selectedIds: taggedAvatarIds,
@@ -907,7 +1110,9 @@ export function AgentsPage() {
       content: text,
       taggedAvatarIds: extraTaggedIds,
       taggedAvatarNames: taggedNames,
+      ...(activeReply ? { replyTo: activeReply } : {}),
     }
+    const invokeText = userTextWithReply(text, activeReply)
 
     // Explicit "switch to X agent" works from any agent and switches immediately.
     const explicitSwitch = detectExplicitSwitchRequest(text)
@@ -988,7 +1193,7 @@ export function AgentsPage() {
               body: {
                 avatar_id: planProjectId,
                 agent_type: platform,
-                user_input: text,
+                user_input: invokeText,
                 chatbot_context_on: true,
                 tagged_avatar_ids: extraTaggedIds.length > 0 ? extraTaggedIds : undefined,
                 chat_history: chatHistory.length > 0 ? chatHistory : undefined,
@@ -1005,7 +1210,7 @@ export function AgentsPage() {
                         return {
                           ...message,
                           content: formatted || message.content,
-                          output,
+                          output: preserveReviewPosts(message.output, output),
                           agentType: platform,
                         }
                       }
@@ -1161,7 +1366,7 @@ export function AgentsPage() {
         body: {
           avatar_id: projectId,
           agent_type: invokeAgentType,
-          user_input: text,
+          user_input: invokeText,
           chatbot_context_on: true,
           tagged_avatar_ids: extraTaggedIds.length > 0 ? extraTaggedIds : undefined,
           chat_history: chatHistory.length > 0 ? chatHistory : undefined,
@@ -1180,7 +1385,7 @@ export function AgentsPage() {
                   return {
                     ...message,
                     content: formatted || message.content,
-                    output,
+                    output: preserveReviewPosts(message.output, output),
                     agentType: invokeAgentType,
                   }
                 }
@@ -1294,9 +1499,169 @@ export function AgentsPage() {
   const showClaudeStyleGreeting = conversationMessages.length === 0
   const atAvatarCap = projects.length >= MAX_AVATARS
   const headerActionClassName = 'contos-btn contos-btn--pill contos-btn--secondary'
+  const reviewPosts = collectReviewPosts(messages)
+  const needsReviewCount = reviewPosts.filter((post) => post.status === 'needs_review').length
+
+  async function writeReviewPost(item: ReviewPost, publishDate: string, mode: 'draft' | 'schedule') {
+    const request = postizRequestFromReview(item, publishDate, mode)
+    if (!request || !projectId) {
+      throw new PostizApiError(
+        `Post ${item.id} on ${item.platform} cannot be sent to Postiz.`,
+        400,
+      )
+    }
+    return createPostizPost({
+      avatarId: projectId,
+      type: request.type,
+      content: request.content,
+      publishDate: request.publishDate,
+      postId: request.postId,
+      platform: request.platform,
+      posts: request.posts,
+      images: request.images,
+    })
+  }
+
+  function applyScheduleRows(rows: Array<{ post: ReviewPost; outcome: string }>) {
+    setMessages((current) =>
+      rows.reduce((next, row) => {
+        const patched = patchReviewPost(next, row.post.messageId, row.post.id, () => row.post)
+        if (row.outcome !== 'succeeded') return patched
+        return hideReviewPost(patched, row.post.messageId, row.post.id)
+      }, current),
+    )
+  }
+
+  async function commitOne(post: ReviewPost, localDateTime: string, mode: 'draft' | 'schedule') {
+    if (!projectId || schedulingRef.current) return
+    schedulingRef.current = true
+    setScheduling(true)
+    try {
+      const row = await commitReviewPost({
+        post,
+        localDateTime,
+        now: new Date(),
+        mode,
+        create: writeReviewPost,
+        list: (startDate, endDate) => listPostizPosts(projectId, startDate, endDate),
+      })
+      applyScheduleRows([row])
+      setScheduleReport({
+        succeeded: row.outcome === 'succeeded' ? [row] : [],
+        failed: row.outcome === 'failed' ? [row] : [],
+        skipped: row.outcome === 'skipped' ? [row] : [],
+        uncertain: row.outcome === 'uncertain' ? [row] : [],
+      })
+    } finally {
+      schedulingRef.current = false
+      setScheduling(false)
+    }
+  }
+
+  async function refinePost(post: ReviewPost, instruction: string) {
+    if (!projectId || showResponding) return
+    const agent = post.platform === 'x' ? 'twitter' : post.platform
+    const assistantId = newId()
+    const literal = literalReplacement(post, instruction)
+    setProposal(null)
+    setMessages((current) => [
+      ...current,
+      {
+        id: newId(),
+        role: 'user',
+        content: instruction,
+        agentType: agent,
+        draftPreview: {
+          postId: post.id,
+          platform: post.platform,
+          excerpt: draftPreviewText(post.text),
+        },
+      },
+      { id: assistantId, role: 'assistant', content: '', agentType: agent, proposalForPostId: post.id },
+    ])
+    const showRevision = (content: string, revision: { text: string; entries: string[] | null } | null) => {
+      setMessages((current) =>
+        current.map((message) =>
+          message.id === assistantId ? { ...message, content, output: undefined } : message,
+        ),
+      )
+      setProposal(revision ? { messageId: assistantId, postId: post.id, text: revision.text, entries: revision.entries } : null)
+    }
+    if (literal) {
+      showRevision(literal.text, literal)
+      return
+    }
+    suppressAgentChipSyncRef.current = true
+    setStreaming(true)
+    setAwaitingCatchUp(true)
+    try {
+      await runAgentStream({
+        projectId,
+        assistantId,
+        agentType: agent,
+        body: {
+          avatar_id: projectId,
+          agent_type: agent,
+          user_input: refineInstruction(post, instruction),
+          chatbot_context_on: false,
+          task: 'revise',
+          response_language: resolveUiLanguage(i18n.language),
+        },
+        handlers: {
+          onComplete: (data) => {
+            const revision = extractRevision(data.output, post.platform)
+            showRevision(revision ? revision.text : t('agents.drafts.proposalFailed'), revision)
+          },
+          onError: (message) => {
+            showRevision(
+              userFacingMessage(new AgentsApiError(message, 500), t('agents.drafts.proposalFailed')),
+              null,
+            )
+          },
+        },
+      })
+    } catch (error) {
+      showRevision(userFacingMessage(error, t('agents.drafts.proposalFailed')), null)
+    } finally {
+      suppressAgentChipSyncRef.current = false
+      setStreaming(false)
+      setAwaitingCatchUp(false)
+    }
+  }
+
+  function acceptChatProposal(post: ReviewPost) {
+    if (!proposal || proposal.postId !== post.id) return
+    const revision = proposal
+    setAcceptedRevision({
+      token: newId(),
+      postId: post.id,
+      text: revision.text,
+      entries: revision.entries,
+    })
+    setMessages((current) =>
+      patchReviewPost(current, post.messageId, post.id, (item) => acceptRevision(item, revision)),
+    )
+    setDismissedProposalIds((current) => {
+      const next = new Set(current)
+      for (const message of messages) {
+        if (message.proposalForPostId === post.id) next.add(message.id)
+      }
+      return next
+    })
+    setProposal(null)
+  }
 
   const headerActions = (
     <div className="flex shrink-0 items-center gap-2">
+      <button
+        type="button"
+        className={headerActionClassName}
+        aria-expanded={draftsOpen}
+        onClick={() => setDraftsOpen((open) => !open)}
+      >
+        <span>{t('agents.drafts.open')}</span>
+        {needsReviewCount > 0 ? <span>{needsReviewCount}</span> : null}
+      </button>
       <button
         type="button"
         onClick={() => {
@@ -1325,9 +1690,192 @@ export function AgentsPage() {
     )
   }
 
+  function detachRecognition(recognition: SpeechRecognitionLike) {
+    recognition.onresult = null
+    recognition.onerror = null
+    recognition.onend = null
+  }
+
+  function stopDictation(mode: 'stop' | 'abort' = 'stop') {
+    const recognition = recognitionRef.current
+    recognitionRef.current = null
+    dictationStopRequestedRef.current = true
+    setListening(false)
+    if (!recognition) return
+    if (mode === 'abort') {
+      const settled = applyDictationResult(
+        dictationFieldRef.current,
+        dictationCursorRef.current,
+        dictationCursorRef.current.appliedFinals,
+        '',
+      )
+      dictationFieldRef.current = settled.field
+      dictationCursorRef.current = settled.cursor
+      setInput(settled.field)
+      detachRecognition(recognition)
+      try {
+        recognition.abort()
+      } catch {
+        // The session was already stopped.
+      }
+      return
+    }
+    try {
+      recognition.stop()
+    } catch {
+      detachRecognition(recognition)
+      try {
+        recognition.abort()
+      } catch {
+        // The session was already stopped.
+      }
+    }
+  }
+  stopDictationRef.current = stopDictation
+
+  function reportSpeechError(error: string) {
+    const failure = speechFailure(error)
+    if (!failure) return
+    if (failure === 'empty') {
+      if (dictationStopRequestedRef.current) return
+      speechErrorRef.current = failure
+      setSendError(t('agents.speech.empty'))
+      return
+    }
+    speechErrorRef.current = failure
+    if (failure === 'permission') {
+      setSendError(t('agents.speech.permission'))
+      return
+    }
+    if (failure === 'unavailable') {
+      setSendError(t('agents.speech.unavailable'))
+      return
+    }
+    setSendError(t('agents.speech.failed', { error }))
+  }
+
+  function startDictation() {
+    if (showResponding) return
+    const Ctor = getSpeechRecognition(window as unknown as SpeechHost)
+    if (!Ctor) {
+      setSendError(t('agents.speech.unavailable'))
+      return
+    }
+    setSendError(null)
+    speechErrorRef.current = null
+    dictationStopRequestedRef.current = false
+    dictationFieldRef.current = input
+    dictationCursorRef.current = { appliedFinals: '', lastInterim: '' }
+    const recognition = new Ctor()
+    recognition.continuous = true
+    recognition.interimResults = true
+    recognition.lang = speechLanguageTag(i18n.language)
+    recognition.onresult = (event) => {
+      const { finals, interim } = collectTranscripts(event.results)
+      const applied = applyDictationResult(
+        dictationFieldRef.current,
+        dictationCursorRef.current,
+        finals,
+        interim,
+      )
+      dictationFieldRef.current = applied.field
+      dictationCursorRef.current = applied.cursor
+      setInput(applied.field)
+    }
+    recognition.onerror = (event) => {
+      reportSpeechError(event.error)
+    }
+    recognition.onend = () => {
+      const userStopped = dictationStopRequestedRef.current
+      if (!userStopped) {
+        const settled = applyDictationResult(
+          dictationFieldRef.current,
+          dictationCursorRef.current,
+          dictationCursorRef.current.appliedFinals,
+          '',
+        )
+        dictationFieldRef.current = settled.field
+        dictationCursorRef.current = settled.cursor
+        setInput(settled.field)
+        if (!speechErrorRef.current && !settled.cursor.appliedFinals) {
+          setSendError(t('agents.speech.empty'))
+        }
+      }
+      detachRecognition(recognition)
+      if (recognitionRef.current === recognition) recognitionRef.current = null
+      setListening(false)
+    }
+    recognitionRef.current = recognition
+    try {
+      recognition.start()
+      setListening(true)
+    } catch (error) {
+      detachRecognition(recognition)
+      if (recognitionRef.current === recognition) recognitionRef.current = null
+      setListening(false)
+      const message = error instanceof Error ? error.message : 'start-failed'
+      setSendError(t('agents.speech.failed', { error: message }))
+    }
+  }
+
+  function toggleDictation() {
+    if (recognitionRef.current) stopDictation('stop')
+    else startDictation()
+  }
+
   function renderComposer(centeredTags = false) {
+    const attachedDraft = draftTargetId
+      ? reviewPosts.find((post) => post.id === draftTargetId) ?? null
+      : null
+    const attachedPreview = attachedDraft ? draftPreviewText(attachedDraft.text) : ''
+    const attachedPlatform = !attachedDraft
+      ? ''
+      : attachedDraft.platform === 'linkedin'
+        ? t('agents.drafts.platformLinkedin')
+        : attachedDraft.platform === 'x'
+          ? t('agents.drafts.platformX')
+          : t('agents.drafts.platformInstagram')
     return (
       <form className="w-full" onSubmit={(event) => void handleSend(event)}>
+        {attachedDraft ? (
+          <div className="mb-2 flex items-start gap-2 rounded-xl border border-border-hairline bg-canvas px-3 py-2 text-left">
+            <div className="min-w-0 flex-1 border-l-2 border-accent-primary-deep/70 pl-2">
+              <p className="text-[11px] font-medium text-ink-muted">
+                {t('agents.drafts.editingDraft', { platform: attachedPlatform })}
+              </p>
+              <p className="line-clamp-4 whitespace-pre-wrap text-xs text-ink">{attachedPreview}</p>
+            </div>
+            <button
+              type="button"
+              className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-ink-muted hover:bg-canvas-raised hover:text-ink"
+              aria-label={t('agents.drafts.clearAddedDraft')}
+              onClick={() => setDraftTargetId(null)}
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" className="h-3.5 w-3.5" aria-hidden>
+                <path d="M6 6l12 12M18 6L6 18" strokeLinecap="round" />
+              </svg>
+            </button>
+          </div>
+        ) : replyTarget ? (
+          <div className="mb-2 flex items-start gap-2 rounded-xl border border-border-hairline bg-canvas px-3 py-2 text-left">
+            <div className="min-w-0 flex-1 border-l-2 border-accent-primary-deep/70 pl-2">
+              <p className="text-[11px] font-medium text-ink-muted">
+                {replyTarget.role === 'assistant' ? t('agents.reply.assistant') : t('agents.reply.you')}
+              </p>
+              <p className="truncate text-xs text-ink">{replyTarget.excerpt}</p>
+            </div>
+            <button
+              type="button"
+              className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-ink-muted hover:bg-canvas-raised hover:text-ink"
+              aria-label={t('agents.reply.cancel')}
+              onClick={() => setReplyTarget(null)}
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" className="h-3.5 w-3.5" aria-hidden>
+                <path d="M6 6l12 12M18 6L6 18" strokeLinecap="round" />
+              </svg>
+            </button>
+          </div>
+        ) : null}
         {taggedAvatarIds.length > 0 ? (
           <div
             className={`mb-2 flex flex-wrap gap-2 ${centeredTags ? 'justify-center' : ''}`}
@@ -1375,14 +1923,23 @@ export function AgentsPage() {
           ) : null}
 
           <div className="flex items-center gap-2 rounded-full border border-border-hairline bg-canvas-raised px-3 py-2 sm:px-4">
-            <button
-              type="button"
-              tabIndex={-1}
-              aria-hidden="true"
-              className="contos-btn contos-btn--icon contos-btn--icon-sm contos-btn--ghost"
-            >
-              <MicIcon />
-            </button>
+            <div className="relative shrink-0">
+              {listening ? (
+                <span className="contos-speech-bubble" aria-hidden="true">
+                  {t('agents.speech.stopRecording')}
+                </span>
+              ) : null}
+              <button
+                type="button"
+                className="contos-btn contos-btn--icon contos-btn--icon-sm contos-btn--ghost"
+                aria-pressed={listening}
+                aria-label={listening ? t('agents.speech.stopRecording') : t('agents.speech.start')}
+                disabled={showResponding}
+                onClick={toggleDictation}
+              >
+                <MicIcon />
+              </button>
+            </div>
             <input
               ref={inputRef}
               value={input}
@@ -1457,42 +2014,44 @@ export function AgentsPage() {
       onSignOut={() => void handleSignOut()}
       sidebarOpen={sidebarOpen}
       onSidebarOpenChange={setSidebarOpen}
-      mainClassName="flex min-h-0 flex-col overflow-hidden pb-3 pt-4 sm:pt-6"
+      mainClassName="flex min-h-0 flex-col overflow-hidden"
     >
-      <div className="px-4 sm:px-8">
-        <IncompleteProfilingBanner
-          projectId={project.id}
-          profilingCompleteness={project.profiling_completeness}
-        />
-      </div>
-
-      <div className="mb-3 shrink-0 px-4 sm:px-8">
-        <div className="flex items-center justify-between gap-4">
-          <AgentTypePills
-            agentType={agentType}
-            streaming={showResponding}
-            options={agentOptions}
-            onChange={(next) => {
-              setPendingPlatformRedirect(null)
-              setAgentType(next)
-            }}
-          />
-          {headerActions}
-        </div>
-      </div>
-
-      {showResearchInProgressBanner ? (
-        <div className="mb-2 shrink-0 px-4 sm:px-8">
-          <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-900">
-            {t('agents.researchInProgress')}{' '}
-            <Link className="font-medium underline" to={`/dashboard/${projectId}`}>
-              {t('agents.viewProgress')}
-            </Link>
+      <div className="flex min-h-0 flex-1">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden pb-3 pt-4 sm:pt-6">
+          <div className="px-4 sm:px-8">
+            <IncompleteProfilingBanner
+              projectId={project.id}
+              profilingCompleteness={project.profiling_completeness}
+            />
           </div>
-        </div>
-      ) : null}
 
-      {showClaudeStyleGreeting ? (
+          <div className="mb-3 shrink-0 px-4 sm:px-8">
+            <div className="flex items-center justify-between gap-4">
+              <AgentTypePills
+                agentType={agentType}
+                streaming={showResponding}
+                options={agentOptions}
+                onChange={(next) => {
+                  setPendingPlatformRedirect(null)
+                  setAgentType(next)
+                }}
+              />
+              {headerActions}
+            </div>
+          </div>
+
+          {showResearchInProgressBanner ? (
+            <div className="mb-2 shrink-0 px-4 sm:px-8">
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-900">
+                {t('agents.researchInProgress')}{' '}
+                <Link className="font-medium underline" to={`/dashboard/${projectId}`}>
+                  {t('agents.viewProgress')}
+                </Link>
+              </div>
+            </div>
+          ) : null}
+
+          {showClaudeStyleGreeting ? (
         <section className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto px-4 pb-4 pt-2 sm:px-8">
           <div className="flex w-full max-w-3xl flex-col items-center px-1 text-center sm:px-2">
             <img
@@ -1515,9 +2074,19 @@ export function AgentsPage() {
             </p>
 
             {sendError ? (
-              <p className="mt-4 w-full rounded-xl border border-red-100 bg-red-50 px-4 py-2 text-left text-sm text-red-700">
-                {sendError}
-              </p>
+              <div className="mt-4 flex w-full items-center gap-3 rounded-xl border border-red-100 bg-red-50 px-4 py-2 text-left text-sm text-red-700">
+                <p className="min-w-0 flex-1">{sendError}</p>
+                <button
+                  type="button"
+                  onClick={() => setSendError(null)}
+                  className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-red-700 transition hover:bg-red-100"
+                  aria-label={t('common.close')}
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" className="h-4 w-4" aria-hidden="true">
+                    <path d="M6 6l12 12M18 6L6 18" strokeLinecap="round" />
+                  </svg>
+                </button>
+              </div>
             ) : null}
 
             <div className="mt-6 w-full sm:mt-8">{renderComposer(true)}</div>
@@ -1526,26 +2095,113 @@ export function AgentsPage() {
         </section>
       ) : (
         <section className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto py-2 sm:space-y-4 sm:py-3">
+          <div
+            ref={messageListRef}
+            className="min-h-0 flex-1 space-y-3 overflow-y-auto py-2 sm:space-y-4 sm:py-3"
+            onScroll={(event) => {
+              if (!event.nativeEvent.isTrusted) return
+              const list = event.currentTarget
+              const distanceFromBottom = list.scrollHeight - list.scrollTop - list.clientHeight
+              stickToBottomRef.current = distanceFromBottom < 96
+            }}
+          >
             {conversationMessages
               .filter((message) => {
                 if (message.role === 'user') return true
+                if (message.proposalForPostId) return message.content.trim().length > 0
                 if (resolveAssistantOutput(message)) return true
                 return message.content.trim().length > 0
               })
               .map((message) => {
                 const structuredOutput =
-                  message.role === 'assistant' ? resolveAssistantOutput(message) : null
+                  message.role === 'assistant' && !message.proposalForPostId
+                    ? resolveAssistantOutput(message)
+                    : null
+                const proposalPost =
+                  message.proposalForPostId && proposal?.messageId === message.id
+                    ? reviewPosts.find((post) => post.id === message.proposalForPostId) ?? null
+                    : null
+                const revision = message.proposalForPostId
+                  ? extractRevision(
+                      message.output ?? message.content,
+                      reviewPlatformForAgent(message.agentType),
+                    )
+                  : null
+                const proposalText =
+                  proposalPost && proposal ? proposal.text : revision?.text ?? ''
+                const content = message.proposalForPostId
+                  ? proposalText && !proposalText.trim().startsWith('{')
+                    ? proposalText
+                    : message.content.trim().startsWith('{')
+                      ? t('agents.drafts.proposalFailed')
+                      : message.content
+                  : message.content
+                const messageIndex = messages.findIndex((item) => item.id === message.id)
+                const following = messageIndex >= 0 ? messages[messageIndex + 1] : undefined
+                const linkedPost =
+                  message.role === 'user' && !message.draftPreview && following?.proposalForPostId
+                    ? reviewPosts.find((post) => post.id === following.proposalForPostId) ?? null
+                    : null
+                const preview = message.draftPreview
+                  ? message.draftPreview
+                  : linkedPost
+                    ? {
+                        platform: linkedPost.platform,
+                        excerpt: draftPreviewText(linkedPost.text),
+                      }
+                    : null
 
                 return (
-                  <div key={message.id} className="px-4 sm:px-8">
+                  <div key={message.id} id={`chat-msg-${message.id}`} className="px-4 sm:px-8">
                     <ChatMessageBubble
                       role={message.role}
-                      content={message.content}
+                      content={content}
                       taggedAvatarNames={message.taggedAvatarNames}
                       agentType={message.agentType}
                       structuredOutput={structuredOutput}
                       avatarId={projectId}
+                      replyTo={message.replyTo}
+                      draftPreview={
+                        preview
+                          ? {
+                              label: t('agents.drafts.attachedPreview', {
+                                platform: draftPlatformName(preview.platform, t),
+                              }),
+                              excerpt: preview.excerpt,
+                            }
+                          : undefined
+                      }
+                      onReply={() => {
+                        const target = replyTargetForMessage(message)
+                        if (!target) return
+                        setDraftTargetId(null)
+                        setReplyTarget(target)
+                        inputRef.current?.focus()
+                      }}
+                      onJumpToReply={jumpToMessage}
+                      footer={
+                        proposalPost ? (
+                          <div className="mt-2 flex gap-2">
+                            <button
+                              type="button"
+                              className="contos-btn contos-btn--rect"
+                              onClick={() => acceptChatProposal(proposalPost)}
+                            >
+                              {t('agents.drafts.accept')}
+                            </button>
+                            <button
+                              type="button"
+                              className="contos-btn contos-btn--rect contos-btn--secondary"
+                              onClick={() => {
+                                setDismissedProposalIds((current) => new Set(current).add(message.id))
+                                setProposal(null)
+                              }}
+                            >
+                              {t('agents.drafts.reject')}
+                            </button>
+                          </div>
+                        ) : null
+                      }
                     />
                   </div>
                 )
@@ -1558,13 +2214,22 @@ export function AgentsPage() {
                 ariaLabel={t('agents.respondingAria')}
               />
             ) : null}
-            <div ref={bottomRef} />
           </div>
 
           {sendError ? (
-            <p className="border-t border-red-100 bg-red-50 px-4 py-2 text-sm text-red-700 sm:px-8">
-              {sendError}
-            </p>
+            <div className="flex items-center gap-3 border-t border-red-100 bg-red-50 px-4 py-2 text-sm text-red-700 sm:px-8">
+              <p className="min-w-0 flex-1">{sendError}</p>
+              <button
+                type="button"
+                onClick={() => setSendError(null)}
+                className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-red-700 transition hover:bg-red-100"
+                aria-label={t('common.close')}
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" className="h-4 w-4" aria-hidden="true">
+                  <path d="M6 6l12 12M18 6L6 18" strokeLinecap="round" />
+                </svg>
+              </button>
+            </div>
           ) : null}
           {syncError ? (
             <p className="border-t border-amber-100 bg-amber-50 px-4 py-2 text-sm text-amber-800 sm:px-8">
@@ -1577,6 +2242,45 @@ export function AgentsPage() {
           </div>
         </section>
       )}
+        </div>
+        {draftsOpen ? (
+          <button
+            type="button"
+            className="fixed inset-0 z-30 bg-ink/20 lg:hidden"
+            aria-label={t('agents.drafts.close')}
+            onClick={() => setDraftsOpen(false)}
+          />
+        ) : null}
+        {draftsOpen ? (
+          <div className="fixed inset-y-0 right-0 z-40 flex h-dvh min-h-0 w-full max-w-md flex-col lg:static lg:z-auto lg:h-full lg:max-h-full lg:w-[24rem] lg:max-w-none lg:shrink-0 lg:self-stretch">
+            <DraftsSidebar
+              posts={reviewPosts}
+              avatarId={project.id}
+              busy={showResponding}
+              scheduling={scheduling}
+              acceptedRevision={acceptedRevision}
+              report={scheduleReport}
+              onClose={() => setDraftsOpen(false)}
+              onPatch={(post) =>
+                setMessages((current) =>
+                  patchReviewPost(current, post.messageId, post.id, () => post),
+                )
+              }
+              onDelete={(post) => {
+                setMessages((current) => hideReviewPost(current, post.messageId, post.id))
+                setProposal((current) => (current?.postId === post.id ? null : current))
+                setDraftTargetId((current) => (current === post.id ? null : current))
+              }}
+              onAddToChat={(post) => {
+                setDraftTargetId(post.id)
+                setReplyTarget(null)
+                inputRef.current?.focus()
+              }}
+              onCommit={(post, localDateTime, mode) => void commitOne(post, localDateTime, mode)}
+            />
+          </div>
+        ) : null}
+      </div>
     </DashboardLayout>
   )
 }

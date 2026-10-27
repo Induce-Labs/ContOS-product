@@ -4,7 +4,6 @@ import type { TFunction } from 'i18next'
 import type { AgentType } from '../../lib/agentsApi'
 import { buildInstagramDisplaySections } from '../../lib/agentOutputDisplay'
 import {
-  outputHasSuggestions,
   splitSuggestions,
   stripSuggestionMarkers,
 } from '../../lib/draftSuggestions'
@@ -807,7 +806,6 @@ export function AgentOutputRenderer({
           (asString(record.reply) || (Array.isArray(record.ideas) && record.ideas.length)),
       )
       const nextQuestion = asString(record.next_question)
-      const showSuggestionHint = showBody && !plain && outputHasSuggestions(record)
 
       return (
         <div className="space-y-4">
@@ -825,9 +823,6 @@ export function AgentOutputRenderer({
               plain={plain}
               avatarId={avatarId}
             />
-          ) : null}
-          {showSuggestionHint ? (
-            <p className="text-xs text-ink-muted">{t('agents.output.suggestionHint')}</p>
           ) : null}
           {showBody && nextQuestion ? <Hairline /> : null}
           <NextQuestion text={nextQuestion} />

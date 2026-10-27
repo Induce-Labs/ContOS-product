@@ -512,7 +512,6 @@
       "ideas": "Idées",
       "exampleDraft": "Exemple de post - un point de départ à ajuster",
       "weeklyPlan": "Plan de la semaine",
-      "suggestionHint": "Les parties en gras sont des suggestions. Modifiez-les, ou dites « confirmer » pour les garder.",
       "confirmedNote": "Confirmé. Voici la version finale. Vérifiez que chaque détail est exact avant de publier.",
       "day": "Jour {{n}}",
       "competitorN": "Concurrent {{n}}",

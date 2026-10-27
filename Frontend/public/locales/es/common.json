@@ -512,7 +512,6 @@
       "ideas": "Ideas",
       "exampleDraft": "Publicación de ejemplo - un punto de partida para ajustar",
       "weeklyPlan": "Plan de la semana",
-      "suggestionHint": "Las partes en negrita son sugerencias. Cámbialas, o di \"confirmar\" para conservarlas.",
       "confirmedNote": "Confirmado. Esta es la versión final. Comprueba que cada detalle sea cierto antes de publicar.",
       "day": "Día {{n}}",
       "competitorN": "Competidor {{n}}",

@@ -17,7 +17,12 @@ from constants import response_language_instruction, response_language_user_remi
 from context.assembly import assemble_context
 from db.supabase_client import log_agent_call
 from mcp.server import TOOL_TRACE, mcp_server
-from prompts import get_system_prompt
+from prompts import (
+    get_system_prompt,
+    is_revise_task,
+    revise_system_prompt,
+    should_run_draft_judge,
+)
 from schemas.output_schemas import OUTPUT_MODELS
 
 load_dotenv()
@@ -329,8 +334,9 @@ class BaseAgent:
         chatbot_context_on: bool = False,
         chat_history: list[dict[str, str]] | None = None,
         response_language: str = "en",
+        revise: bool = False,
     ) -> list[dict[str, str]]:
-        history = [turn for turn in (chat_history or []) if turn.get("content")]
+        history = [] if revise else [turn for turn in (chat_history or []) if turn.get("content")]
         language_tail = response_language_user_reminder(
             response_language,
             structured=bool(self.structured_output),
@@ -366,6 +372,12 @@ class BaseAgent:
                 "do NOT copy their language if RESPONSE LANGUAGE says otherwise):\n"
                 + "\n".join(lines)
             )
+
+        if revise:
+            return [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_input},
+            ]
 
         if self.agent_type == "chatbot" and not chatbot_context_on:
             return _with_history(f"{user_input}{_memory_block()}")
@@ -862,9 +874,18 @@ class BaseAgent:
         chat_history: list[dict[str, str]] | None = None,
         response_language: str = "en",
         stream: bool = True,
+        task: str | None = None,
     ) -> Generator[dict[str, Any], None, None]:
         """Execute the agent pipeline, yielding SSE-ready event dicts."""
         agent_type = agent_type or self.agent_type
+        revise = is_revise_task(task)
+        if revise:
+            # A revise edit must not see chat history or competitor context.
+            chatbot_context_on = False
+            chat_history = None
+            competitor_summaries = None
+            competitor_url = None
+            tagged_avatar_ids = None
         status = "success"
         error_message = None
         raw_response = ""
@@ -907,7 +928,7 @@ class BaseAgent:
             )
 
             avatar_bundle: dict[str, Any] | None = None
-            if avatar_ids and (
+            if not revise and avatar_ids and (
                 chatbot_context_on
                 or has_tagged_avatars
                 or len(avatar_ids) > 1
@@ -924,7 +945,7 @@ class BaseAgent:
 
             # Avoid a second full RAG pass when avatar_bundle already loaded profile +
             # competitor intel (was roughly doubling pre-LLM latency).
-            needs_legacy_gather = (
+            needs_legacy_gather = not revise and (
                 agent_type == "playbook"
                 or live_mode
                 or bool(competitor_summaries)
@@ -961,8 +982,9 @@ class BaseAgent:
             # The demo corpus is global strategy reference material. Retrieve it
             # through MCP and present it in the same compact evidence slot as a
             # playbook, while retaining source/section metadata for traceability.
-            if agent_type in {"instagram", "linkedin", "twitter", "playbook"} or (
-                agent_type == "chatbot" and chatbot_context_on
+            if not revise and (
+                agent_type in {"instagram", "linkedin", "twitter", "playbook"}
+                or (agent_type == "chatbot" and chatbot_context_on)
             ):
                 knowledge_hits = self.mcp.call_tool(
                     "similarity_search",
@@ -991,7 +1013,7 @@ class BaseAgent:
 
             avatar_memory: list[dict[str, Any]] = []
             memory_avatar_id = avatar_ids[0] if avatar_ids else avatar_id
-            if agent_type in STRATEGIST_AGENTS and memory_avatar_id:
+            if not revise and agent_type in STRATEGIST_AGENTS and memory_avatar_id:
                 from services.avatar_memory import load_avatar_memory
 
                 avatar_memory = load_avatar_memory(
@@ -1001,7 +1023,7 @@ class BaseAgent:
                     tools_used.append("avatar_memory")
 
             competitor_style: dict[str, Any] | None = None
-            if agent_type in {"linkedin", "instagram"} and memory_avatar_id:
+            if not revise and agent_type in {"linkedin", "instagram"} and memory_avatar_id:
                 from services.competitor_style import load_competitor_post_style
 
                 competitor_style = load_competitor_post_style(
@@ -1010,7 +1032,7 @@ class BaseAgent:
                 if competitor_style:
                     tools_used.append("competitor_post_style")
 
-            if agent_type == "instagram":
+            if not revise and agent_type == "instagram":
                 from services.content_plan import load_recent_content_performance
 
                 previous_performance = load_recent_content_performance(
@@ -1030,7 +1052,7 @@ class BaseAgent:
                 or gathered.get("summaries")
                 or []
             )
-            if competitor_summaries:
+            if not revise and competitor_summaries:
                 # Merge ingested summaries into competitor intel
                 for item in competitor_summaries:
                     if isinstance(item, dict) and item.get("summary"):
@@ -1053,15 +1075,20 @@ class BaseAgent:
                 competitor_post_style=competitor_style,
             )
 
-            system_prompt = get_system_prompt(
-                agent_type,
-                chatbot_context_on,
-                multi_avatar=bool(avatar_bundle and avatar_bundle.get("multi_avatar")),
+            system_prompt = (
+                revise_system_prompt(agent_type)
+                if revise
+                else get_system_prompt(
+                    agent_type,
+                    chatbot_context_on,
+                    multi_avatar=bool(avatar_bundle and avatar_bundle.get("multi_avatar")),
+                )
             )
-            system_prompt += response_language_instruction(
-                response_language,
-                structured=bool(self.structured_output),
-            )
+            if not revise:
+                system_prompt += response_language_instruction(
+                    response_language,
+                    structured=bool(self.structured_output),
+                )
             messages = self.build_messages(
                 system_prompt,
                 context,
@@ -1069,6 +1096,7 @@ class BaseAgent:
                 chatbot_context_on,
                 chat_history=chat_history,
                 response_language=response_language,
+                revise=revise,
             )
 
             yield {
@@ -1127,7 +1155,11 @@ class BaseAgent:
                 tools_used.extend(playbook_tools)
                 for i in range(0, len(raw_response), 48):
                     yield {"event": "token", "data": {"token": raw_response[i : i + 48]}}
-            elif self.structured_output and agent_type in STRATEGIST_AGENTS:
+            elif should_run_draft_judge(
+                agent_type,
+                structured=bool(self.structured_output),
+                task=task,
+            ):
                 self._last_usage = usage
                 self._last_raw = ""
                 self._last_review = None

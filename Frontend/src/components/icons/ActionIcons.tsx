@@ -23,6 +23,22 @@ export function ChatIcon({ className = defaultClass }: IconProps) {
   )
 }
 
+export function ReplyIcon({ className = defaultClass }: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      className={className}
+      aria-hidden
+    >
+      <path d="M9 14 4 9l5-5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M4 9h9a7 7 0 0 1 7 7v3" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
 export function TrashIcon({ className = defaultClass }: IconProps) {
   return (
     <svg

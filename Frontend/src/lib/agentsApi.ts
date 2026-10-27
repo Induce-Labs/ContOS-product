@@ -52,6 +52,8 @@ export type AgentsInvokeRequest = {
   chat_history?: Array<{ role: 'user' | 'assistant'; content: string }>
   /** UI locale; agent replies in this language (en/hi/zh/fr/es). */
   response_language?: string
+  /** Edit one existing post. Omits chat history, competitor context, and the draft judge. */
+  task?: 'revise'
 }
 
 export type AgentsSseHandlers = {
@@ -187,6 +189,7 @@ export async function invokeAgentStream(
           ? body.chat_history
           : undefined,
       response_language: body.response_language ?? 'en',
+      ...(body.task ? { task: body.task } : {}),
     }),
     signal,
   })

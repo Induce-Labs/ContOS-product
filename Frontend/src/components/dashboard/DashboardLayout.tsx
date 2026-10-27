@@ -161,9 +161,6 @@ export function DashboardLayout({
                 <p className="truncate text-base font-semibold leading-tight text-ink">
                   {t('layout.brandName')}
                 </p>
-                <p className="truncate text-[11px] tracking-wide text-ink-muted">
-                  {t('layout.brandTagline')}
-                </p>
               </div>
             ) : null}
           </div>

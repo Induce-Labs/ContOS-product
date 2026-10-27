@@ -370,6 +370,40 @@ body {
   color: var(--color-ink-muted);
 }
 
+.contos-btn--icon.contos-btn--ghost[aria-pressed='true'] {
+  background-color: var(--color-accent-primary-soft);
+  border-color: transparent;
+  color: var(--color-accent-primary-deep);
+}
+
+.contos-speech-bubble {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  z-index: 20;
+  transform: translateX(-50%);
+  padding: 0.25rem 0.625rem;
+  border-radius: 999px;
+  background: var(--color-ink);
+  color: var(--color-canvas);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.25rem;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 6px 16px color-mix(in srgb, var(--color-ink) 18%, transparent);
+}
+
+.contos-speech-bubble::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: var(--color-ink);
+}
+
 .contos-btn--icon.contos-btn--ghost:hover:not(:disabled):not(
     [aria-disabled="true"]
   ) {

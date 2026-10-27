@@ -1,5 +1,6 @@
 import { isAgentsWelcomeMessage, type AgentType } from './agentsApi'
 import { formatStructuredAgentOutput } from './agentOutputDisplay'
+import type { ReplyTarget } from './agentChatStorage'
 
 export type ChatHistoryTurn = {
   role: 'user' | 'assistant'
@@ -7,10 +8,45 @@ export type ChatHistoryTurn = {
 }
 
 type MemorySourceMessage = {
+  id?: string
   role: 'user' | 'assistant'
   content: string
   agentType?: AgentType
   output?: unknown
+  proposalForPostId?: string
+  replyTo?: ReplyTarget
+}
+
+const REPLY_EXCERPT_LIMIT = 140
+
+export function replyExcerpt(text: string): string {
+  const flat = text.replace(/\s+/g, ' ').trim()
+  if (flat.length <= REPLY_EXCERPT_LIMIT) return flat
+  return `${flat.slice(0, REPLY_EXCERPT_LIMIT - 1)}…`
+}
+
+/** Plain-text tag for one message. Structured output uses its formatted text. */
+export function replyTargetForMessage(message: {
+  id: string
+  role: 'user' | 'assistant'
+  content: string
+  output?: unknown
+}): ReplyTarget | null {
+  let source = message.content
+  if (message.role === 'assistant' && message.output != null && typeof message.output === 'object') {
+    const formatted = formatStructuredAgentOutput(message.output).trim()
+    if (formatted) source = formatted
+  }
+  const excerpt = replyExcerpt(source)
+  if (!excerpt) return null
+  return { messageId: message.id, role: message.role, excerpt }
+}
+
+/** History and the invoke body see the quote. The stored bubble text does not. */
+export function userTextWithReply(text: string, replyTo: ReplyTarget | null | undefined): string {
+  if (!replyTo?.excerpt) return text
+  const who = replyTo.role === 'assistant' ? 'the assistant' : 'you'
+  return `Replying to ${who}: "${replyTo.excerpt}"\n\n${text}`
 }
 
 const MAX_HISTORY_MESSAGES = 12
@@ -59,14 +95,19 @@ export function buildChatHistoryForInvoke(
     if (agentType && isOtherPlatformSpecialist(message.agentType, agentType)) {
       continue
     }
+    if (message.role === 'assistant' && message.proposalForPostId) {
+      const previous = turns[turns.length - 1]
+      if (previous?.role === 'user') turns.pop()
+      continue
+    }
     if (message.role === 'assistant' && isAgentsWelcomeMessage(message.content)) {
       continue
     }
 
     if (message.role === 'user') {
-      const content = clip(message.content || '')
-      if (!content) continue
-      turns.push({ role: 'user', content })
+      const typed = clip(message.content || '')
+      if (!typed) continue
+      turns.push({ role: 'user', content: clip(userTextWithReply(typed, message.replyTo)) })
       continue
     }
 

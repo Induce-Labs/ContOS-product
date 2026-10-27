@@ -143,3 +143,30 @@ above) containing these fields in addition to the platform fields:
   "memory_updates": [{"kind": "...", "content": "...", "source": "..."}]
 Leave every platform content field empty when there is no draft or weekly plan.
 """
+
+REVISE_AGENTS = frozenset({"linkedin", "instagram", "twitter"})
+
+
+def is_revise_task(task: str | None) -> bool:
+    return task == "revise"
+
+
+def should_run_draft_judge(agent_type: str, *, structured: bool, task: str | None) -> bool:
+    """A revise edit is not a new draft, so the grounding judge must not rewrite it."""
+    return bool(structured and agent_type in REVISE_AGENTS and not is_revise_task(task))
+
+
+def revise_system_prompt(agent_type: str) -> str:
+    """Edit one post. This prompt replaces the strategist prompt for task=revise."""
+    return f"""You edit one existing {agent_type} post. The user message contains CURRENT POST and INSTRUCTION.
+Change only the words the instruction names. Add or remove text only when the instruction asks for that.
+Do not invent facts, examples, hashtags, statistics, quotes, or **bold** suggestions.
+Do not rewrite, lengthen, or improve the rest of the post.
+Keep the language of the current post. Do not translate it unless the instruction asks you to.
+Return one JSON object and no other text. Set "agent" to "{agent_type}" and "reply" to "".
+Put the full replacement in exactly one of these fields and leave the others empty:
+- LinkedIn: {{"post_ideas":[{{"post_structure":"..."}}]}}
+- Instagram: {{"content_calendar":[{{"copy_paste_post":"..."}}]}}
+- One X post: {{"tweet_ideas":[{{"full_tweet":"..."}}]}}
+- An X thread: {{"thread_structures":[{{"topic":"","tweets":["..."]}}]}}
+"""

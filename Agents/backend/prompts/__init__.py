@@ -8,6 +8,7 @@ from .chatbot import (
 from .instagram import INSTAGRAM_SYSTEM_PROMPT
 from .linkedin import LINKEDIN_SYSTEM_PROMPT
 from .playbook import PLAYBOOK_SYSTEM_PROMPT
+from .strategist_core import is_revise_task, revise_system_prompt, should_run_draft_judge
 from .twitter import TWITTER_SYSTEM_PROMPT
 
 
@@ -38,4 +39,9 @@ def get_system_prompt(
     return prompt
 
 
-__all__ = ["get_system_prompt"]
+__all__ = [
+    "get_system_prompt",
+    "is_revise_task",
+    "revise_system_prompt",
+    "should_run_draft_judge",
+]

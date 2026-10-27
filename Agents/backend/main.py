@@ -114,6 +114,10 @@ class InvokeRequest(BaseModel):
         max_length=8,
         description="UI locale code; agent must reply in this language (en/hi/zh/fr/es)",
     )
+    task: Literal["revise"] | None = Field(
+        default=None,
+        description="revise edits one existing post and skips history, competitor context, and the draft judge",
+    )
 
 
 class CompetitorIngestItem(BaseModel):
@@ -382,7 +386,7 @@ def invoke_agent(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     try:
-        normalized_history = normalize_chat_history(body.chat_history)
+        normalized_history = [] if body.task == "revise" else normalize_chat_history(body.chat_history)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -459,13 +463,14 @@ def invoke_agent(
                     agent_type=body.agent_type,
                     user_input=body.user_input,
                     live_mode=body.live_mode,
-                    chatbot_context_on=body.chatbot_context_on,
-                    competitor_url=body.competitor_url,
-                    competitor_summaries=body.competitor_summaries,
-                    tagged_avatar_ids=body.tagged_avatar_ids,
+                    chatbot_context_on=False if body.task == "revise" else body.chatbot_context_on,
+                    competitor_url=None if body.task == "revise" else body.competitor_url,
+                    competitor_summaries=None if body.task == "revise" else body.competitor_summaries,
+                    tagged_avatar_ids=None if body.task == "revise" else body.tagged_avatar_ids,
                     chat_history=normalized_history,
                     response_language=response_language,
                     stream=True,
+                    task=body.task,
                 ):
                     if stop_producer.is_set():
                         break

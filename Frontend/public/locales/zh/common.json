@@ -512,7 +512,6 @@
       "ideas": "创意",
       "exampleDraft": "示例帖子 - 供您参考修改的起点",
       "weeklyPlan": "本周计划",
-      "suggestionHint": "加粗部分是建议。可以修改，或说“确认”保留它们。",
       "confirmedNote": "已确认。这是最终版本。发布前请核实每个细节都属实。",
       "day": "第 {{n}} 天",
       "competitorN": "竞争对手 {{n}}",

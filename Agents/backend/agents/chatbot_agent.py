@@ -86,6 +86,7 @@ class ChatbotAgent(BaseAgent):
         chat_history: list[dict[str, str]] | None = None,
         response_language: str = "en",
         stream: bool = True,
+        task: str | None = None,
     ) -> Generator[dict[str, Any], None, None]:
         # Instant path for greetings — skip OpenRouter entirely
         # (skip when prior turns exist so mid-thread "hi" still uses memory)
@@ -94,6 +95,7 @@ class ChatbotAgent(BaseAgent):
             and not live_mode
             and not competitor_summaries
             and not chat_history
+            and task != "revise"
         ):
             reply = _instant_greeting(response_language)
             yield {"event": "status", "data": {"stage": "instant_reply", "agent": "chatbot"}}
@@ -163,4 +165,5 @@ class ChatbotAgent(BaseAgent):
             chat_history=chat_history,
             response_language=response_language,
             stream=stream,
+            task=task,
         )
