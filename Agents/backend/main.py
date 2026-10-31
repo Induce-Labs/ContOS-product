@@ -725,6 +725,17 @@ def backfill_twitter_summaries(
         ) from exc
 
 
+@app.get("/api/diagnostics/supermemory")
+def supermemory_diagnostics(
+    user_id: UUID = Depends(get_current_user_id),
+) -> dict[str, Any]:
+    """Temporary Supermemory connectivity probe. Remove after verification."""
+    require_admin_user(user_id)
+    from services.supermemory_diagnostics import probe_supermemory
+
+    return probe_supermemory()
+
+
 @app.get("/api/mcp/tools")
 def list_mcp_tools(
     user_id: UUID = Depends(get_current_user_id),
