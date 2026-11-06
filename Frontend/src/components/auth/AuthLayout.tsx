@@ -2,61 +2,79 @@ import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import bgSign from '../../assets/bg-sign.jpg'
+import contosMark from '../../assets/image.png'
 
 type AuthLayoutProps = {
   title: string
-  subtitle: string
   children: ReactNode
   footer: ReactNode
 }
 
-export function AuthLayout({ title, subtitle, children, footer }: AuthLayoutProps) {
+function BrandMark({ tone }: { tone: 'light' | 'dark' }) {
+  const { t } = useTranslation()
+  const nameClass = tone === 'light' ? 'text-white' : 'text-accent-primary-deep'
+
+  return (
+    <div className="flex items-center gap-3">
+      <img
+        src={contosMark}
+        alt=""
+        aria-hidden="true"
+        className="h-11 w-11 rounded-xl object-contain sm:h-12 sm:w-12"
+      />
+      <span className={`text-2xl font-bold tracking-tight sm:text-[1.75rem] ${nameClass}`}>
+        {t('auth.brandName')}
+      </span>
+    </div>
+  )
+}
+
+export function AuthLayout({ title, children, footer }: AuthLayoutProps) {
   const { t } = useTranslation()
 
   return (
-    <div className="flex min-h-dvh items-center justify-center overflow-y-auto bg-canvas p-3 sm:p-4">
-      <div className="my-auto flex w-full max-w-[980px] max-h-[calc(100dvh-1.5rem)] flex-col overflow-hidden rounded-[2rem] bg-canvas-raised p-2 shadow-[0_8px_30px_rgb(0,0,0,0.04)] sm:rounded-[2.25rem] sm:p-3 md:max-h-[calc(100dvh-2rem)] md:flex-row">
-        <div className="relative hidden min-h-0 overflow-hidden rounded-[1.5rem] md:flex md:w-[42%] md:flex-col md:justify-between">
-          <img
-            src={bgSign}
-            alt=""
-            aria-hidden="true"
-            className="absolute inset-0 h-full w-full object-cover"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/15 to-black/25" />
+    <div className="flex min-h-dvh flex-col bg-canvas-raised md:flex-row">
+      <aside className="relative hidden min-h-dvh w-1/2 overflow-hidden md:flex md:flex-col">
+        <img
+          src={bgSign}
+          alt=""
+          aria-hidden="true"
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/35 to-black/25" />
 
-          <div className="relative z-10 p-6 lg:p-8">
-            <span className="text-xl font-bold tracking-tight text-white">
-              {t('auth.brandName')}
-            </span>
-          </div>
-
-          <div className="relative z-10 mt-auto p-6 pt-8 lg:p-8">
-            <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-white/80">
-              {t('auth.panelEyebrow')}
-            </p>
-            <h2 className="text-2xl font-semibold leading-snug text-white lg:text-[1.75rem]">
-              {t('auth.panelHeadline')}
-            </h2>
-          </div>
+        <div className="relative z-10 p-8 lg:p-10">
+          <BrandMark tone="light" />
         </div>
 
-        <div className="flex min-h-0 w-full flex-col justify-center overflow-y-auto p-5 sm:p-6 md:w-[58%] md:p-8 lg:p-10">
-          <div className="mx-auto w-full max-w-[380px]">
-            <div className="mb-5 space-y-1.5 sm:mb-6">
-              <div className="mb-4 flex items-center md:hidden">
-                <span className="text-xl font-bold tracking-tight text-accent-primary-deep">
-                  {t('auth.brandName')}
-                </span>
-              </div>
-              <h1 className="text-2xl font-bold tracking-tight text-ink sm:text-[1.75rem]">{title}</h1>
-              <p className="text-sm leading-relaxed text-ink-muted">{subtitle}</p>
-            </div>
-
-            {children}
-
-            <div className="mt-5 text-center text-sm text-ink-muted sm:mt-6">{footer}</div>
+        <div className="relative z-10 flex flex-1 flex-col justify-center px-8 pb-16 lg:px-12 lg:pb-20">
+          <div className="max-w-md">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-[0.14em] text-white/75">
+              {t('auth.panelEyebrow')}
+            </p>
+            <h2 className="text-[2.15rem] font-bold leading-snug tracking-tight text-white lg:text-[2.4rem]">
+              {t('auth.panelHeadline')}
+            </h2>
+            <p className="mt-4 text-sm leading-relaxed text-white/75 lg:text-[0.95rem]">
+              {t('auth.panelBody')}
+            </p>
           </div>
+        </div>
+      </aside>
+
+      <div className="flex min-h-dvh w-full flex-col justify-center px-6 py-10 sm:px-10 md:w-1/2 md:px-12 lg:px-16">
+        <div className="mx-auto w-full max-w-[380px]">
+          <div className="mb-8 md:hidden">
+            <BrandMark tone="dark" />
+          </div>
+
+          <h1 className="mb-8 text-[2.15rem] font-bold tracking-tight text-ink sm:text-[2.35rem]">
+            {title}
+          </h1>
+
+          {children}
+
+          <div className="mt-6 text-center text-sm text-ink-muted">{footer}</div>
         </div>
       </div>
     </div>
