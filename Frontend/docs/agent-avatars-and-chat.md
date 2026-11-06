@@ -68,6 +68,7 @@ Frontend sends `avatar_id`, optional `tagged_avatar_ids`, and optional `chat_his
 
 - Frontend needs `VITE_AGENT_API_BASE_URL` (e.g. `http://127.0.0.1:8002`)
 - Agents loads `Backend/.env` via [env_loader.py](../../Agents/backend/env_loader.py)
+- Browser ContOS flow console (`[CONTOS:…]` / invoke breadcrumbs) is **off by default**. Set `VITE_CONTOS_FLOW_CONSOLE=true` only for local debugging. Production Vite builds also strip `console` / `debugger` via Oxc `dropConsole` / `dropDebugger` (Vite 8 `build.rolldownOptions`).
 
 ## Security
 

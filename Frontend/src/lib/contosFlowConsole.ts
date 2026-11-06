@@ -14,9 +14,13 @@ export type ContosFlowEvent = {
 const seenEventIds = new Set<string>()
 const MAX_SEEN = 500
 
-/** Chrome DevTools ContOS flow logs — Vite DEV only. */
+/**
+ * Chrome DevTools ContOS flow logs.
+ * Opt-in only via VITE_CONTOS_FLOW_CONSOLE=true — never auto-enable from
+ * import.meta.env.DEV (some hosts run the Vite DEV server as "production").
+ */
 export function contosFlowConsoleEnabled(): boolean {
-  return Boolean(import.meta.env.DEV)
+  return import.meta.env.VITE_CONTOS_FLOW_CONSOLE === 'true'
 }
 
 export function logContosFlowEvent(event: ContosFlowEvent | null | undefined): void {
@@ -44,12 +48,10 @@ export function logContosFlowEvent(event: ContosFlowEvent | null | undefined): v
   if (!line) {
     return
   }
-  // Dual-emit so Custom levels (Verbose off / Warnings on) still show ContOS.
-  console.log(line)
-  console.warn(line)
+  console.debug(line)
 }
 
-/** DEV breadcrumb — always console.log, never throws. */
+/** Opt-in breadcrumb — never throws. */
 export function logContosFlowBreadcrumb(message: string, extra?: Record<string, unknown>): void {
   if (!contosFlowConsoleEnabled()) {
     return
@@ -60,9 +62,7 @@ export function logContosFlowBreadcrumb(message: string, extra?: Record<string, 
           .map(([k, v]) => `${k}=${String(v)}`)
           .join(' | ')}`
       : ''
-  const line = `[CONTOS:FLOW] ${message}${suffix}`
-  console.log(line)
-  console.warn(line)
+  console.debug(`[CONTOS:FLOW] ${message}${suffix}`)
 }
 
 export function formatContosFlowLine(event: ContosFlowEvent): string {
