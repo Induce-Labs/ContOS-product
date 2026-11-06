@@ -9,13 +9,14 @@ from .instagram import INSTAGRAM_SYSTEM_PROMPT
 from .linkedin import LINKEDIN_SYSTEM_PROMPT
 from .playbook import PLAYBOOK_SYSTEM_PROMPT
 from .strategist_core import is_revise_task, revise_system_prompt, should_run_draft_judge
-from .twitter import TWITTER_SYSTEM_PROMPT
+from .twitter import twitter_system_prompt
 
 
 def get_system_prompt(
     agent_type: str,
     chatbot_context_on: bool = False,
     multi_avatar: bool = False,
+    x_char_limit: int | None = None,
 ) -> str:
     if agent_type == "playbook":
         prompt = PLAYBOOK_SYSTEM_PROMPT
@@ -24,7 +25,7 @@ def get_system_prompt(
     elif agent_type == "linkedin":
         prompt = LINKEDIN_SYSTEM_PROMPT
     elif agent_type == "twitter":
-        prompt = TWITTER_SYSTEM_PROMPT
+        prompt = twitter_system_prompt(280 if x_char_limit is None else x_char_limit)
     elif agent_type == "chatbot":
         prompt = (
             CHATBOT_CONTEXT_ON_PROMPT

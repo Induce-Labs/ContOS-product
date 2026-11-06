@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from .compression import compress_context
+from .profiling_data import omit_raw_profiling_data_for_llm
 
 
 def compress_summaries(summaries: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -54,12 +55,21 @@ def assemble_context(
     competitor_post_style: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     multi = bool(avatar_bundle and avatar_bundle.get("multi_avatar"))
-    profiles = (avatar_bundle or {}).get("profiles") or (
+    raw_profiles = (avatar_bundle or {}).get("profiles") or (
         [profile] if profile else []
     )
+    # Never serialize raw questionnaire JSON for any avatar in the LLM CONTEXT.
+    # Primary PROFILE_READ sanitization already pops profiling_data; this also
+    # covers non-primary multi-avatar rows that were never SM-injected.
+    profiles = [
+        omit_raw_profiling_data_for_llm(item) if isinstance(item, dict) else item
+        for item in raw_profiles
+    ]
 
     avatars = (avatar_bundle or {}).get("avatars") or []
-    primary = profile or (profiles[0] if profiles else {})
+    primary = omit_raw_profiling_data_for_llm(profile) or (
+        profiles[0] if profiles else {}
+    )
     context: dict[str, Any] = {
         "brand_profile": primary,
         "avatar_profiles": profiles,

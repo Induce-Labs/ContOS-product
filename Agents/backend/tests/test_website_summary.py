@@ -12,6 +12,13 @@ BACKEND = Path(__file__).resolve().parents[1]
 if str(BACKEND) not in sys.path:
     sys.path.insert(0, str(BACKEND))
 
+
+@pytest.fixture(autouse=True)
+def _no_ambient_supermemory(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep profile generation tests from calling a configured Supermemory service."""
+    monkeypatch.delenv("SUPERMEMORY_BASE_URL", raising=False)
+    monkeypatch.delenv("SUPERMEMORY_API_KEY", raising=False)
+
 from clients.apify_website import (
     WebsiteCrawlError,
     extract_crawl_text,
@@ -183,6 +190,7 @@ def test_generate_profile_summary_continues_when_website_fails():
             "website_url": "https://broken.example",
         },
         "profile_summary_status": "pending",
+        "profile_summary": None,
     }
 
     mock_profile_update = MagicMock()
@@ -196,8 +204,8 @@ def test_generate_profile_summary_continues_when_website_fails():
                 side_effect=WebsiteSummaryError("crawl failed"),
             ):
                 with patch(
-                    "services.profile_summary._call_summary_llm",
-                    return_value="## Narrative Summary\nOk without site",
+                    "services.enqueue_profile_sync.schedule_profile_sync",
+                    return_value=True,
                 ):
                     result = generate_and_store_profile_summary(
                         avatar_id="a1",
@@ -205,9 +213,17 @@ def test_generate_profile_summary_continues_when_website_fails():
                         force=True,
                     )
 
-    assert result["profile_summary"] == "## Narrative Summary\nOk without site"
-    assert result["website_summary_status"] == "failed"
     assert result["status"] == "completed"
+    assert result["website_summary_status"] == "failed"
+    assert result["cached"] is False
+    # LLM summary is no longer written; historical column left untouched.
+    completed = [
+        call
+        for call in mock_profile_update.call_args_list
+        if call.kwargs.get("status") == "completed"
+    ]
+    assert completed
+    assert "summary" not in completed[-1].kwargs
 
 
 def test_generate_profile_summary_cached_still_runs_website_step():

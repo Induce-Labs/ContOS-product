@@ -296,6 +296,24 @@ def _join_continuation(kept: str, addition: str, sep: str) -> str:
 STRATEGIST_AGENTS = frozenset({"linkedin", "instagram", "twitter"})
 
 
+def uses_supermemory_profile_context(
+    agent_type: str,
+    *,
+    chatbot_context_on: bool = False,
+    revise: bool = False,
+) -> bool:
+    """True when this invoke should PROFILE_READ from Supermemory into brand_profile.
+
+    LinkedIn / Instagram / X always do. Chatbot does when brand context is on.
+    Playbook and revise turns do not.
+    """
+    if revise:
+        return False
+    if agent_type in STRATEGIST_AGENTS:
+        return True
+    return agent_type == "chatbot" and bool(chatbot_context_on)
+
+
 class BaseAgent:
     """Shared pipeline for ContOS specialized agents."""
 
@@ -726,6 +744,7 @@ class BaseAgent:
         chat_history: list[dict[str, str]] | None,
         avatar_memory: list[dict[str, Any]] | None,
         profile: dict[str, Any] | None,
+        tweet_limit: int = 280,
     ) -> Generator[dict[str, Any], None, None]:
         """Generate, judge draft/plan output, retry once with the rejection reason, then stream."""
         from services import draft_judge
@@ -744,14 +763,14 @@ class BaseAgent:
         missing_draft = parsed is not None and draft_judge.expects_draft(
             user_input, self.agent_type, parsed
         )
-        too_long = draft_judge.length_violation(self.agent_type, parsed)
+        too_long = draft_judge.length_violation(self.agent_type, parsed, tweet_limit)
         if parsed is not None and (missing_draft or too_long or draft_judge.is_judged(parsed)):
             client = get_llm_client()
             facts = draft_judge.build_facts(user_input, chat_history, avatar_memory, profile)
             if missing_draft:
                 verdict = dict(draft_judge.MISSING_DRAFT_VERDICT)
             elif too_long:
-                verdict = draft_judge.length_verdict(too_long)
+                verdict = draft_judge.length_verdict(too_long, tweet_limit)
             else:
                 verdict = draft_judge.judge_output(client, user_input, parsed, facts)
             review["verdicts"].append(verdict)
@@ -769,10 +788,14 @@ class BaseAgent:
                     review["fallback_verdict"] = verdict
                 else:
                     raw = raw2
-                    still_long = draft_judge.length_violation(self.agent_type, parsed2)
+                    still_long = draft_judge.length_violation(
+                        self.agent_type, parsed2, tweet_limit
+                    )
                     if still_long:
                         review["outcome"] = "fallback"
-                        review["fallback_verdict"] = draft_judge.length_verdict(still_long)
+                        review["fallback_verdict"] = draft_judge.length_verdict(
+                            still_long, tweet_limit
+                        )
                     elif missing_draft and not draft_judge.is_judged(parsed2):
                         review["outcome"] = "no_draft_after_retry"
                     elif draft_judge.is_judged(parsed2):
@@ -1014,13 +1037,18 @@ class BaseAgent:
             avatar_memory: list[dict[str, Any]] = []
             memory_avatar_id = avatar_ids[0] if avatar_ids else avatar_id
             if not revise and agent_type in STRATEGIST_AGENTS and memory_avatar_id:
-                from services.avatar_memory import load_avatar_memory
+                from services.avatar_memory import load_strategist_memory
+                from services.contos_flow_log import drain_flow_events
 
-                avatar_memory = load_avatar_memory(
-                    user_id=user_id, avatar_id=memory_avatar_id
+                avatar_memory = load_strategist_memory(
+                    user_id=user_id,
+                    avatar_id=memory_avatar_id,
+                    user_input=user_input,
                 )
                 if avatar_memory:
                     tools_used.append("avatar_memory")
+                for flow_evt in drain_flow_events():
+                    yield {"event": "contos_flow", "data": flow_evt}
 
             competitor_style: dict[str, Any] | None = None
             if not revise and agent_type in {"linkedin", "instagram"} and memory_avatar_id:
@@ -1062,6 +1090,93 @@ class BaseAgent:
                         s.setdefault("platform", item.get("platform"))
                         summaries.append(s)
 
+            load_profile_context = uses_supermemory_profile_context(
+                agent_type,
+                chatbot_context_on=chatbot_context_on,
+                revise=revise,
+            )
+            from services.contos_flow_log import drain_flow_events, flow_log, short_id
+
+            # Always emit the gate decision so DevTools shows where profile came from
+            # (or why PROFILE_READ did not run) — including chatbot with context off.
+            flow_log(
+                "PROFILE_READ",
+                "Gate evaluated",
+                agent=agent_type,
+                load=bool(load_profile_context),
+                chatbot_context_on=bool(chatbot_context_on),
+                revise=bool(revise),
+                avatar=short_id(memory_avatar_id),
+            )
+            for flow_evt in drain_flow_events():
+                yield {"event": "contos_flow", "data": flow_evt}
+
+            if load_profile_context and memory_avatar_id:
+                from services.profile_context import (
+                    apply_strategist_profile_context,
+                    load_strategist_profile_context,
+                )
+
+                profile_read = load_strategist_profile_context(
+                    user_id=user_id,
+                    avatar_id=memory_avatar_id,
+                    profiling_data=(profile or {}).get("profiling_data")
+                    if isinstance(profile, dict)
+                    else None,
+                    agent_type=agent_type,
+                )
+                profile = apply_strategist_profile_context(
+                    profile,
+                    profile_read,
+                    agent_type=agent_type,
+                )
+                # Keep multi-avatar profile list aligned with the primary inject.
+                # Non-primary rows keep their own flattened fields but drop raw
+                # profiling_data (no extra Supermemory GETs; no primary context copy).
+                if (
+                    isinstance(avatar_bundle, dict)
+                    and isinstance(profile, dict)
+                    and isinstance(avatar_bundle.get("profiles"), list)
+                ):
+                    from context.profiling_data import omit_raw_profiling_data_for_llm
+
+                    primary_id = str(profile.get("avatar_id") or memory_avatar_id)
+                    updated_profiles: list[Any] = []
+                    for item in avatar_bundle["profiles"]:
+                        if (
+                            isinstance(item, dict)
+                            and str(item.get("avatar_id") or item.get("id") or "")
+                            == primary_id
+                        ):
+                            updated_profiles.append(profile)
+                        elif isinstance(item, dict):
+                            updated_profiles.append(omit_raw_profiling_data_for_llm(item))
+                        else:
+                            updated_profiles.append(item)
+                    avatar_bundle = {**avatar_bundle, "profile": profile, "profiles": updated_profiles}
+                if profile_read.source == "supermemory":
+                    tools_used.append("supermemory_profile")
+                elif profile_read.source == "supabase_profiling_data":
+                    tools_used.append("profiling_data_fallback")
+                flow_log(
+                    "PROFILE_READ",
+                    "Source for this reply",
+                    agent=agent_type,
+                    source=profile_read.source,
+                    avatar=short_id(memory_avatar_id),
+                    destination=(
+                        "Supermemory"
+                        if profile_read.source == "supermemory"
+                        else (
+                            "Supabase profiling_data"
+                            if profile_read.source == "supabase_profiling_data"
+                            else "none"
+                        )
+                    ),
+                )
+                for flow_evt in drain_flow_events():
+                    yield {"event": "contos_flow", "data": flow_evt}
+
             context = assemble_context(
                 profile=profile,
                 summaries=summaries,
@@ -1075,6 +1190,23 @@ class BaseAgent:
                 competitor_post_style=competitor_style,
             )
 
+            if load_profile_context:
+                from services.contos_flow_log import drain_flow_events
+                from services.profile_context import log_strategist_profile_llm_handoff
+
+                log_strategist_profile_llm_handoff(
+                    agent_type=agent_type,
+                    profile=profile if isinstance(profile, dict) else None,
+                    context=context,
+                )
+                for flow_evt in drain_flow_events():
+                    yield {"event": "contos_flow", "data": flow_evt}
+
+            tweet_limit = 280
+            if agent_type == "twitter" and not revise:
+                from services.x_account import tweet_limit_for_avatar
+
+                tweet_limit = tweet_limit_for_avatar(avatar_id)
             system_prompt = (
                 revise_system_prompt(agent_type)
                 if revise
@@ -1082,6 +1214,7 @@ class BaseAgent:
                     agent_type,
                     chatbot_context_on,
                     multi_avatar=bool(avatar_bundle and avatar_bundle.get("multi_avatar")),
+                    x_char_limit=tweet_limit if agent_type == "twitter" else None,
                 )
             )
             if not revise:
@@ -1169,6 +1302,7 @@ class BaseAgent:
                     chat_history=chat_history,
                     avatar_memory=avatar_memory,
                     profile=profile,
+                    tweet_limit=tweet_limit,
                 )
                 raw_response = getattr(self, "_last_raw", "") or ""
                 usage = getattr(self, "_last_usage", usage)
@@ -1248,6 +1382,7 @@ class BaseAgent:
 
                 try:
                     from services.avatar_memory import save_memory_updates
+                    from services.contos_flow_log import drain_flow_events
 
                     saved_memory = save_memory_updates(
                         user_id=user_id,
@@ -1257,6 +1392,8 @@ class BaseAgent:
                     )
                     if saved_memory:
                         tools_used.append("avatar_memory_write")
+                    for flow_evt in drain_flow_events():
+                        yield {"event": "contos_flow", "data": flow_evt}
                 except Exception as memory_error:
                     logger.warning("Avatar memory write failed: %s", memory_error)
 

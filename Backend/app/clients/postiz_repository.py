@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 _TABLE = "postiz_connections"
 _SELECT_COLS = (
     "id, contos_user_id, avatar_id, postiz_organization_id, encrypted_access_token, "
-    "postiz_integration_id, postiz_x_integration_id, created_at, updated_at"
+    "postiz_integration_id, postiz_x_integration_id, x_account_type, created_at, updated_at"
 )
 
 
@@ -375,7 +375,7 @@ class PostizRepository:
 
         response = (
             self._client.table(_TABLE)
-            .update({"postiz_x_integration_id": None})
+            .update({"postiz_x_integration_id": None, "x_account_type": None})
             .eq("avatar_id", str(avatar_id))
             .execute()
         )
@@ -388,6 +388,34 @@ class PostizRepository:
         logger.info(
             "Cleared Postiz X integration id",
             extra={"avatar_id": str(avatar_id)},
+        )
+        return rows[0]
+
+    def set_x_account_type(self, avatar_id: UUID, account_type: str) -> dict[str, Any]:
+        """Store premium or standard for this avatar. Does not change the X integration id."""
+        if account_type not in ("premium", "standard"):
+            raise RepositoryError(
+                f"Unsupported X account type {account_type!r} for avatar {avatar_id}.",
+            )
+        current = self.get_connection(avatar_id)
+        if current is None:
+            raise RepositoryError(
+                f"No Postiz connection exists for avatar {avatar_id}.",
+            )
+        response = (
+            self._client.table(_TABLE)
+            .update({"x_account_type": account_type})
+            .eq("avatar_id", str(avatar_id))
+            .execute()
+        )
+        rows = [] if response is None else (response.data or [])
+        if not rows:
+            raise RepositoryError(
+                f"Failed to save X account type for avatar {avatar_id}.",
+            )
+        logger.info(
+            "Saved X account type",
+            extra={"avatar_id": str(avatar_id), "x_account_type": account_type},
         )
         return rows[0]
 

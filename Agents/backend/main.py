@@ -283,14 +283,22 @@ def summarize_profiling(
     """Enqueue website crawl + profile summary on the Celery website queue."""
     verify_avatar_owner(body.avatar_id, user_id)
 
+    from services.contos_flow_log import flow_context, flow_log, short_id
     from services.enqueue_profiling import EnqueueProfilingError, enqueue_profiling_summarize
 
     try:
-        enqueue_profiling_summarize(
-            avatar_id=body.avatar_id,
-            user_id=str(user_id),
-            force=body.force,
-        )
+        with flow_context(user_id=str(user_id), avatar_id=body.avatar_id):
+            flow_log(
+                "PROFILING",
+                "Summarize requested",
+                avatar=short_id(body.avatar_id),
+                force=body.force,
+            )
+            enqueue_profiling_summarize(
+                avatar_id=body.avatar_id,
+                user_id=str(user_id),
+                force=body.force,
+            )
     except EnqueueProfilingError as exc:
         raise HTTPException(
             status_code=500,
@@ -304,6 +312,21 @@ def summarize_profiling(
             f"Website crawl and profile summarization queued for avatar {body.avatar_id}."
         ),
     }
+
+
+@app.get("/api/dev/flow-events")
+def get_dev_flow_events(
+    avatar_id: str,
+    user_id: UUID = Depends(get_current_user_id),
+) -> dict[str, Any]:
+    """Return and clear ContOS flow events for Chrome DevTools (local only)."""
+    from services.contos_flow_log import consume_flow_events, flow_logs_enabled
+
+    if not flow_logs_enabled():
+        raise HTTPException(status_code=404, detail="Not found")
+    verify_avatar_owner(avatar_id, user_id)
+    events = consume_flow_events(user_id=str(user_id), avatar_id=avatar_id)
+    return {"events": events, "count": len(events)}
 
 
 @app.post("/api/translate")
@@ -455,64 +478,71 @@ def invoke_agent(
         stop_producer = threading.Event()
 
         def producer() -> None:
+            from services.contos_flow_log import drain_flow_events, flow_context
+
             last_refresh = time.monotonic()
             try:
-                for evt in agent.run(
-                    user_id=auth_user_id,
-                    avatar_id=auth_avatar_id,
-                    agent_type=body.agent_type,
-                    user_input=body.user_input,
-                    live_mode=body.live_mode,
-                    chatbot_context_on=False if body.task == "revise" else body.chatbot_context_on,
-                    competitor_url=None if body.task == "revise" else body.competitor_url,
-                    competitor_summaries=None if body.task == "revise" else body.competitor_summaries,
-                    tagged_avatar_ids=None if body.task == "revise" else body.tagged_avatar_ids,
-                    chat_history=normalized_history,
-                    response_language=response_language,
-                    stream=True,
-                    task=body.task,
-                ):
-                    if stop_producer.is_set():
-                        break
-                    now_mono = time.monotonic()
-                    if now_mono - last_refresh >= INFLIGHT_REFRESH_INTERVAL_SECS:
-                        still_owner = refresh_inflight_ttl(
-                            auth_user_id,
-                            inflight_token,
-                            scope=rate_scope,
-                        )
-                        last_refresh = now_mono
-                        if not still_owner:
-                            logger.info(
-                                "sse inflight preempted or expired; stopping producer",
-                                extra={
-                                    "user_id": auth_user_id,
-                                    "agent": body.agent_type,
-                                    "run_id": run_id,
-                                },
-                            )
-                            final_payload["status"] = "preempted"
-                            final_payload["error"] = (
-                                "Run was superseded by a newer request."
-                            )
+                with flow_context(user_id=auth_user_id, avatar_id=auth_avatar_id):
+                    for evt in agent.run(
+                        user_id=auth_user_id,
+                        avatar_id=auth_avatar_id,
+                        agent_type=body.agent_type,
+                        user_input=body.user_input,
+                        live_mode=body.live_mode,
+                        chatbot_context_on=False if body.task == "revise" else body.chatbot_context_on,
+                        competitor_url=None if body.task == "revise" else body.competitor_url,
+                        competitor_summaries=None if body.task == "revise" else body.competitor_summaries,
+                        tagged_avatar_ids=None if body.task == "revise" else body.tagged_avatar_ids,
+                        chat_history=normalized_history,
+                        response_language=response_language,
+                        stream=True,
+                        task=body.task,
+                    ):
+                        if stop_producer.is_set():
                             break
+                        now_mono = time.monotonic()
+                        if now_mono - last_refresh >= INFLIGHT_REFRESH_INTERVAL_SECS:
+                            still_owner = refresh_inflight_ttl(
+                                auth_user_id,
+                                inflight_token,
+                                scope=rate_scope,
+                            )
+                            last_refresh = now_mono
+                            if not still_owner:
+                                logger.info(
+                                    "sse inflight preempted or expired; stopping producer",
+                                    extra={
+                                        "user_id": auth_user_id,
+                                        "agent": body.agent_type,
+                                        "run_id": run_id,
+                                    },
+                                )
+                                final_payload["status"] = "preempted"
+                                final_payload["error"] = (
+                                    "Run was superseded by a newer request."
+                                )
+                                break
 
-                    event_name = evt.get("event")
-                    data = evt.get("data") if isinstance(evt.get("data"), dict) else {}
-                    if event_name == "complete":
-                        final_payload["status"] = str(data.get("status") or "success")
-                        final_payload["output"] = data.get("output")
-                        final_payload["error"] = None
-                    elif event_name == "error":
-                        final_payload["status"] = "error"
-                        final_payload["error"] = (
-                            str(data.get("error"))
-                            if data.get("error") is not None
-                            else "Agent stream failed"
-                        )
-                        final_payload["output"] = data.get("output")
+                        event_name = evt.get("event")
+                        data = evt.get("data") if isinstance(evt.get("data"), dict) else {}
+                        if event_name == "complete":
+                            final_payload["status"] = str(data.get("status") or "success")
+                            final_payload["output"] = data.get("output")
+                            final_payload["error"] = None
+                        elif event_name == "error":
+                            final_payload["status"] = "error"
+                            final_payload["error"] = (
+                                str(data.get("error"))
+                                if data.get("error") is not None
+                                else "Agent stream failed"
+                            )
+                            final_payload["output"] = data.get("output")
 
-                    event_q.put(evt)
+                        event_q.put(evt)
+                        for flow_evt in drain_flow_events():
+                            event_q.put({"event": "contos_flow", "data": flow_evt})
+                    for flow_evt in drain_flow_events():
+                        event_q.put({"event": "contos_flow", "data": flow_evt})
             except Exception as exc:
                 capture_server_exception(exc)
                 logger.exception(

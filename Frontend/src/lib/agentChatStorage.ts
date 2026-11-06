@@ -476,6 +476,8 @@ export function deleteChatSession(
 
 export const CHAT_DELETE_EVENT = 'contos-chat-delete'
 export const CHAT_DELETE_REVERT_EVENT = 'contos-chat-delete-revert'
+/** Project id stored when the sidebar logo asks for a new chat before Agents is ready. */
+export const LOGO_NEW_CHAT_KEY = 'contos_open_new_chat'
 
 export type ChatDeleteEventDetail = {
   projectId: string

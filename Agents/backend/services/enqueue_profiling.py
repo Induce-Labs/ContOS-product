@@ -18,6 +18,8 @@ def enqueue_profiling_summarize(
     force: bool = False,
 ) -> None:
     """Publish one Celery website-queue task. Raises if the broker is down."""
+    from services.contos_flow_log import flow_context, flow_log, short_id
+
     try:
         from tasks.profiling import run_summarize_task
     except Exception as error:
@@ -44,3 +46,11 @@ def enqueue_profiling_summarize(
         "Enqueued profiling summarize task",
         extra={"avatar_id": avatar_id, "user_id": user_id, "force": force},
     )
+    with flow_context(user_id=user_id, avatar_id=avatar_id):
+        flow_log(
+            "PROFILING",
+            "Summarize task enqueued",
+            avatar=short_id(avatar_id),
+            force=force,
+            queue="website",
+        )

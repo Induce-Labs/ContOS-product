@@ -51,6 +51,9 @@ MIGRATION_AVATAR_SCOPE = (
 MIGRATION_X_INTEGRATION_ID = (
     REPO_ROOT / "supabase" / "migrations" / "20260925000000_postiz_x_integration_id.sql"
 )
+MIGRATION_X_ACCOUNT_TYPE = (
+    REPO_ROOT / "supabase" / "migrations" / "20261102120000_postiz_x_account_type.sql"
+)
 
 USER_A = UUID("11111111-1111-1111-1111-111111111111")
 USER_B = UUID("22222222-2222-2222-2222-222222222222")
@@ -113,6 +116,7 @@ def _connection(
     org_id: str = "org-a",
     integration_id: str | None = None,
     x_integration_id: str | None = None,
+    x_account_type: str | None = None,
 ) -> dict[str, Any]:
     fernet = Fernet(settings.postiz_token_encryption_key.encode())
     return {
@@ -122,6 +126,7 @@ def _connection(
         "postiz_organization_id": org_id,
         "postiz_integration_id": integration_id,
         "postiz_x_integration_id": x_integration_id,
+        "x_account_type": x_account_type,
     }
 
 
@@ -1055,6 +1060,99 @@ class TestPostizRoutesAuth:
         finally:
             app.dependency_overrides.clear()
 
+    def test_x_status_returns_account_type(self) -> None:
+        from app.api.deps import get_current_user_id
+        from app.main import app
+
+        fake_status = PostizStatus(
+            connected=True,
+            integration=SafeIntegration(
+                id="x-1",
+                name="Sheema",
+                identifier="x",
+                picture=None,
+            ),
+            x_account_type="premium",
+        )
+        app.dependency_overrides[get_current_user_id] = lambda: USER_A
+        try:
+            with (
+                patch("app.api.routes.postiz.SupabaseRepository") as repo_cls,
+                patch("app.api.routes.postiz.PostizOAuthService") as service_cls,
+            ):
+                repo_cls.return_value.verify_avatar_owner.return_value = None
+                service_cls.return_value.get_x_status.return_value = fake_status
+                client = TestClient(app)
+                response = client.get(
+                    f"/api/postiz/status?avatar_id={AVATAR_A}&platform=x",
+                )
+                assert response.status_code == 200
+                assert response.json()["x_account_type"] == "premium"
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_put_x_account_type_rejects_unowned_avatar(self) -> None:
+        from app.api.deps import get_current_user_id
+        from app.errors import RepositoryError
+        from app.main import app
+
+        app.dependency_overrides[get_current_user_id] = lambda: USER_A
+        try:
+            with patch("app.api.routes.postiz.SupabaseRepository") as repo_cls:
+                repo_cls.return_value.verify_avatar_owner.side_effect = RepositoryError(
+                    "Avatar not found or you do not have permission to access it.",
+                )
+                client = TestClient(app)
+                response = client.put(
+                    "/api/postiz/x-account-type",
+                    json={"avatar_id": str(AVATAR_B), "account_type": "premium"},
+                )
+                assert response.status_code == 404
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_put_x_account_type_rejects_unknown_value(self) -> None:
+        from app.api.deps import get_current_user_id
+        from app.main import app
+
+        app.dependency_overrides[get_current_user_id] = lambda: USER_A
+        try:
+            client = TestClient(app)
+            response = client.put(
+                "/api/postiz/x-account-type",
+                json={"avatar_id": str(AVATAR_A), "account_type": "gold"},
+            )
+            assert response.status_code == 422
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_put_x_account_type_saves_for_owner(self) -> None:
+        from app.api.deps import get_current_user_id
+        from app.main import app
+
+        app.dependency_overrides[get_current_user_id] = lambda: USER_A
+        try:
+            with (
+                patch("app.api.routes.postiz.SupabaseRepository") as repo_cls,
+                patch("app.api.routes.postiz.PostizOAuthService") as service_cls,
+            ):
+                repo_cls.return_value.verify_avatar_owner.return_value = None
+                service_cls.return_value.set_x_account_type.return_value = "standard"
+                client = TestClient(app)
+                response = client.put(
+                    "/api/postiz/x-account-type",
+                    json={"avatar_id": str(AVATAR_A), "account_type": "standard"},
+                )
+                assert response.status_code == 200
+                assert response.json() == {"account_type": "standard"}
+                service_cls.return_value.set_x_account_type.assert_called_once_with(
+                    contos_user_id=USER_A,
+                    avatar_id=AVATAR_A,
+                    account_type="standard",
+                )
+        finally:
+            app.dependency_overrides.clear()
+
 
 class TestPostizRepositoryClaim:
     def test_claim_idempotent_for_same_avatar(self) -> None:
@@ -1155,6 +1253,12 @@ class TestPostizMigrationAndSecrets:
         assert "WHERE postiz_x_integration_id IS NOT NULL" in sql
         assert "DROP COLUMN" not in sql.upper()
         assert "postiz_integration_id text" not in sql
+
+    def test_x_account_type_migration_checks_premium_or_standard(self) -> None:
+        sql = MIGRATION_X_ACCOUNT_TYPE.read_text(encoding="utf-8")
+        assert "x_account_type" in sql
+        assert "IN ('premium', 'standard')" in sql
+        assert "DROP " not in sql.upper()
 
     def test_avatar_scope_migration(self) -> None:
         sql = MIGRATION_AVATAR_SCOPE.read_text(encoding="utf-8")
@@ -2150,6 +2254,42 @@ class TestPostizX:
         repository.claim_x_integration.assert_not_called()
         assert any(key.startswith("postiz:x:snapshot:") for key in redis_client.store)
         assert not any(key.startswith("postiz:linkedin:snapshot:") for key in redis_client.store)
+
+    def test_x_status_includes_stored_account_type(self) -> None:
+        settings = _settings()
+        client = MagicMock()
+        repository = MagicMock()
+        repository.get_connection.return_value = _connection(
+            settings=settings,
+            x_integration_id="x-a",
+            x_account_type="premium",
+        )
+        client.list_integrations.return_value = [
+            {"id": "x-a", "name": "X", "identifier": "x", "disabled": False},
+        ]
+        service = _service(settings=settings, client=client, repository=repository)
+        status = service.get_x_status(contos_user_id=USER_A, avatar_id=AVATAR_A)
+        assert status.connected is True
+        assert status.x_account_type == "premium"
+
+    def test_set_x_account_type_requires_connection_and_clears_cache(self) -> None:
+        settings = _settings()
+        repository = MagicMock()
+        redis_client = FakeRedis()
+        repository.get_connection.return_value = _connection(settings=settings)
+        service = _service(
+            settings=settings,
+            repository=repository,
+            redis_client=redis_client,
+        )
+        redis_client.store[f"postiz:x:status:{AVATAR_A}"] = "{}"
+        assert service.set_x_account_type(
+            contos_user_id=USER_A,
+            avatar_id=AVATAR_A,
+            account_type="premium",
+        ) == "premium"
+        repository.set_x_account_type.assert_called_once_with(AVATAR_A, "premium")
+        assert f"postiz:x:status:{AVATAR_A}" not in redis_client.store
 
     def test_x_claim_stores_x_id_and_rejects_linkedin_identifier(self) -> None:
         settings = _settings()

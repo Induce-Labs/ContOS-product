@@ -1,5 +1,12 @@
 import { logDevError, remoteStatusCode } from './devLog'
 import { getAccessToken as getAuthAccessToken } from './auth'
+import {
+  contosFlowConsoleEnabled,
+  logContosFlowBreadcrumb,
+  logContosFlowEvent,
+  pullContosFlowEvents,
+  type ContosFlowEvent,
+} from './contosFlowConsole'
 import { getApiBaseUrl } from './supabase'
 
 export class AgentsApiError extends Error {
@@ -61,6 +68,7 @@ export type AgentsSseHandlers = {
   onToken?: (token: string) => void
   onComplete?: (data: Record<string, unknown>) => void
   onError?: (message: string) => void
+  onContosFlow?: (data: ContosFlowEvent) => void
 }
 
 function requireAgentApiBaseUrl(): string {
@@ -109,6 +117,7 @@ async function getAccessToken(): Promise<string> {
 function parseSseChunk(
   buffer: string,
   handlers: AgentsSseHandlers,
+  counters?: { flow: number; status: number; token: number; complete: number },
 ): string {
   const parts = buffer.split('\n\n')
   const rest = parts.pop() ?? ''
@@ -139,13 +148,16 @@ function parseSseChunk(
     }
 
     if (eventName === 'status') {
+      counters && (counters.status += 1)
       handlers.onStatus?.(data)
     } else if (eventName === 'token') {
+      counters && (counters.token += 1)
       const token = typeof data.token === 'string' ? data.token : ''
       if (token) {
         handlers.onToken?.(token)
       }
     } else if (eventName === 'complete') {
+      counters && (counters.complete += 1)
       handlers.onComplete?.(data)
     } else if (eventName === 'error') {
       const message =
@@ -153,6 +165,11 @@ function parseSseChunk(
           ? data.error
           : 'Agent stream failed unexpectedly.'
       handlers.onError?.(message)
+    } else if (eventName === 'contos_flow') {
+      counters && (counters.flow += 1)
+      const flowEvent = data as ContosFlowEvent
+      logContosFlowEvent(flowEvent)
+      handlers.onContosFlow?.(flowEvent)
     }
   }
 
@@ -166,6 +183,16 @@ export async function invokeAgentStream(
 ): Promise<void> {
   const token = await getAccessToken()
   const base = getAgentApiBaseUrl()
+  const counters = { flow: 0, status: 0, token: 0, complete: 0 }
+
+  if (contosFlowConsoleEnabled()) {
+    logContosFlowBreadcrumb('invoke start', {
+      base,
+      agent: body.agent_type,
+      avatar: body.avatar_id.slice(0, 8),
+      chatbot_context_on: body.chatbot_context_on ?? true,
+    })
+  }
 
   const response = await fetch(`${base}/api/agents/invoke`, {
     method: 'POST',
@@ -223,6 +250,12 @@ export async function invokeAgentStream(
       status: response.status,
       error: message,
     })
+    if (contosFlowConsoleEnabled()) {
+      logContosFlowBreadcrumb('invoke HTTP failed', {
+        status: response.status,
+        error: message.slice(0, 120),
+      })
+    }
     throw new AgentsApiError(message, response.status, errorCode)
   }
 
@@ -240,11 +273,33 @@ export async function invokeAgentStream(
       break
     }
     buffer += decoder.decode(value, { stream: true })
-    buffer = parseSseChunk(buffer, handlers)
+    buffer = parseSseChunk(buffer, handlers, counters)
   }
 
   if (buffer.trim()) {
-    parseSseChunk(`${buffer}\n\n`, handlers)
+    parseSseChunk(`${buffer}\n\n`, handlers, counters)
+  }
+
+  if (contosFlowConsoleEnabled()) {
+    logContosFlowBreadcrumb('invoke stream done', {
+      agent: body.agent_type,
+      contos_flow: counters.flow,
+      status: counters.status,
+      tokens: counters.token,
+      complete: counters.complete,
+    })
+    const pulled = await pullContosFlowEvents(body.avatar_id, signal)
+    logContosFlowBreadcrumb('redis flow-events drain', {
+      avatar: body.avatar_id.slice(0, 8),
+      pulled,
+      sse_flow: counters.flow,
+    })
+    if (counters.flow === 0 && pulled === 0) {
+      logContosFlowBreadcrumb(
+        'no PROFILE_READ/MEMORY events — check Agents terminal for [CONTOS:] and CONTOS_FLOW_LOGS',
+        { agent: body.agent_type },
+      )
+    }
   }
 }
 

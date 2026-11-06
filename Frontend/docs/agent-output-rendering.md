@@ -17,14 +17,9 @@ Show Instagram / LinkedIn / Playbook / Twitter agent replies as readable strateg
 - Do not stream partial JSON into the chat bubble for structured agents (status line / “Building your strategy…” instead).
 - Chatbot remains plain-text streaming.
 
-## Chat draft edit + schedule (LinkedIn / X)
+## Single post in chat
 
-Plain single drafts (`draft_kind` `draft`/`example`, one item) for LinkedIn and X render [`ChatDraftComposer`](../src/components/agents/ChatDraftComposer.tsx): editable body (suggestion markers stripped), media attach (same caps as Calendar), Copy, Save draft, and a Schedule popover ([`ChatSchedulePopover`](../src/components/agents/ChatSchedulePopover.tsx)) with date/time, Schedule post, Publish now, and connect-platform warning/OAuth.
-
-- Prefill helpers: [`chatDraftPrefill.ts`](../src/lib/chatDraftPrefill.ts)
-- Uses existing Postiz APIs (`createPostizPost`, `uploadPostizMedia`, `getPostizStatus`, `startPostizConnect`); no new backend endpoints
-- `avatarId` (project id) is passed AgentsPage → ChatMessageBubble → AgentOutputRenderer
-- Instagram plain drafts stay Copy-only
+A single LinkedIn or X draft (`draft_kind` `draft` or `example`, one item) renders as the post text plus Copy. Suggestion markers (`**like this**`) are removed, so the post is ordinary text. Save, schedule, and publish are not in the chat. Those actions stay on the Drafts card and use the existing Postiz calls. Instagram plain drafts stay Copy-only.
 
 ## API endpoints
 

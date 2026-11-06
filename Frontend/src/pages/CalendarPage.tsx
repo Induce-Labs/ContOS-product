@@ -12,6 +12,7 @@ import {
   deletePostizPost,
   disconnectPostizIntegration,
   getPostizStatus,
+  setPostizXAccountType,
   isoToLocalDateTimeInput,
   listPostizPosts,
   localDateTimeToOffsetIso,
@@ -25,6 +26,7 @@ import {
   uploadPostizMedia,
   type PostizCalendarPost,
   type PostizIntegration,
+  type XAccountType,
   type PostizMediaItem,
   type PostizPostType,
 } from '../lib/postiz'
@@ -675,6 +677,149 @@ export function CalendarPage() {
   )
 }
 
+function XAccountTypeDialog({
+  open,
+  mode,
+  value,
+  saving,
+  errorMessage,
+  onChange,
+  onConfirm,
+  onCancel,
+}: {
+  open: boolean
+  mode: 'connect' | 'change'
+  value: XAccountType
+  saving: boolean
+  errorMessage: string | null
+  onChange: (value: XAccountType) => void
+  onConfirm: () => void
+  onCancel: () => void
+}) {
+  const { t } = useTranslation()
+  const titleId = useId()
+  const descriptionId = useId()
+  const groupName = useId()
+  const cancelRef = useRef<HTMLButtonElement | null>(null)
+
+  useEffect(() => {
+    if (!open) {
+      return
+    }
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    cancelRef.current?.focus()
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape' && !saving) {
+        onCancel()
+      }
+    }
+
+    window.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.body.style.overflow = previousOverflow
+      window.removeEventListener('keydown', onKeyDown)
+    }
+  }, [open, saving, onCancel])
+
+  if (!open) {
+    return null
+  }
+
+  const options: { id: XAccountType; label: string; hint: string }[] = [
+    {
+      id: 'premium',
+      label: t('postiz.calendar.x.premium'),
+      hint: t('postiz.calendar.x.premiumHint'),
+    },
+    {
+      id: 'standard',
+      label: t('postiz.calendar.x.standard'),
+      hint: t('postiz.calendar.x.standardHint'),
+    },
+  ]
+
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-end justify-center p-4 sm:items-center">
+      <button
+        type="button"
+        aria-label={t('common.cancel')}
+        className="absolute inset-0 bg-ink/40 backdrop-blur-[2px] dark:bg-black/60"
+        onClick={() => {
+          if (!saving) {
+            onCancel()
+          }
+        }}
+      />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        aria-describedby={descriptionId}
+        className="relative w-full max-w-md contos-dialog-panel rounded-[1.75rem] border border-border-hairline bg-canvas-raised p-6 shadow-[0_24px_64px_rgba(28,27,41,0.18)] sm:p-7"
+      >
+        <h2 id={titleId} className="font-serif text-2xl text-ink">
+          {t('postiz.calendar.x.accountTypeTitle')}
+        </h2>
+        <p id={descriptionId} className="mt-2 text-sm leading-relaxed text-ink-muted">
+          {mode === 'connect'
+            ? t('postiz.calendar.x.accountTypeConnectBody')
+            : t('postiz.calendar.x.accountTypeChangeBody')}
+        </p>
+        <fieldset className="mt-5 space-y-2">
+          <legend className="sr-only">{t('postiz.calendar.x.accountType')}</legend>
+          {options.map((option) => (
+            <label
+              key={option.id}
+              className="flex cursor-pointer items-start gap-3 rounded-2xl border border-border-hairline px-3 py-3"
+            >
+              <input
+                type="radio"
+                name={groupName}
+                className="mt-1"
+                checked={value === option.id}
+                onChange={() => onChange(option.id)}
+              />
+              <span>
+                <span className="block text-sm font-semibold text-ink">{option.label}</span>
+                <span className="block text-xs text-ink-muted">{option.hint}</span>
+              </span>
+            </label>
+          ))}
+        </fieldset>
+        {errorMessage ? (
+          <p className="mt-3 text-sm text-red-700 dark:text-red-300" role="alert">
+            {errorMessage}
+          </p>
+        ) : null}
+        <div className="mt-7 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <button
+            ref={cancelRef}
+            type="button"
+            onClick={onCancel}
+            disabled={saving}
+            className="contos-btn contos-btn--pill contos-btn--secondary"
+          >
+            {t('common.cancel')}
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={saving}
+            className="contos-btn contos-btn--pill"
+          >
+            {mode === 'connect'
+              ? t('postiz.calendar.x.connectPrepConfirm')
+              : t('postiz.calendar.x.accountTypeSave')}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  )
+}
+
 function XChannelPanel({
   avatarId,
   onIntegrationChange,
@@ -692,7 +837,14 @@ function XChannelPanel({
   const [isClaiming, setIsClaiming] = useState(false)
   const [isDisconnecting, setIsDisconnecting] = useState(false)
   const [disconnectOpen, setDisconnectOpen] = useState(false)
-  const [connectPrepOpen, setConnectPrepOpen] = useState(false)
+  const [accountTypeOpen, setAccountTypeOpen] = useState(false)
+  const [accountTypeMode, setAccountTypeMode] = useState<'connect' | 'change'>('connect')
+  const [selectedAccountType, setSelectedAccountType] = useState<XAccountType>('standard')
+  const [savedAccountType, setSavedAccountType] = useState<XAccountType | null>(null)
+  const [savingAccountType, setSavingAccountType] = useState(false)
+  const pendingAccountTypeRef = useRef<XAccountType | null>(null)
+  const savedAccountTypeRef = useRef<XAccountType | null>(null)
+  savedAccountTypeRef.current = savedAccountType
   const popupRef = useRef<Window | null>(null)
   const pollTimerRef = useRef<number | null>(null)
   const pollDeadlineRef = useRef<number>(0)
@@ -712,8 +864,28 @@ function XChannelPanel({
     popupRef.current = null
   }, [])
 
+  const persistPendingAccountType = useCallback(
+    async (fromStatus: XAccountType | null | undefined) => {
+      const choice = pendingAccountTypeRef.current
+      if (choice != null) {
+        pendingAccountTypeRef.current = null
+        try {
+          const saved = await setPostizXAccountType(avatarId, choice)
+          setSavedAccountType(saved)
+        } catch (error) {
+          setErrorMessage(userFacingMessage(error, t('postiz.calendar.x.accountTypeFailed')))
+        }
+        return
+      }
+      if (fromStatus !== undefined && !(fromStatus == null && savedAccountTypeRef.current != null)) {
+        setSavedAccountType(fromStatus)
+      }
+    },
+    [avatarId, t],
+  )
+
   const applyConnected = useCallback(
-    (nextIntegration: PostizIntegration | null) => {
+    (nextIntegration: PostizIntegration | null, fromStatus?: XAccountType | null) => {
       connectingRef.current = false
       setIntegration(nextIntegration)
       setClaimCandidates([])
@@ -721,8 +893,9 @@ function XChannelPanel({
       setErrorMessage(null)
       stopPolling()
       closePopup()
+      void persistPendingAccountType(fromStatus)
     },
-    [closePopup, stopPolling],
+    [closePopup, persistPendingAccountType, stopPolling],
   )
 
   const applyClaimCandidates = useCallback(
@@ -750,6 +923,7 @@ function XChannelPanel({
         if (cancelled) {
           return
         }
+        setSavedAccountType(status.xAccountType)
         if (status.connected) {
           setIntegration(status.integration)
           setClaimCandidates([])
@@ -794,6 +968,7 @@ function XChannelPanel({
       }
 
       connectingRef.current = false
+      pendingAccountTypeRef.current = null
       stopPolling()
       closePopup()
       setUiState('error')
@@ -813,7 +988,7 @@ function XChannelPanel({
   const refreshStatus = useCallback(async (): Promise<boolean> => {
     const status = await getPostizStatus(avatarId, 'x')
     if (status.connected) {
-      applyConnected(status.integration)
+      applyConnected(status.integration, status.xAccountType)
       return true
     }
     if (status.claim_candidates.length > 0) {
@@ -833,7 +1008,7 @@ function XChannelPanel({
       if (!result.connected || result.integration === null) {
         throw new PostizApiError(t('postiz.calendar.x.claimFailed'))
       }
-      applyConnected(result.integration)
+      applyConnected(result.integration, result.xAccountType)
     } catch (error) {
       setUiState('error')
       setErrorMessage(userFacingMessage(error, t('postiz.calendar.x.claimFailed')))
@@ -855,16 +1030,18 @@ function XChannelPanel({
           try {
             const status = await getPostizStatus(avatarId, 'x')
             if (status.connected && status.integration) {
-              applyConnected(status.integration)
+              applyConnected(status.integration, status.xAccountType)
               return
             }
             if (status.claim_candidates.length > 0) {
               applyClaimCandidates(status.claim_candidates)
               return
             }
+            pendingAccountTypeRef.current = null
             setUiState('error')
             setErrorMessage(t('postiz.calendar.x.timeout'))
           } catch (error) {
+            pendingAccountTypeRef.current = null
             setUiState('error')
             setErrorMessage(userFacingMessage(error, t('postiz.calendar.x.timeout')))
           }
@@ -880,8 +1057,15 @@ function XChannelPanel({
     }, POLL_INTERVAL_MS)
   }, [applyClaimCandidates, applyConnected, avatarId, closePopup, refreshStatus, stopPolling, t])
 
+  function openAccountTypeDialog(mode: 'connect' | 'change') {
+    setAccountTypeMode(mode)
+    setSelectedAccountType(savedAccountTypeRef.current ?? 'standard')
+    setAccountTypeOpen(true)
+  }
+
   async function handleConnectX() {
-    setConnectPrepOpen(false)
+    pendingAccountTypeRef.current = selectedAccountType
+    setAccountTypeOpen(false)
     setErrorMessage(null)
     connectingRef.current = true
     setUiState('connecting')
@@ -890,6 +1074,7 @@ function XChannelPanel({
     popupRef.current = popup
     if (!popup) {
       connectingRef.current = false
+      pendingAccountTypeRef.current = null
       setUiState('error')
       setErrorMessage(t('postiz.calendar.x.popupBlocked'))
       return
@@ -901,10 +1086,25 @@ function XChannelPanel({
       startPolling()
     } catch (error) {
       connectingRef.current = false
+      pendingAccountTypeRef.current = null
       popup.close()
       popupRef.current = null
       setUiState('error')
       setErrorMessage(userFacingMessage(error, t('postiz.calendar.x.connectFailed')))
+    }
+  }
+
+  async function saveAccountTypeChange() {
+    setSavingAccountType(true)
+    setErrorMessage(null)
+    try {
+      const saved = await setPostizXAccountType(avatarId, selectedAccountType)
+      setSavedAccountType(saved)
+      setAccountTypeOpen(false)
+    } catch (error) {
+      setErrorMessage(userFacingMessage(error, t('postiz.calendar.x.accountTypeFailed')))
+    } finally {
+      setSavingAccountType(false)
     }
   }
 
@@ -915,6 +1115,8 @@ function XChannelPanel({
       await disconnectPostizIntegration(avatarId, 'x')
       setDisconnectOpen(false)
       setIntegration(null)
+      setSavedAccountType(null)
+      pendingAccountTypeRef.current = null
       setUiState('disconnected')
     } catch (error) {
       setErrorMessage(userFacingMessage(error, t('postiz.calendar.x.disconnectFailed')))
@@ -924,8 +1126,15 @@ function XChannelPanel({
   }
 
   useEffect(() => {
-    onExposeConnect(() => setConnectPrepOpen(true))
+    onExposeConnect(() => openAccountTypeDialog('connect'))
   }, [onExposeConnect])
+
+  const accountTypeLabel =
+    savedAccountType === 'premium'
+      ? t('postiz.calendar.x.premium')
+      : savedAccountType === 'standard'
+        ? t('postiz.calendar.x.standard')
+        : ''
 
   const xSubtitle =
     uiState === 'checking'
@@ -935,7 +1144,7 @@ function XChannelPanel({
         : uiState === 'error'
           ? (errorMessage ?? t('postiz.calendar.x.connectFailed'))
           : uiState === 'connected'
-            ? (integration?.name ?? '')
+            ? [integration?.name, accountTypeLabel].filter(Boolean).join(' · ')
             : t('postiz.calendar.notConnected')
 
   return (
@@ -956,7 +1165,7 @@ function XChannelPanel({
                 className={menuItemClassName()}
                 onClick={() => {
                   close()
-                  setConnectPrepOpen(true)
+                  openAccountTypeDialog('connect')
                 }}
               >
                 {t('postiz.calendar.reconnectLinkedIn')}
@@ -968,12 +1177,25 @@ function XChannelPanel({
                 className={menuItemClassName()}
                 onClick={() => {
                   close()
-                  setConnectPrepOpen(true)
+                  openAccountTypeDialog('connect')
                 }}
               >
                 {uiState === 'error' ? t('common.retry') : t('postiz.calendar.x.connect')}
               </button>
             )}
+            {uiState === 'connected' ? (
+              <button
+                type="button"
+                role="menuitem"
+                className={menuItemClassName()}
+                onClick={() => {
+                  close()
+                  openAccountTypeDialog('change')
+                }}
+              >
+                {t('postiz.calendar.x.accountType')}
+              </button>
+            ) : null}
             {uiState === 'connected' ? (
               <button
                 type="button"
@@ -1013,15 +1235,31 @@ function XChannelPanel({
         </div>
       ) : null}
 
-      <ConfirmDialog
-        open={connectPrepOpen}
-        title={t('postiz.calendar.x.connectPrepTitle')}
-        description={t('postiz.calendar.connectAccountHint')}
-        confirmLabel={t('postiz.calendar.x.connectPrepConfirm')}
-        cancelLabel={t('common.cancel')}
-        tone="default"
-        onConfirm={() => void handleConnectX()}
-        onCancel={() => setConnectPrepOpen(false)}
+      {errorMessage && uiState === 'connected' && !accountTypeOpen ? (
+        <p className="text-sm text-red-700 dark:text-red-300" role="alert">
+          {errorMessage}
+        </p>
+      ) : null}
+
+      <XAccountTypeDialog
+        open={accountTypeOpen}
+        mode={accountTypeMode}
+        value={selectedAccountType}
+        saving={savingAccountType}
+        errorMessage={accountTypeMode === 'change' ? errorMessage : null}
+        onChange={setSelectedAccountType}
+        onConfirm={() => {
+          if (accountTypeMode === 'connect') {
+            void handleConnectX()
+            return
+          }
+          void saveAccountTypeChange()
+        }}
+        onCancel={() => {
+          if (!savingAccountType) {
+            setAccountTypeOpen(false)
+          }
+        }}
       />
 
       <ConfirmDialog

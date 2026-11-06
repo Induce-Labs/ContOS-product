@@ -4,14 +4,13 @@ import { PostizApiError } from './postiz'
 import {
   acceptRevision,
   collectReviewPosts,
+  ensureManualReviewMessage,
   extractRevision,
   hideReviewPost,
   literalReplacement,
-  messageQualifiesForDrafts,
+  manualReviewPost,
   patchReviewPost,
   preserveReviewPosts,
-  requestedDraftDayCount,
-  requestedDraftPostCount,
   scheduleSkipReason,
   stampMissingReviewPosts,
   stampReviewPosts,
@@ -55,6 +54,17 @@ describe('stampReviewPosts', () => {
     expect(posts.map((post) => post.text)).toEqual(['First body', 'Second body'])
     expect(posts.map((post) => post.id)).toEqual(['post-1', 'post-2'])
     expect(posts[0]?.proposedDate).toBe('2026-10-26')
+  })
+
+  it('stores a generated post without suggestion markers', () => {
+    const stamped = stampReviewPosts(
+      assistant({ post_ideas: [{ post_structure: 'Ship **the CRM** today' }] }),
+      ids(),
+    )
+    expect(collectReviewPosts([stamped.message])[0]?.text).toBe('Ship the CRM today')
+    expect(
+      extractRevision({ post_ideas: [{ post_structure: 'Ship **the CRM** today' }] }, 'linkedin'),
+    ).toEqual({ text: 'Ship the CRM today', entries: null })
   })
 
   it('turns seven Instagram bodies into seven posts and ignores idea-only rows', () => {
@@ -180,7 +190,7 @@ describe('stampReviewPosts', () => {
     expect(stamped.messages).toBe(messages)
   })
 
-  it('stamps a 2-day or week request and leaves a single day or a month in the chat only', () => {
+  it('stamps one post, a one-day request, and a week the same way', () => {
     const output = {
       post_ideas: [{ post_structure: 'One' }, { post_structure: 'Two' }],
     }
@@ -191,78 +201,44 @@ describe('stampReviewPosts', () => {
       ],
       ids(),
     )
-    const twoDays = stampMissingReviewPosts(
-      [
-        { id: 'u2', role: 'user', content: 'Write 2 days of content' },
-        assistant(output, 'two'),
-      ],
-      ids(),
-    )
     const oneDay = stampMissingReviewPosts(
       [
         { id: 'u3', role: 'user', content: 'Write 1 day of content' },
-        assistant(output, 'one'),
+        assistant({ post_ideas: [{ post_structure: 'Only day' }] }, 'one'),
       ],
       ids(),
     )
     const month = stampMissingReviewPosts(
       [
         { id: 'u4', role: 'user', content: 'Plan the whole month' },
-        assistant(output, 'month'),
+        assistant({ post_ideas: [{ post_structure: 'Month post' }] }, 'month'),
       ],
       ids(),
     )
     expect(collectReviewPosts(week.messages).map((post) => post.text)).toEqual(['One', 'Two'])
-    expect(collectReviewPosts(twoDays.messages)).toHaveLength(2)
-    expect(oneDay.changed).toBe(false)
-    expect(collectReviewPosts(oneDay.messages)).toEqual([])
-    expect(month.changed).toBe(false)
-    expect(collectReviewPosts(month.messages)).toEqual([])
-    expect(messageQualifiesForDrafts(week.messages, 1)).toBe(true)
-    expect(requestedDraftDayCount('seven days of linkedin posts')).toBe(7)
+    expect(collectReviewPosts(oneDay.messages).map((post) => post.text)).toEqual(['Only day'])
+    expect(collectReviewPosts(month.messages).map((post) => post.text)).toEqual(['Month post'])
   })
 
-  it('stamps a request for more than one post and leaves a single post or post ideas in the chat', () => {
-    const output = {
-      post_ideas: [{ post_structure: 'One' }, { post_structure: 'Two' }],
-    }
-    const five = stampMissingReviewPosts(
+  it('stamps a single post from General Chat and leaves an idea list with no body', () => {
+    const handoff = stampMissingReviewPosts(
       [
-        { id: 'u', role: 'user', content: 'Give me 5 posts' },
-        assistant(output, 'five'),
-      ],
-      ids(),
-    )
-    const fiveLinkedIn = stampMissingReviewPosts(
-      [
-        { id: 'u2', role: 'user', content: 'Write five linkedin posts' },
-        assistant(output, 'linkedin'),
-      ],
-      ids(),
-    )
-    const onePost = stampMissingReviewPosts(
-      [
-        { id: 'u3', role: 'user', content: 'Write 1 post' },
-        assistant(output, 'one'),
+        { id: 'u', role: 'user', content: 'write a post', agentType: 'chatbot' },
+        assistant({ post_ideas: [{ post_structure: 'From chat' }] }, 'handoff'),
       ],
       ids(),
     )
     const ideas = stampMissingReviewPosts(
       [
         { id: 'u4', role: 'user', content: 'Give me 5 post ideas' },
-        assistant(output, 'ideas'),
+        assistant({ ideas: [{ title: 'Angle', why: 'Because' }] }, 'ideas'),
       ],
       ids(),
     )
-    expect(collectReviewPosts(five.messages).map((post) => post.text)).toEqual(['One', 'Two'])
-    expect(collectReviewPosts(fiveLinkedIn.messages)).toHaveLength(2)
-    expect(onePost.changed).toBe(false)
-    expect(collectReviewPosts(onePost.messages)).toEqual([])
+    expect(collectReviewPosts(handoff.messages).map((post) => post.text)).toEqual(['From chat'])
+    expect(handoff.messages[1]?.agentType).toBe('linkedin')
     expect(ideas.changed).toBe(false)
     expect(collectReviewPosts(ideas.messages)).toEqual([])
-    expect(requestedDraftPostCount('Give me 10 posts')).toBe(10)
-    expect(requestedDraftPostCount('a couple of posts')).toBe(2)
-    expect(requestedDraftPostCount('one post')).toBeNull()
   })
 
   it('keeps a hidden card hidden and leaves a welcome-only thread empty', () => {
@@ -369,6 +345,12 @@ describe('revisions', () => {
       ),
     ).toBeNull()
     expect(extractRevision({ tweet_ideas: [{ full_tweet: 'x'.repeat(281) }] }, 'x')).toBeNull()
+    expect(
+      extractRevision({ tweet_ideas: [{ full_tweet: 'x'.repeat(281) }] }, 'x', 4000)?.text,
+    ).toBe('x'.repeat(281))
+    expect(
+      extractRevision({ tweet_ideas: [{ full_tweet: 'x'.repeat(4001) }] }, 'x', 4000),
+    ).toBeNull()
   })
 
   it('writes an accepted revision into the post the sidebar reads', () => {
@@ -450,6 +432,9 @@ describe('schedule decisions', () => {
     expect(scheduleSkipReason(post, '2026-10-25T11:00', now)).toBe('past')
     expect(scheduleSkipReason(post, 'not-a-date', now)).toBe('needs_time')
     expect(scheduleSkipReason({ ...post, platform: 'instagram' }, '2026-10-26T09:00', now)).toBe('instagram')
+    const longX = { ...post, platform: 'x' as const, text: 'x'.repeat(281) }
+    expect(scheduleSkipReason(longX, '2026-10-26T09:00', now)).toBe('too_long')
+    expect(scheduleSkipReason(longX, '2026-10-26T09:00', now, 4000)).toBeNull()
   })
 
   it('does not create again after a timeout when the calendar has one match', async () => {
@@ -570,6 +555,34 @@ describe('schedule decisions', () => {
       postizRequestFromReview({ ...thread, postizPostId: 'existing' }, '2026-10-26T09:00+05:30', 'schedule'),
     ).toMatchObject({ type: 'update', postId: 'existing', posts: undefined, threadUpdateLimited: true })
     expect(postizRequestFromReview({ ...post, platform: 'instagram' }, '2026-10-26T09:00+05:30', 'draft')).toBeNull()
+  })
+
+  it('schedules a manual LinkedIn post and still skips a manual Instagram post', () => {
+    const manual = {
+      ...manualReviewPost('linkedin', 'post-manual', 'msg-manual'),
+      text: 'Hello from drafts',
+      originalText: 'Hello from drafts',
+    }
+    expect(scheduleSkipReason(manual, '2026-10-26T09:00', now)).toBeNull()
+    expect(postizRequestFromReview(manual, '2026-10-26T09:00+05:30', 'schedule')).toMatchObject({
+      type: 'schedule',
+      platform: 'linkedin',
+      content: 'Hello from drafts',
+      postId: undefined,
+    })
+    const instagram = { ...manual, platform: 'instagram' as const }
+    expect(scheduleSkipReason(instagram, '2026-10-26T09:00', now)).toBe('instagram')
+    expect(postizRequestFromReview(instagram, '2026-10-26T09:00+05:30', 'schedule')).toBeNull()
+  })
+
+  it('keeps a manual post on its own message when stamps run', () => {
+    const manual = { ...manualReviewPost('x', 'post-x', 'msg-x'), text: 'One tweet' }
+    const first = ensureManualReviewMessage<DraftMessage>([], manual)
+    const again = ensureManualReviewMessage(first, { ...manual, text: 'Edited tweet' })
+    const stamped = stampMissingReviewPosts(again, ids())
+    expect(stamped.changed).toBe(false)
+    expect(collectReviewPosts(stamped.messages).map((post) => post.text)).toEqual(['Edited tweet'])
+    expect(collectReviewPosts(stamped.messages)[0]?.source).toBe('manual')
   })
 
   it('reads a post id from the shapes Postiz has returned', () => {

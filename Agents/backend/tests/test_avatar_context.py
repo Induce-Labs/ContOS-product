@@ -168,6 +168,179 @@ def test_assemble_keeps_every_tagged_avatar_profile():
     assert handles == ["poet", "saas"]
 
 
+def test_assemble_strips_raw_profiling_data_from_all_avatar_profiles():
+    import json
+
+    from context.assembly import assemble_context
+
+    primary = {
+        "avatar_id": "a1",
+        "name": "Primary",
+        "brand_voice": "Direct",
+        "profile_context": "SM primary context",
+        "profile_context_source": "supermemory",
+        "profiling_data": {"content_goal": {"question": "G?", "answer": "Leads"}},
+        "profile_summary": None,
+    }
+    secondary = {
+        "avatar_id": "a2",
+        "name": "Secondary",
+        "brand_voice": "Warm",
+        "goals": "Awareness",
+        "website_summary": "Secondary site blurb",
+        "profiling_data": {
+            "brand_voice": {"question": "V?", "answer": "Warm"},
+            "content_goal": {"question": "G?", "answer": "Awareness"},
+        },
+    }
+    # Secondary must not inherit primary profile_context.
+    assert "profile_context" not in secondary
+
+    ctx = assemble_context(
+        profile=primary,
+        summaries=[],
+        playbooks=[],
+        user_input="compare both",
+        agent_type="linkedin",
+        avatar_bundle={
+            "multi_avatar": True,
+            "avatars": [
+                {"id": "a1", "name": "Primary"},
+                {"id": "a2", "name": "Secondary"},
+            ],
+            "profiles": [primary, secondary],
+            "relevant_insights": [],
+            "competitor_context": [],
+        },
+    )
+
+    brand = ctx["brand_profile"]
+    profiles = ctx["avatar_profiles"]
+    assert brand["profile_context"] == "SM primary context"
+    assert "profiling_data" not in brand
+    assert brand.get("profiling_answer_count") == 1
+    assert brand["brand_voice"] == "Direct"
+
+    assert len(profiles) == 2
+    assert profiles[0]["avatar_id"] == "a1"
+    assert "profiling_data" not in profiles[0]
+    assert profiles[0]["profile_context"] == "SM primary context"
+
+    assert profiles[1]["avatar_id"] == "a2"
+    assert "profiling_data" not in profiles[1]
+    assert profiles[1].get("profiling_answer_count") == 2
+    assert profiles[1]["brand_voice"] == "Warm"
+    assert profiles[1]["goals"] == "Awareness"
+    assert profiles[1]["website_summary"] == "Secondary site blurb"
+    assert "profile_context" not in profiles[1]
+
+    # Final serialized LLM CONTEXT shape (no content dump of answers).
+    serialized = json.dumps(ctx, default=str)
+    assert "profiling_data" not in serialized
+    assert "SM primary context" in serialized
+    assert profiles[1]["name"] == "Secondary"
+
+
+def test_assemble_single_avatar_also_omits_raw_profiling_data():
+    from context.assembly import assemble_context
+
+    profile = {
+        "avatar_id": "a1",
+        "name": "Solo",
+        "profiling_data": {"a": {"question": "Q", "answer": "A"}},
+        "brand_voice": "Clear",
+    }
+    ctx = assemble_context(
+        profile=profile,
+        summaries=[],
+        playbooks=[],
+        user_input="hello",
+        agent_type="chatbot",
+        avatar_bundle={
+            "multi_avatar": False,
+            "avatars": [{"id": "a1", "name": "Solo"}],
+            "profiles": [profile],
+        },
+    )
+    assert "profiling_data" not in ctx["brand_profile"]
+    assert "profiling_data" not in ctx["avatar_profiles"][0]
+    assert ctx["brand_profile"]["brand_voice"] == "Clear"
+    assert ctx["brand_profile"]["profiling_answer_count"] == 1
+
+
+def test_omit_raw_profiling_data_preserves_secondary_own_context():
+    """Secondary may already carry its own profile_context; never invent/copy primary's."""
+    import json
+
+    from context.assembly import assemble_context
+    from context.profiling_data import omit_raw_profiling_data_for_llm
+
+    primary_ctx = "PRIMARY_SM_ONLY"
+    secondary_ctx = "SECONDARY_OWN_CONTEXT"
+
+    stripped = omit_raw_profiling_data_for_llm(
+        {
+            "avatar_id": "a2",
+            "profile_context": secondary_ctx,
+            "profiling_data": {"q": {"answer": "raw should go"}},
+            "goals": "Growth",
+        }
+    )
+    assert stripped is not None
+    assert "profiling_data" not in stripped
+    assert stripped["profile_context"] == secondary_ctx
+    assert stripped["goals"] == "Growth"
+
+    primary = {
+        "avatar_id": "a1",
+        "profile_context": primary_ctx,
+        "profile_context_source": "supermemory",
+        "brand_voice": "Direct",
+    }
+    secondary_no_ctx = {
+        "avatar_id": "a3",
+        "name": "NoCtx",
+        "brand_voice": "Casual",
+        "profiling_data": {"only": {"answer": "leak"}},
+    }
+    secondary_with_ctx = {
+        "avatar_id": "a2",
+        "name": "HasCtx",
+        "profile_context": secondary_ctx,
+        "profiling_data": {"only": {"answer": "leak2"}},
+    }
+
+    ctx = assemble_context(
+        profile=primary,
+        summaries=[],
+        playbooks=[],
+        user_input="multi",
+        agent_type="linkedin",
+        avatar_bundle={
+            "multi_avatar": True,
+            "avatars": [
+                {"id": "a1", "name": "P"},
+                {"id": "a2", "name": "HasCtx"},
+                {"id": "a3", "name": "NoCtx"},
+            ],
+            "profiles": [primary, secondary_with_ctx, secondary_no_ctx],
+        },
+    )
+    by_id = {p["avatar_id"]: p for p in ctx["avatar_profiles"]}
+    assert by_id["a1"]["profile_context"] == primary_ctx
+    assert by_id["a2"]["profile_context"] == secondary_ctx
+    assert "profile_context" not in by_id["a3"]
+    assert by_id["a3"]["brand_voice"] == "Casual"
+    for p in ctx["avatar_profiles"]:
+        assert "profiling_data" not in p
+
+    blob = json.dumps(ctx, default=str)
+    assert "profiling_data" not in blob
+    assert primary_ctx in blob
+    assert secondary_ctx in blob
+    assert "leak" not in blob
+
+
 def test_compress_keeps_intel_for_each_tagged_avatar():
     from context.compression import compress_context
 

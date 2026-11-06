@@ -4,11 +4,8 @@ import type { TFunction } from 'i18next'
 import type { AgentType } from '../../lib/agentsApi'
 import { buildInstagramDisplaySections } from '../../lib/agentOutputDisplay'
 import {
-  splitSuggestions,
   stripSuggestionMarkers,
 } from '../../lib/draftSuggestions'
-import { plainDraftPrefillText } from '../../lib/chatDraftPrefill'
-import { ChatDraftComposer } from './ChatDraftComposer'
 import { FormattedAssistantText } from './FormattedAssistantText'
 
 type UnknownRecord = Record<string, unknown>
@@ -39,21 +36,9 @@ function asStringList(value: unknown): string[] {
     .filter(Boolean)
 }
 
-/** Draft text with the assistant's unconfirmed suggestions shown in bold. */
+/** Generated post text, with suggestion markers removed. */
 function DraftText({ text }: { text: string }) {
-  return (
-    <>
-      {splitSuggestions(text).map((segment, index) =>
-        segment.suggestion ? (
-          <strong key={index} className="rounded bg-accent-primary/10 px-0.5 font-semibold text-ink">
-            {segment.text}
-          </strong>
-        ) : (
-          <span key={index}>{segment.text}</span>
-        ),
-      )}
-    </>
-  )
+  return <>{stripSuggestionMarkers(text)}</>
 }
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
@@ -381,28 +366,13 @@ function linkedInDraftText(idea: UnknownRecord): string {
   return asString(idea.post_structure) || asString(idea.hook)
 }
 
-function LinkedInPlainDraft({
-  output,
-  avatarId,
-}: {
-  output: UnknownRecord
-  avatarId?: string
-}) {
+function LinkedInPlainDraft({ output }: { output: UnknownRecord }) {
   const { t } = useTranslation()
   const ideas = Array.isArray(output.post_ideas) ? output.post_ideas : []
   const first = asRecord(ideas[0]) ?? {}
   const copy = linkedInDraftText(first)
   const [copied, setCopied] = useState(false)
   if (!copy) return null
-  if (avatarId) {
-    return (
-      <ChatDraftComposer
-        avatarId={avatarId}
-        platform="linkedin"
-        initialContent={plainDraftPrefillText('linkedin', output)}
-      />
-    )
-  }
   return (
     <div className="space-y-3">
       <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink">
@@ -539,28 +509,13 @@ function twitterDraftText(tweet: UnknownRecord): string {
   return asString(tweet.full_tweet) || asString(tweet.hook)
 }
 
-function TwitterPlainDraft({
-  output,
-  avatarId,
-}: {
-  output: UnknownRecord
-  avatarId?: string
-}) {
+function TwitterPlainDraft({ output }: { output: UnknownRecord }) {
   const { t } = useTranslation()
   const tweets = Array.isArray(output.tweet_ideas) ? output.tweet_ideas : []
   const first = asRecord(tweets[0]) ?? {}
   const copy = twitterDraftText(first)
   const [copied, setCopied] = useState(false)
   if (!copy) return null
-  if (avatarId) {
-    return (
-      <ChatDraftComposer
-        avatarId={avatarId}
-        platform="x"
-        initialContent={plainDraftPrefillText('twitter', output)}
-      />
-    )
-  }
   return (
     <div className="space-y-3">
       <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink">
@@ -724,18 +679,16 @@ function PlatformDraftBody({
   agent,
   output,
   plain,
-  avatarId,
 }: {
   agent: 'instagram' | 'linkedin' | 'twitter'
   output: UnknownRecord
   plain: boolean
-  avatarId?: string
 }) {
   if (plain && agent === 'linkedin') {
-    return <LinkedInPlainDraft output={output} avatarId={avatarId} />
+    return <LinkedInPlainDraft output={output} />
   }
   if (plain && agent === 'twitter') {
-    return <TwitterPlainDraft output={output} avatarId={avatarId} />
+    return <TwitterPlainDraft output={output} />
   }
   if (plain && agent === 'instagram') {
     return <InstagramRichOutputView output={{ ...output, presentation_mode: 'copy' }} />
@@ -749,12 +702,10 @@ export function AgentOutputRenderer({
   agentType,
   output,
   streamingText,
-  avatarId,
 }: {
   agentType?: AgentType
   output: unknown
   streamingText?: string
-  avatarId?: string
 }) {
   const { t } = useTranslation()
 
@@ -817,12 +768,7 @@ export function AgentOutputRenderer({
             </p>
           ) : null}
           {showBody ? (
-            <PlatformDraftBody
-              agent={agent}
-              output={record}
-              plain={plain}
-              avatarId={avatarId}
-            />
+            <PlatformDraftBody agent={agent} output={record} plain={plain} />
           ) : null}
           {showBody && nextQuestion ? <Hairline /> : null}
           <NextQuestion text={nextQuestion} />

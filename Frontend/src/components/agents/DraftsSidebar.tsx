@@ -19,7 +19,9 @@ import { MEDIA_ACCEPT, validateNewFiles, type MediaKind } from '../../lib/postiz
 import type { ScheduleRow } from '../../lib/draftSchedule'
 import {
   browserTimeZone,
+  manualReviewPost,
   scheduleSkipReason,
+  type ReviewPlatform,
   type ReviewPost,
   type ReviewStatus,
 } from '../../lib/reviewableDrafts'
@@ -38,11 +40,32 @@ type DraftsSidebarProps = {
   scheduling: boolean
   acceptedRevision: AcceptedDraftRevision | null
   report: { succeeded: ScheduleRow[]; failed: ScheduleRow[]; skipped: ScheduleRow[]; uncertain: ScheduleRow[] } | null
+  createId: () => string
   onClose: () => void
   onPatch: (post: ReviewPost) => void
+  onCreate: (post: ReviewPost) => void
   onDelete: (post: ReviewPost) => void
   onAddToChat: (post: ReviewPost) => void
-  onCommit: (post: ReviewPost, localDateTime: string, mode: 'draft' | 'schedule') => void
+  onCommit: (post: ReviewPost, localDateTime: string, mode: 'draft' | 'schedule') => Promise<ScheduleRow['outcome']>
+  xCharLimit?: number
+  xLimitError?: string | null
+}
+
+const PLATFORM_LABEL: Record<ReviewPlatform, string> = {
+  linkedin: 'agents.drafts.platformLinkedin',
+  instagram: 'agents.drafts.platformInstagram',
+  x: 'agents.drafts.platformX',
+}
+
+const PLATFORMS: ReviewPlatform[] = ['linkedin', 'instagram', 'x']
+
+function newDraftIds(createId: () => string): { postId: string; messageId: string } {
+  const postId = createId()
+  const messageId = createId()
+  if (!postId || !messageId || postId === messageId) {
+    throw new Error('Draft ids must be two distinct non-empty values.')
+  }
+  return { postId, messageId }
 }
 
 type LocalDraft = { text: string; entries: string[] | null }
@@ -77,9 +100,7 @@ const STATUS_KEY: Record<ReviewStatus, string> = {
 }
 
 function platformKey(post: ReviewPost): string {
-  if (post.platform === 'linkedin') return 'agents.drafts.platformLinkedin'
-  if (post.platform === 'x') return 'agents.drafts.platformX'
-  return 'agents.drafts.platformInstagram'
+  return PLATFORM_LABEL[post.platform]
 }
 
 function preview(post: ReviewPost, local: LocalDraft | undefined): string {
@@ -95,14 +116,19 @@ export function DraftsSidebar({
   scheduling,
   acceptedRevision,
   report,
+  createId,
   onClose,
   onPatch,
+  onCreate,
   onDelete,
   onAddToChat,
   onCommit,
+  xCharLimit = CHAT_X_SOFT_LIMIT,
+  xLimitError = null,
 }: DraftsSidebarProps) {
   const { t } = useTranslation()
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [creating, setCreating] = useState<ReviewPost | null>(null)
   const [pendingDelete, setPendingDelete] = useState<ReviewPost | null>(null)
   const [drafts, setDrafts] = useState<Record<string, LocalDraft>>({})
   const [times, setTimes] = useState<Record<string, string>>({})
@@ -112,13 +138,22 @@ export function DraftsSidebar({
   const [notice, setNotice] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
   const zone = browserTimeZone()
-  const selected = posts.find((post) => post.id === selectedId) ?? null
+  const stored = posts.find((post) => post.id === selectedId) ?? null
+  const isNew = Boolean(creating && selectedId === creating.id)
+  const selected = isNew && creating ? creating : stored
 
   useEffect(() => {
+    if (creating && posts.some((post) => post.id === creating.id)) {
+      setCreating(null)
+    }
+  }, [posts, creating])
+
+  useEffect(() => {
+    if (creating && selectedId === creating.id) return
     if (selectedId && !posts.some((post) => post.id === selectedId)) {
       setSelectedId(null)
     }
-  }, [posts, selectedId])
+  }, [posts, selectedId, creating])
 
   useEffect(() => {
     if (!acceptedRevision || appliedRevisionToken.current === acceptedRevision.token) return
@@ -161,16 +196,51 @@ export function DraftsSidebar({
   function saveLocal(post: ReviewPost) {
     const body = currentBody(post)
     if (post.platform === 'linkedin' && linkedInOverLimit(body.text)) return
-    onPatch({
-      ...post,
-      text: body.text,
-      entries: body.entries,
+    const next = { ...post, text: body.text, entries: body.entries }
+    if (creating?.id === post.id) onCreate(next)
+    else onPatch(next)
+    setDrafts((current) => {
+      const nextDrafts = { ...current }
+      delete nextDrafts[post.id]
+      return nextDrafts
     })
+  }
+
+  function discardCreating() {
+    if (!creating) return
+    const id = creating.id
+    setCreating(null)
+    setSelectedId(null)
     setDrafts((current) => {
       const next = { ...current }
-      delete next[post.id]
+      delete next[id]
       return next
     })
+    setTimes((current) => {
+      const next = { ...current }
+      delete next[id]
+      return next
+    })
+  }
+
+  function startNewPost() {
+    const ids = newDraftIds(createId)
+    const post = manualReviewPost('linkedin', ids.postId, ids.messageId)
+    setCreating(post)
+    setSelectedId(post.id)
+    setError(null)
+    setNotice(null)
+  }
+
+  function composed(post: ReviewPost): ReviewPost {
+    const body = currentBody(post)
+    return { ...post, text: body.text, entries: body.entries }
+  }
+
+  function choosePlatform(value: string) {
+    if (!PLATFORMS.includes(value as ReviewPlatform)) return
+    const platform = value as ReviewPlatform
+    setCreating((current) => (current ? { ...current, platform } : current))
   }
 
   async function copyText(text: string) {
@@ -201,7 +271,9 @@ export function DraftsSidebar({
       for (const item of validated.accepted) {
         uploaded.push(await uploadPostizMedia(avatarId, item.file))
       }
-      onPatch({ ...post, media: [...post.media, ...uploaded] })
+      const media = [...post.media, ...uploaded]
+      if (creating?.id === post.id) setCreating((current) => (current ? { ...current, media } : current))
+      else onPatch({ ...post, media })
     } catch (uploadError) {
       setError(userFacingMessage(uploadError, t('agents.drafts.statusFailed')))
     } finally {
@@ -210,24 +282,53 @@ export function DraftsSidebar({
   }
 
   const selectedTime = selected ? (times[selected.id] ?? '') : ''
-  const selectedSkip = selected
-    ? scheduleSkipReason(selected, selectedTime, new Date())
+  const commitTarget = selected && isNew ? composed(selected) : selected
+  const selectedSkip = commitTarget
+    ? scheduleSkipReason(commitTarget, selectedTime, new Date(), xCharLimit)
     : null
+  const textSkip = commitTarget
+    ? scheduleSkipReason(commitTarget, '2099-01-01T00:00', new Date(), xCharLimit)
+    : null
+
+  async function send(mode: 'draft' | 'schedule') {
+    if (!commitTarget) return
+    const created = isNew
+    try {
+      const outcome = await onCommit(commitTarget, selectedTime, mode)
+      if (created && outcome === 'succeeded') discardCreating()
+    } catch (sendError) {
+      setError(userFacingMessage(sendError, t('agents.drafts.statusFailed')))
+    }
+  }
 
   return (
     <aside className="flex h-full min-h-0 w-full flex-1 flex-col border-l border-border-hairline bg-canvas-raised text-ink">
       <div className="flex items-center justify-between gap-3 border-b border-border-hairline px-4 py-3">
         <h2 className="font-serif text-xl text-ink">{t('agents.drafts.title')}</h2>
-        <button
-          type="button"
-          onClick={onClose}
-          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-ink-muted transition hover:bg-canvas hover:text-ink"
-          aria-label={t('agents.drafts.close')}
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" className="h-4 w-4" aria-hidden>
-            <path d="M6 6l12 12M18 6L6 18" strokeLinecap="round" />
-          </svg>
-        </button>
+        <div className="flex items-center gap-1">
+          {selected ? null : (
+            <button
+              type="button"
+              onClick={startNewPost}
+              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-ink-muted transition hover:bg-canvas hover:text-ink"
+              aria-label={t('agents.drafts.newPost')}
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" className="h-4 w-4" aria-hidden>
+                <path d="M12 5v14M5 12h14" strokeLinecap="round" />
+              </svg>
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-ink-muted transition hover:bg-canvas hover:text-ink"
+            aria-label={t('agents.drafts.close')}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" className="h-4 w-4" aria-hidden>
+              <path d="M6 6l12 12M18 6L6 18" strokeLinecap="round" />
+            </svg>
+          </button>
+        </div>
       </div>
       <p className="px-4 pt-3 text-xs text-ink-muted">{t('agents.drafts.timezone', { zone })}</p>
       {error ? <p className="mx-4 mt-3 rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
@@ -239,7 +340,14 @@ export function DraftsSidebar({
             <button
               type="button"
               className="contos-btn contos-btn--pill contos-btn--secondary inline-flex items-center gap-1.5"
-              onClick={() => setSelectedId(null)}
+              onClick={() => {
+                if (!isNew) {
+                  setSelectedId(null)
+                  return
+                }
+                if (dirty) setDiscarding(true)
+                else discardCreating()
+              }}
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" className="h-4 w-4" aria-hidden>
                 <path d="M15 6l-6 6 6 6" strokeLinecap="round" strokeLinejoin="round" />
@@ -249,14 +357,14 @@ export function DraftsSidebar({
             <button
               type="button"
               className="contos-btn contos-btn--pill shrink-0"
-              disabled={busy || dirty}
+              disabled={busy || dirty || isNew}
               onClick={() => onAddToChat(selected)}
             >
               {t('agents.drafts.addToChat')}
             </button>
           </div>
           <p className="text-sm text-ink-muted">
-            {t(platformKey(selected))} · {t(STATUS_KEY[selected.status])}
+            {isNew ? t(STATUS_KEY[selected.status]) : `${t(platformKey(selected))} · ${t(STATUS_KEY[selected.status])}`}
           </p>
           <textarea
             className="w-full rounded-xl border border-border-hairline bg-canvas-raised px-3 py-2 text-ink"
@@ -265,12 +373,39 @@ export function DraftsSidebar({
             value={local?.text ?? selected.text}
             onChange={(event) => remember(selected, editedDraft(selected, event.target.value))}
           />
+          {isNew ? (
+            <label className="block text-sm">
+              {t('agents.drafts.platform')}
+              <select
+                className="mt-1 w-full rounded-xl border border-border-hairline bg-canvas-raised px-3 py-2"
+                aria-label={t('agents.drafts.platform')}
+                value={selected.platform}
+                onChange={(event) => choosePlatform(event.target.value)}
+              >
+                {PLATFORMS.map((platform) => (
+                  <option key={platform} value={platform}>
+                    {t(PLATFORM_LABEL[platform])}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
           <p className="text-xs text-ink-muted">
             {t('agents.draftComposer.charCountOf', {
               count: postizContentLength(local?.text ?? selected.text),
-              limit: selected.platform === 'linkedin' ? CHAT_LINKEDIN_CONTENT_LIMIT : CHAT_X_SOFT_LIMIT,
+              limit:
+                selected.platform === 'linkedin'
+                  ? CHAT_LINKEDIN_CONTENT_LIMIT
+                  : selected.platform === 'x'
+                    ? xCharLimit
+                    : CHAT_X_SOFT_LIMIT,
             })}
           </p>
+          {xLimitError && selected.platform === 'x' ? (
+            <p className="text-sm text-red-700 dark:text-red-300" role="alert">
+              {xLimitError}
+            </p>
+          ) : null}
           {selected.platform === 'instagram' ? (
             <p className="text-sm text-ink-muted">{t('agents.drafts.instagramOnly')}</p>
           ) : null}
@@ -280,7 +415,11 @@ export function DraftsSidebar({
                 key={item.id}
                 type="button"
                 className="contos-btn contos-btn--pill contos-btn--secondary"
-                onClick={() => onPatch({ ...selected, media: selected.media.filter((media) => media.id !== item.id) })}
+                onClick={() => {
+                  const media = selected.media.filter((entry) => entry.id !== item.id)
+                  if (isNew) setCreating((current) => (current ? { ...current, media } : current))
+                  else onPatch({ ...selected, media })
+                }}
               >
                 {item.name || item.original_name || t('agents.drafts.removeMedia')}
               </button>
@@ -328,6 +467,11 @@ export function DraftsSidebar({
               type="button"
               className="contos-btn contos-btn--rect contos-btn--secondary"
               onClick={() => {
+                if (isNew) {
+                  if (dirty) setDiscarding(true)
+                  else discardCreating()
+                  return
+                }
                 if (dirty) setDiscarding(true)
                 else setSelectedId(null)
               }}
@@ -351,16 +495,16 @@ export function DraftsSidebar({
               <button
                 type="button"
                 className="contos-btn contos-btn--pill contos-btn--secondary"
-                disabled={busy || scheduling || uploading || dirty}
-                onClick={() => onCommit(selected, selectedTime, 'draft')}
+                disabled={busy || scheduling || uploading || (!isNew && dirty) || (isNew && textSkip != null)}
+                onClick={() => void send('draft')}
               >
                 {t('agents.draftComposer.saveDraft')}
               </button>
               <button
                 type="button"
                 className="contos-btn contos-btn--pill"
-                disabled={busy || scheduling || uploading || dirty || selectedSkip != null}
-                onClick={() => onCommit(selected, selectedTime, 'schedule')}
+                disabled={busy || scheduling || uploading || (!isNew && dirty) || selectedSkip != null}
+                onClick={() => void send('schedule')}
               >
                 {t('agents.draftComposer.schedule')}
               </button>
@@ -435,7 +579,8 @@ export function DraftsSidebar({
         confirmLabel={t('agents.drafts.deleteConfirm')}
         onCancel={() => setPendingDelete(null)}
         onConfirm={() => {
-          if (pendingDelete) onDelete(pendingDelete)
+          if (pendingDelete && creating?.id === pendingDelete.id) discardCreating()
+          else if (pendingDelete) onDelete(pendingDelete)
           setPendingDelete(null)
         }}
       />
@@ -446,6 +591,11 @@ export function DraftsSidebar({
         confirmLabel={t('agents.drafts.discardConfirm')}
         onCancel={() => setDiscarding(false)}
         onConfirm={() => {
+          if (isNew) {
+            discardCreating()
+            setDiscarding(false)
+            return
+          }
           if (selected) {
             setDrafts((current) => {
               const next = { ...current }

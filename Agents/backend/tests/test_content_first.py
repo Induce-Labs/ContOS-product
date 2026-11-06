@@ -89,6 +89,19 @@ def test_tweet_length_check_ignores_bold_markers_and_covers_threads():
     assert draft_judge.length_violation("linkedin", long) is None
 
 
+def test_premium_limit_accepts_281_and_rejects_4001():
+    tweet = {"tweet_ideas": [{"full_tweet": "x" * 281}]}
+    assert draft_judge.length_violation("twitter", tweet, 280) is not None
+    assert draft_judge.length_violation("twitter", tweet, 4000) is None
+    assert draft_judge.length_violation(
+        "twitter", {"tweet_ideas": [{"full_tweet": "x" * 4001}]}, 4000
+    ) is not None
+    prompt = get_system_prompt("twitter", x_char_limit=4000)
+    assert "at most 4000" in prompt
+    assert "X under 4000" in prompt
+    assert "280" not in prompt
+
+
 def test_over_limit_tweet_retry_says_shorten_and_fallback_keeps_it_with_a_note():
     verdict = draft_judge.length_verdict("a tweet is 365 characters; the limit is 280")
     text = draft_judge.build_retry_messages([], "RAW", verdict)[-1]["content"]

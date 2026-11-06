@@ -102,8 +102,21 @@ def build_facts(
         ],
         "rejections": [str(m.get("content")) for m in memory or [] if m.get("kind") == "rejection"],
         "brand_profile": {k: (profile or {}).get(k) for k in PROFILE_KEYS if (profile or {}).get(k)},
-        "profile_summary": str((profile or {}).get("profile_summary") or "")[:3000],
-        "profiling_answers": _profiling_answers((profile or {}).get("profiling_data")),
+        # Strategists prefer Supermemory profile_context; never require LLM summary.
+        "profile_summary": str(
+            (profile or {}).get("profile_context")
+            or (profile or {}).get("profile_summary")
+            or ""
+        )[:3000],
+        # Avoid duplicating questionnaire text already present in profile_context.
+        "profiling_answers": (
+            []
+            if (
+                isinstance((profile or {}).get("profile_context"), str)
+                and str((profile or {}).get("profile_context") or "").strip()
+            )
+            else _profiling_answers((profile or {}).get("profiling_data"))
+        ),
     }
 
 
@@ -184,7 +197,8 @@ def build_retry_messages(
         "The user NEVER saw the rejected answer: do not mention it, apologize, or say you "
         "overreached or removed anything. Regenerate the FULL JSON with a different approach for the "
         "draft only: keep the same mode, ideas, thesis and next_question unless they were the problem. "
-        + ("Shorten every tweet to 280 characters or fewer, counting bold text, keeping the same idea; "
+        + (f"Shorten every tweet to {verdict.get('tweet_limit') or TWEET_LIMIT} characters or fewer, "
+           "counting bold text, keeping the same idea; "
            "if it needs more room, write a thread where each tweet fits. "
            if verdict.get("length") else
            "Still deliver the draft the user asked for, at the same length and layout as before. ")
@@ -229,7 +243,11 @@ def apply_fallback(output: dict[str, Any], verdict: dict[str, Any]) -> str:
 TWEET_LIMIT = 280
 
 
-def length_violation(agent_type: str, output: Any) -> str | None:
+def length_violation(
+    agent_type: str,
+    output: Any,
+    tweet_limit: int = TWEET_LIMIT,
+) -> str | None:
     """A tweet longer than X allows (bold markers do not count); None when everything fits."""
     if agent_type != "twitter" or not isinstance(output, dict):
         return None
@@ -242,15 +260,15 @@ def length_violation(agent_type: str, output: Any) -> str | None:
         if isinstance(thread, dict):
             texts += [str(t) for t in thread.get("tweets") or []]
     longest = max((len(t.replace("**", "")) for t in texts), default=0)
-    if longest > TWEET_LIMIT:
-        return f"a tweet is {longest} characters; the limit is {TWEET_LIMIT}"
+    if longest > tweet_limit:
+        return f"a tweet is {longest} characters; the limit is {tweet_limit}"
     return None
 
 
-def length_verdict(reason: str) -> dict[str, Any]:
+def length_verdict(reason: str, tweet_limit: int = TWEET_LIMIT) -> dict[str, Any]:
     return {
         "pass": False, "off_topic": False, "ignored_request": False, "contradicts_memory": False,
-        "unsupported": [], "reason": reason, "length": True,
+        "unsupported": [], "reason": reason, "length": True, "tweet_limit": tweet_limit,
     }
 
 

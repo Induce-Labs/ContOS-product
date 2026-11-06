@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 import redis
@@ -18,6 +18,7 @@ from app.errors import (
     ConfigurationError,
     PostizAuthorizationInvalidError,
     PostizIntegrationClaimError,
+    PostizNotConnectedError,
     PostizServiceError,
 )
 
@@ -44,12 +45,27 @@ class PostizStatus:
     connected: bool
     integration: SafeIntegration | None
     claim_candidates: tuple[SafeIntegration, ...] = ()
+    x_account_type: str | None = None
 
 
 @dataclass(frozen=True)
 class ConnectResult:
     authorization_url: str
     flow: str  # "linkedin" | "x"
+
+
+def _stored_x_account_type(connection: dict[str, Any] | None) -> str | None:
+    """Return premium or standard. A bad stored value is an error, not a silent default."""
+    if not isinstance(connection, dict):
+        return None
+    value = connection.get("x_account_type")
+    if value in ("premium", "standard"):
+        return value
+    if value is not None:
+        raise PostizServiceError(
+            f"Stored X account type {value!r} is not premium or standard.",
+        )
+    return None
 
 
 def _reported_x_max_length(settings_payload: dict[str, Any] | None) -> int | None:
@@ -518,6 +534,7 @@ class PostizOAuthService:
             raise PostizServiceError(
                 "Postiz connection for this avatar belongs to a different ContOS user.",
             )
+        account_type = _stored_x_account_type(connection)
 
         org_id = str(connection.get("postiz_organization_id") or "")
         try:
@@ -560,11 +577,19 @@ class PostizOAuthService:
                         "postiz_x_integration_id": stored_id_str,
                     },
                 )
-                status = PostizStatus(connected=False, integration=None)
+                status = PostizStatus(
+                    connected=False,
+                    integration=None,
+                    x_account_type=account_type,
+                )
                 self._set_x_status_cache(avatar_id, status)
                 return status
 
-            status = PostizStatus(connected=True, integration=matched)
+            status = PostizStatus(
+                connected=True,
+                integration=matched,
+                x_account_type=account_type,
+            )
             self._set_x_status_cache(avatar_id, status)
             return status
 
@@ -574,7 +599,11 @@ class PostizOAuthService:
             integrations=integrations,
         )
         if claimed is not None:
-            status = PostizStatus(connected=True, integration=claimed)
+            status = PostizStatus(
+                connected=True,
+                integration=claimed,
+                x_account_type=account_type,
+            )
             self._set_x_status_cache(avatar_id, status)
             return status
 
@@ -586,9 +615,10 @@ class PostizOAuthService:
                     connected=False,
                     integration=None,
                     claim_candidates=candidates,
+                    x_account_type=account_type,
                 )
 
-        status = PostizStatus(connected=False, integration=None)
+        status = PostizStatus(connected=False, integration=None, x_account_type=account_type)
         self._set_x_status_cache(avatar_id, status)
         return status
 
@@ -656,7 +686,40 @@ class PostizOAuthService:
         )
         self._clear_x_snapshot(avatar_id)
         self._clear_x_status_cache(avatar_id)
-        return PostizStatus(connected=True, integration=matched)
+        return PostizStatus(
+            connected=True,
+            integration=matched,
+            x_account_type=_stored_x_account_type(connection),
+        )
+
+    def set_x_account_type(
+        self,
+        *,
+        contos_user_id: UUID,
+        avatar_id: UUID,
+        account_type: str,
+    ) -> Literal["premium", "standard"]:
+        """Save the user's Premium or standard choice. Does not reconnect X."""
+        if account_type == "premium":
+            saved: Literal["premium", "standard"] = "premium"
+        elif account_type == "standard":
+            saved = "standard"
+        else:
+            raise PostizServiceError(
+                f"Unsupported X account type {account_type!r}.",
+            )
+        connection = self._repository.get_connection(avatar_id)
+        if connection is None:
+            raise PostizNotConnectedError(
+                f"No Postiz connection exists for avatar {avatar_id}.",
+            )
+        if str(connection.get("contos_user_id")) != str(contos_user_id):
+            raise PostizServiceError(
+                "Postiz connection for this avatar belongs to a different ContOS user.",
+            )
+        self._repository.set_x_account_type(avatar_id, saved)
+        self._clear_x_status_cache(avatar_id)
+        return saved
 
     def x_character_limit(self, settings_payload: dict[str, Any] | None) -> int:
         """Map Postiz-reported maxLength to 4000 or 280. Not a live Premium check."""
@@ -916,6 +979,9 @@ class PostizOAuthService:
             return PostizStatus(
                 connected=bool(data.get("connected")),
                 integration=integration,
+                x_account_type=data.get("x_account_type")
+                if data.get("x_account_type") in ("premium", "standard")
+                else None,
             )
         except (TypeError, ValueError, KeyError, json.JSONDecodeError):
             self._clear_x_status_cache(avatar_id)
@@ -927,6 +993,7 @@ class PostizOAuthService:
         payload: dict[str, Any] = {
             "connected": status.connected,
             "integration": None,
+            "x_account_type": status.x_account_type,
         }
         if status.integration is not None:
             payload["integration"] = {

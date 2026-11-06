@@ -64,6 +64,28 @@ def profiling_data_hash(profiling: Any) -> str:
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
+def omit_raw_profiling_data_for_llm(
+    profile: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    """Drop raw ``profiling_data`` from an LLM-facing profile dict.
+
+    Keeps flattened fields (brand_voice, goals, …), website_summary, and any
+    existing ``profile_context``. Does **not** invent or copy profile_context
+    from another avatar. Safe for primary and secondary profiles.
+    """
+    if not isinstance(profile, dict):
+        return profile
+    if "profiling_data" not in profile:
+        return profile
+    updated = dict(profile)
+    raw = updated.pop("profiling_data", None)
+    if "profiling_answer_count" not in updated:
+        updated["profiling_answer_count"] = (
+            len(raw) if isinstance(raw, dict) else 0
+        )
+    return updated
+
+
 def profile_summary_fields(row: dict[str, Any]) -> dict[str, Any]:
     return {
         "profile_summary": row.get("profile_summary"),

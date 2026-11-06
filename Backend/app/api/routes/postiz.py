@@ -55,6 +55,18 @@ class XStatusResponse(BaseModel):
     integration_id: str | None = None
     integration: IntegrationResponse | None = None
     claim_candidates: list[IntegrationResponse] = Field(default_factory=list)
+    x_account_type: Literal["premium", "standard"] | None = None
+
+
+class XAccountTypeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    avatar_id: UUID
+    account_type: Literal["premium", "standard"]
+
+
+class XAccountTypeResponse(BaseModel):
+    account_type: Literal["premium", "standard"]
 
 
 class ClaimIntegrationRequest(BaseModel):
@@ -355,12 +367,39 @@ def get_postiz_status(
             integration_id=integration.id if integration is not None else None,
             integration=integration,
             claim_candidates=candidates,
+            x_account_type=status_result.x_account_type
+            if status_result.x_account_type in ("premium", "standard")
+            else None,
         )
     return StatusResponse(
         connected=status_result.connected,
         integration=integration,
         claim_candidates=candidates,
     )
+
+
+@router.put("/x-account-type", response_model=XAccountTypeResponse)
+def put_x_account_type(
+    body: XAccountTypeRequest,
+    user_id: UUID = Depends(get_current_user_id),
+) -> XAccountTypeResponse:
+    try:
+        _verify_avatar_owner(body.avatar_id, user_id)
+        saved = _get_service().set_x_account_type(
+            contos_user_id=user_id,
+            avatar_id=body.avatar_id,
+            account_type=body.account_type,
+        )
+    except (
+        ConfigurationError,
+        PostizAuthorizationInvalidError,
+        PostizIntegrationClaimError,
+        PostizNotConnectedError,
+        PostizServiceError,
+        RepositoryError,
+    ) as error:
+        _raise_postiz_http(error)
+    return XAccountTypeResponse(account_type=saved)
 
 
 @router.post("/claim", response_model=StatusResponse | XStatusResponse)
@@ -411,6 +450,9 @@ def claim_postiz_integration(
             integration_id=integration.id if integration is not None else None,
             integration=integration,
             claim_candidates=[],
+            x_account_type=status_result.x_account_type
+            if status_result.x_account_type in ("premium", "standard")
+            else None,
         )
     return StatusResponse(
         connected=status_result.connected,

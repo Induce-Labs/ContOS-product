@@ -42,4 +42,15 @@ Return valid JSON matching (platform fields shown; add the envelope fields above
 CRITICAL: "agent" MUST be the string "twitter".
 """
 
-TWITTER_SYSTEM_PROMPT = STRATEGIST_CORE + TWITTER_PLATFORM_LAYER
+def twitter_system_prompt(limit: int = 280) -> str:
+    """X prompt for the standard 280 limit or the Premium 4000 limit."""
+    if limit not in (280, 4000):
+        raise ValueError(f"X character limit must be 280 or 4000, got {limit}.")
+    core = STRATEGIST_CORE.replace(
+        "X under 280 characters per tweet.",
+        f"X under {limit} characters per tweet.",
+    )
+    return core + TWITTER_PLATFORM_LAYER.replace("280", str(limit))
+
+
+TWITTER_SYSTEM_PROMPT = twitter_system_prompt(280)

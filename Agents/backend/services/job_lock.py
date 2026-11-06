@@ -30,6 +30,14 @@ def profiling_lock_key(avatar_id: str) -> str:
     return f"profiling:avatar:{avatar_id}"
 
 
+# Longer than the sync task hard limit (60s) so the lock cannot expire mid-write.
+PROFILE_SYNC_LOCK_TTL_SECS = 90
+
+
+def profile_sync_lock_key(avatar_id: str) -> str:
+    return f"profile_sync:avatar:{avatar_id}"
+
+
 @contextmanager
 def acquire_job_lock(key: str, *, ttl_secs: int) -> Iterator[bool]:
     """Yield True if lock acquired; False if another worker holds it."""
@@ -48,5 +56,5 @@ def acquire_job_lock(key: str, *, ttl_secs: int) -> Iterator[bool]:
         except Exception as error:
             logger.warning(
                 "Failed to release job lock",
-                extra={"lock_key": key, "error": str(error)},
+                extra={"lock_key": key, "error_type": type(error).__name__},
             )

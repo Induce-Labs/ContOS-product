@@ -70,6 +70,7 @@ celery_app.conf.update(
     task_default_queue="website",
     task_routes={
         "profiling.run_summarize": {"queue": "website"},
+        "profiling.sync_profile": {"queue": "website"},
         "translate.translate_content": {"queue": "website"},
     },
 )

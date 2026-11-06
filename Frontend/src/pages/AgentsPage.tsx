@@ -48,11 +48,13 @@ import {
   outputHasSuggestions,
 } from '../lib/draftSuggestions'
 import { commitReviewPost, postizRequestFromReview, type ScheduleRow } from '../lib/draftSchedule'
-import { createPostizPost, listPostizPosts, PostizApiError } from '../lib/postiz'
+import { createPostizPost, getPostizStatus, listPostizPosts, PostizApiError } from '../lib/postiz'
+import { CHAT_X_SOFT_LIMIT, xCharLimitForAccount } from '../lib/chatDraftPrefill'
 import {
   acceptRevision,
   collectReviewPosts,
   draftPreviewText,
+  ensureManualReviewMessage,
   extractRevision,
   hideReviewPost,
   literalReplacement,
@@ -101,6 +103,7 @@ import {
   updateActiveSessionMessages,
   CHAT_DELETE_EVENT,
   CHAT_DELETE_REVERT_EVENT,
+  LOGO_NEW_CHAT_KEY,
   type ChatDeleteEventDetail,
   type ChatStore,
   type StoredChatMessage,
@@ -179,6 +182,15 @@ function draftPlatformName(
   return t('agents.drafts.platformLinkedin')
 }
 
+function isStoredManualDraft(message: ChatMessage): boolean {
+  if (message.role !== 'assistant' || message.content.trim().length > 0 || message.proposalForPostId) {
+    return false
+  }
+  if (!message.output || typeof message.output !== 'object' || Array.isArray(message.output)) return false
+  const record = message.output as Record<string, unknown>
+  return Object.keys(record).length === 1 && Array.isArray(record.review_posts)
+}
+
 function resolveAssistantOutput(message: ChatMessage): unknown | null {
   if (message.output != null && isStructuredAgentOutput(message.output)) {
     return message.output
@@ -206,6 +218,29 @@ export function AgentsPage() {
   const [competitors, setCompetitors] = useState<Competitor[]>([])
   const [loadError, setLoadError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [xCharLimit, setXCharLimit] = useState(CHAT_X_SOFT_LIMIT)
+  const [xLimitError, setXLimitError] = useState<string | null>(null)
+  const xCharLimitRef = useRef(CHAT_X_SOFT_LIMIT)
+  xCharLimitRef.current = xCharLimit
+
+  useEffect(() => {
+    if (!projectId) return
+    let cancelled = false
+    setXLimitError(null)
+    void getPostizStatus(projectId, 'x')
+      .then((status) => {
+        if (cancelled) return
+        setXCharLimit(xCharLimitForAccount(status.xAccountType))
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return
+        setXCharLimit(CHAT_X_SOFT_LIMIT)
+        setXLimitError(userFacingMessage(error, t('agents.drafts.xLimitFailed')))
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [projectId, t])
   const [agentType, setAgentType] = useState<AgentType>(() => {
     try {
       const pending = getPendingAgentCatchUp()
@@ -260,6 +295,8 @@ export function AgentsPage() {
   const stickToBottomRef = useRef(true)
   const positionedSessionRef = useRef<string | null>(null)
   const chatStoreRef = useRef<ChatStore | null>(null)
+  const isLoadingRef = useRef(true)
+  isLoadingRef.current = isLoading
   /** Project id the in-memory store was loaded for. Persist must match the route. */
   const boundProjectIdRef = useRef<string | null>(null)
   const loadedProjectRef = useRef<string | null>(null)
@@ -369,6 +406,7 @@ export function AgentsPage() {
 
   useEffect(() => {
     function onNewChat() {
+      if (isLoadingRef.current || !chatStoreRef.current) return
       handleNewChatRef.current()
     }
     window.addEventListener('contos-new-chat', onNewChat)
@@ -504,9 +542,19 @@ export function AgentsPage() {
         const keepLiveThread = Boolean(
           live && live.projectId === projectId && (live.streaming || live.runId),
         )
-        // Project switch stays on the loading shell until the fresh welcome
-        // session is the only thread committed to the screen.
-        const deferPaint = openFresh && !keepLiveThread
+        let logoRequested = false
+        try {
+          logoRequested = sessionStorage.getItem(LOGO_NEW_CHAT_KEY) === projectId
+        } catch (error) {
+          throw new Error(
+            `Could not read the new-chat request for project ${projectId}: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+          )
+        }
+        // Project switch, or a logo click from another page, stays on the loading
+        // shell until the fresh welcome session is the only thread committed.
+        const deferPaint = (openFresh && !keepLiveThread) || logoRequested
 
         function commitStore(next: ChatStore) {
           skipPersistRef.current = true
@@ -514,6 +562,54 @@ export function AgentsPage() {
           chatStoreRef.current = next
           setChatStore(next)
           setMessages(getActiveSession(next).messages as ChatMessage[])
+        }
+
+        async function applyLogoNewChat(current: ChatStore): Promise<ChatStore> {
+          if (!mounted || !projectId) return current
+          let requested = false
+          try {
+            requested = sessionStorage.getItem(LOGO_NEW_CHAT_KEY) === projectId
+            if (requested) sessionStorage.removeItem(LOGO_NEW_CHAT_KEY)
+          } catch (error) {
+            throw new Error(
+              `Could not read the new-chat request for project ${projectId}: ${
+                error instanceof Error ? error.message : String(error)
+              }`,
+            )
+          }
+          if (!requested) return current
+          const liveForLogo = getActiveAgentStream()
+          if (liveForLogo?.projectId === projectId) {
+            abortActiveAgentStream()
+            setStreaming(false)
+            setAwaitingCatchUp(false)
+          }
+          const next = startNewChatSession(current, welcome)
+          commitStore(next)
+          setDraftsOpen(false)
+          setProposal(null)
+          setDismissedProposalIds(new Set())
+          setAcceptedRevision(null)
+          setScheduleReport(null)
+          setSendError(null)
+          setPendingPlatformRedirect(null)
+          setReplyTarget(null)
+          setDraftTargetId(null)
+          setIsLoading(false)
+          if (user?.id) {
+            saveChatStore(user.id, projectId, next)
+            try {
+              await upsertRemoteChatStore(user.id, projectId, next)
+            } catch (error) {
+              if (mounted) {
+                logDevError('agents chat sync save', {
+                  error: error instanceof Error ? error.message : String(error),
+                })
+                setSyncError(userFacingMessage(error, translate('agents.syncToFailed')))
+              }
+            }
+          }
+          return next
         }
 
         if (!deferPaint) {
@@ -560,10 +656,12 @@ export function AgentsPage() {
 
         if (!user?.id) {
           if (deferPaint) {
-            commitStore(startNewChatSession(store, welcome))
+            store = startNewChatSession(store, welcome)
+            commitStore(store)
             setIsLoading(false)
             openFreshOnLoadRef.current = false
           }
+          await applyLogoNewChat(store)
           return
         }
 
@@ -615,6 +713,7 @@ export function AgentsPage() {
             openFreshOnLoadRef.current = false
             setSyncError(null)
           }
+          await applyLogoNewChat(store)
         } catch (error) {
           if (mounted) {
             logDevError('agents chat sync load', {
@@ -642,6 +741,7 @@ export function AgentsPage() {
             setIsLoading(false)
           }
           if (mounted) openFreshOnLoadRef.current = false
+          await applyLogoNewChat(store)
         }
       } catch (error) {
         if (mounted) {
@@ -709,6 +809,7 @@ export function AgentsPage() {
             const revision = extractRevision(
               snapshot.output ?? snapshot.content,
               reviewPlatformForAgent(message.agentType),
+              xCharLimitRef.current,
             )
             if (!revision || revision.text.trim().startsWith('{')) {
               return { ...message, output: undefined }
@@ -823,11 +924,9 @@ export function AgentsPage() {
     if (showResponding) return
     const stamped = stampMissingReviewPosts(messages, newId)
     if (!stamped.changed) return
-    const before = new Set(collectReviewPosts(messages).map((post) => post.messageId))
-    const added = collectReviewPosts(stamped.messages).filter((post) => !before.has(post.messageId))
-    const counts = new Map<string, number>()
-    for (const post of added) counts.set(post.messageId, (counts.get(post.messageId) ?? 0) + 1)
-    if ([...counts.values()].some((count) => count >= 2)) setDraftsOpen(true)
+    const before = new Set(collectReviewPosts(messages).map((post) => post.id))
+    const added = collectReviewPosts(stamped.messages).filter((post) => !before.has(post.id))
+    if (added.length > 0) setDraftsOpen(true)
     setMessages(stamped.messages)
   }, [messages, showResponding])
 
@@ -877,6 +976,19 @@ export function AgentsPage() {
   }, [searchParams, chatStore, projectId, user?.id, streaming, t, setSearchParams])
 
   function handleNewChat() {
+    if (projectId) {
+      try {
+        if (sessionStorage.getItem(LOGO_NEW_CHAT_KEY) === projectId) {
+          sessionStorage.removeItem(LOGO_NEW_CHAT_KEY)
+        }
+      } catch (error) {
+        throw new Error(
+          `Could not clear the new-chat request for project ${projectId}: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        )
+      }
+    }
     if (streaming) {
       abortActiveAgentStream()
       setStreaming(false)
@@ -950,6 +1062,7 @@ export function AgentsPage() {
         const revision = extractRevision(
           message.output ?? message.content,
           reviewPlatformForAgent(message.agentType),
+          xCharLimit,
         )
         if (!revision || revision.text.trim().startsWith('{')) return message
         changed = true
@@ -957,7 +1070,7 @@ export function AgentsPage() {
       })
       return changed ? next : current
     })
-  }, [messages, t])
+  }, [messages, t, xCharLimit])
 
   useEffect(() => {
     const failure = t('agents.drafts.proposalFailed')
@@ -967,6 +1080,7 @@ export function AgentsPage() {
     const revision = extractRevision(
       latest.output ?? latest.content,
       reviewPlatformForAgent(latest.agentType),
+      xCharLimit,
     )
     const text =
       revision?.text ??
@@ -980,7 +1094,7 @@ export function AgentsPage() {
       text,
       entries: revision?.entries ?? null,
     })
-  }, [dismissedProposalIds, messages, proposal, t])
+  }, [dismissedProposalIds, messages, proposal, t, xCharLimit])
 
   function jumpToMessage(messageId: string) {
     const node = document.getElementById(`chat-msg-${messageId}`)
@@ -1490,7 +1604,9 @@ export function AgentsPage() {
   }
 
   const conversationMessages = messages.filter(
-    (message) => !(message.role === 'assistant' && isAgentsWelcomeMessage(message.content)),
+    (message) =>
+      !(message.role === 'assistant' && isAgentsWelcomeMessage(message.content)) &&
+      !isStoredManualDraft(message),
   )
   const welcomeGreeting =
     messages.find(
@@ -1525,15 +1641,20 @@ export function AgentsPage() {
   function applyScheduleRows(rows: Array<{ post: ReviewPost; outcome: string }>) {
     setMessages((current) =>
       rows.reduce((next, row) => {
-        const patched = patchReviewPost(next, row.post.messageId, row.post.id, () => row.post)
+        const base = row.outcome === 'skipped' ? next : ensureManualReviewMessage(next, row.post)
+        const patched = patchReviewPost(base, row.post.messageId, row.post.id, () => row.post)
         if (row.outcome !== 'succeeded') return patched
         return hideReviewPost(patched, row.post.messageId, row.post.id)
       }, current),
     )
   }
 
-  async function commitOne(post: ReviewPost, localDateTime: string, mode: 'draft' | 'schedule') {
-    if (!projectId || schedulingRef.current) return
+  async function commitOne(
+    post: ReviewPost,
+    localDateTime: string,
+    mode: 'draft' | 'schedule',
+  ): Promise<'succeeded' | 'failed' | 'skipped' | 'uncertain'> {
+    if (!projectId || schedulingRef.current) return 'skipped'
     schedulingRef.current = true
     setScheduling(true)
     try {
@@ -1542,6 +1663,7 @@ export function AgentsPage() {
         localDateTime,
         now: new Date(),
         mode,
+        xLimit: xCharLimit,
         create: writeReviewPost,
         list: (startDate, endDate) => listPostizPosts(projectId, startDate, endDate),
       })
@@ -1552,6 +1674,7 @@ export function AgentsPage() {
         skipped: row.outcome === 'skipped' ? [row] : [],
         uncertain: row.outcome === 'uncertain' ? [row] : [],
       })
+      return row.outcome
     } finally {
       schedulingRef.current = false
       setScheduling(false)
@@ -1609,7 +1732,7 @@ export function AgentsPage() {
         },
         handlers: {
           onComplete: (data) => {
-            const revision = extractRevision(data.output, post.platform)
+            const revision = extractRevision(data.output, post.platform, xCharLimitRef.current)
             showRevision(revision ? revision.text : t('agents.drafts.proposalFailed'), revision)
           },
           onError: (message) => {
@@ -2125,6 +2248,7 @@ export function AgentsPage() {
                   ? extractRevision(
                       message.output ?? message.content,
                       reviewPlatformForAgent(message.agentType),
+                      xCharLimit,
                     )
                   : null
                 const proposalText =
@@ -2159,7 +2283,6 @@ export function AgentsPage() {
                       taggedAvatarNames={message.taggedAvatarNames}
                       agentType={message.agentType}
                       structuredOutput={structuredOutput}
-                      avatarId={projectId}
                       replyTo={message.replyTo}
                       draftPreview={
                         preview
@@ -2258,13 +2381,19 @@ export function AgentsPage() {
               avatarId={project.id}
               busy={showResponding}
               scheduling={scheduling}
+              xCharLimit={xCharLimit}
+              xLimitError={xLimitError}
               acceptedRevision={acceptedRevision}
               report={scheduleReport}
               onClose={() => setDraftsOpen(false)}
+              createId={newId}
               onPatch={(post) =>
                 setMessages((current) =>
                   patchReviewPost(current, post.messageId, post.id, () => post),
                 )
+              }
+              onCreate={(post) =>
+                setMessages((current) => ensureManualReviewMessage(current, post))
               }
               onDelete={(post) => {
                 setMessages((current) => hideReviewPost(current, post.messageId, post.id))
@@ -2276,7 +2405,7 @@ export function AgentsPage() {
                 setReplyTarget(null)
                 inputRef.current?.focus()
               }}
-              onCommit={(post, localDateTime, mode) => void commitOne(post, localDateTime, mode)}
+              onCommit={(post, localDateTime, mode) => commitOne(post, localDateTime, mode)}
             />
           </div>
         ) : null}

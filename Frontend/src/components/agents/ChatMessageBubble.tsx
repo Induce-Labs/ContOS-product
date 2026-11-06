@@ -14,7 +14,6 @@ type ChatMessageBubbleProps = {
   taggedAvatarNames?: string[]
   agentType?: AgentType
   structuredOutput?: unknown | null
-  avatarId?: string
   replyTo?: ReplyTarget
   draftPreview?: { label: string; excerpt: string }
   onReply?: () => void
@@ -28,7 +27,6 @@ export function ChatMessageBubble({
   taggedAvatarNames,
   agentType,
   structuredOutput,
-  avatarId,
   replyTo,
   draftPreview,
   onReply,
@@ -74,11 +72,7 @@ export function ChatMessageBubble({
         </div>
       ) : null}
       {structuredOutput ? (
-        <AgentOutputRenderer
-          agentType={agentType}
-          output={structuredOutput}
-          avatarId={avatarId}
-        />
+        <AgentOutputRenderer agentType={agentType} output={structuredOutput} />
       ) : isUser ? (
         content
       ) : (

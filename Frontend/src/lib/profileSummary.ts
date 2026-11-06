@@ -1,5 +1,6 @@
 import { getAccessToken as getAuthAccessToken } from './auth'
 import { AgentsApiError, getAgentApiBaseUrl } from './agentsApi'
+import { pullContosFlowEvents } from './contosFlowConsole'
 import { logDevError, remoteStatusCode } from './devLog'
 import { fetchAvatar } from './avatars'
 
@@ -59,6 +60,8 @@ async function waitForProfileSummary(
     }
 
     const avatar = await fetchAvatar(avatarId)
+    // Piggyback on the existing summarize poll — no separate polling loop.
+    await pullContosFlowEvents(avatarId, signal)
     const status = String(avatar.profile_summary_status || '').toLowerCase()
 
     if (TERMINAL_PROFILE_STATUSES.has(status)) {
@@ -75,6 +78,17 @@ async function waitForProfileSummary(
           error: detail,
         })
         throw new AgentsApiError(detail, 502)
+      }
+
+      // Final pull so late Celery profile-sync lines still reach DevTools.
+      await pullContosFlowEvents(avatarId, signal)
+      // Short grace pulls for async PROFILE_SYNC after summary completes.
+      for (let i = 0; i < 5; i += 1) {
+        await sleep(POLL_INTERVAL_MS, signal)
+        const n = await pullContosFlowEvents(avatarId, signal)
+        if (n === 0 && i >= 2) {
+          break
+        }
       }
 
       return {
@@ -139,6 +153,7 @@ export async function summarizeProfiling(
 
     // 202 queued — poll Supabase until profile_summary_status is terminal.
     if (response.status === 202 || payload.status === 'queued') {
+      await pullContosFlowEvents(avatarId, controller.signal)
       return await waitForProfileSummary(avatarId, timeoutMs, controller.signal)
     }
 

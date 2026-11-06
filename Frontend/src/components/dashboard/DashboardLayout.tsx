@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { DashboardSidebarNav } from './DashboardSidebarNav'
 import { PostingConsistency } from './PostingConsistency'
@@ -8,6 +8,7 @@ import { ProjectSwitcher } from './ProjectSwitcher'
 import { SidebarUserMenu } from './SidebarUserMenu'
 import contosMark from '../../assets/contos-mark.png'
 import contosMarkDark from '../../assets/image.png'
+import { LOGO_NEW_CHAT_KEY } from '../../lib/agentChatStorage'
 import type { Project } from '../../lib/projects'
 import type { ReactNode } from 'react'
 
@@ -70,6 +71,8 @@ export function DashboardLayout({
   isLoading = false,
 }: DashboardLayoutProps) {
   const { t } = useTranslation()
+  const navigate = useNavigate()
+  const location = useLocation()
   const projectId = activeProject?.id ?? null
   const [sidebarCollapsed, setSidebarCollapsed] = useState(readCollapsedPreference)
   const [isDesktop, setIsDesktop] = useState(() =>
@@ -139,31 +142,77 @@ export function DashboardLayout({
               : 'flex items-start justify-between gap-2 px-4 pb-3 pt-5'
           }
         >
-          <div
-            className={`flex min-w-0 items-center ${
-              railCollapsed ? 'w-full justify-center' : 'gap-2.5'
-            }`}
-          >
-            <img
-              src={contosMark}
-              alt=""
-              aria-hidden="true"
-              className="h-8 w-8 shrink-0 object-contain dark:hidden"
-            />
-            <img
-              src={contosMarkDark}
-              alt=""
-              aria-hidden="true"
-              className="hidden h-8 w-8 shrink-0 object-contain dark:block"
-            />
-            {!railCollapsed ? (
-              <div className="min-w-0">
-                <p className="truncate text-base font-semibold leading-tight text-ink">
+          {projectId ? (
+            <button
+              type="button"
+              onClick={() => {
+                onSidebarOpenChange(false)
+                const agentsPath = `/dashboard/${projectId}/agents`
+                try {
+                  sessionStorage.setItem(LOGO_NEW_CHAT_KEY, projectId)
+                } catch (error) {
+                  throw new Error(
+                    `Could not remember the new chat for project ${projectId}: ${
+                      error instanceof Error ? error.message : String(error)
+                    }`,
+                  )
+                }
+                if (location.pathname === agentsPath) {
+                  window.dispatchEvent(new CustomEvent('contos-new-chat'))
+                  return
+                }
+                navigate(agentsPath)
+              }}
+              className={`flex min-w-0 items-center rounded-lg text-left transition hover:bg-canvas ${
+                railCollapsed ? 'w-full justify-center' : 'gap-2.5'
+              }`}
+              aria-label={t('layout.newChatAria')}
+            >
+              <img
+                src={contosMark}
+                alt=""
+                aria-hidden="true"
+                className="h-8 w-8 shrink-0 object-contain dark:hidden"
+              />
+              <img
+                src={contosMarkDark}
+                alt=""
+                aria-hidden="true"
+                className="hidden h-8 w-8 shrink-0 object-contain dark:block"
+              />
+              {!railCollapsed ? (
+                <span className="min-w-0 truncate text-base font-semibold leading-tight text-ink">
                   {t('layout.brandName')}
-                </p>
-              </div>
-            ) : null}
-          </div>
+                </span>
+              ) : null}
+            </button>
+          ) : (
+            <div
+              className={`flex min-w-0 items-center ${
+                railCollapsed ? 'w-full justify-center' : 'gap-2.5'
+              }`}
+            >
+              <img
+                src={contosMark}
+                alt=""
+                aria-hidden="true"
+                className="h-8 w-8 shrink-0 object-contain dark:hidden"
+              />
+              <img
+                src={contosMarkDark}
+                alt=""
+                aria-hidden="true"
+                className="hidden h-8 w-8 shrink-0 object-contain dark:block"
+              />
+              {!railCollapsed ? (
+                <div className="min-w-0">
+                  <p className="truncate text-base font-semibold leading-tight text-ink">
+                    {t('layout.brandName')}
+                  </p>
+                </div>
+              ) : null}
+            </div>
+          )}
 
           <div
             className={`flex shrink-0 items-center justify-center gap-1 ${

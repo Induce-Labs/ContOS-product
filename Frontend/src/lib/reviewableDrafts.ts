@@ -3,6 +3,7 @@ import {
   CHAT_X_SOFT_LIMIT,
 } from './chatDraftPrefill'
 import { postizContentLength, type PostizMediaItem } from './postiz'
+import { stripSuggestionMarkers } from './draftSuggestions'
 
 export type ReviewPlatform = 'linkedin' | 'instagram' | 'x'
 export type ReviewStatus =
@@ -12,7 +13,7 @@ export type ReviewStatus =
   | 'published'
   | 'uncertain'
   | 'failed'
-export type ReviewSource = 'post_ideas' | 'tweet_ideas' | 'thread' | 'content_calendar'
+export type ReviewSource = 'post_ideas' | 'tweet_ideas' | 'thread' | 'content_calendar' | 'manual'
 
 export type ReviewPost = {
   id: string
@@ -54,6 +55,10 @@ function asRecord(value: unknown): UnknownRecord | null {
 
 function asString(value: unknown): string {
   return typeof value === 'string' ? value : ''
+}
+
+function plainDraft(value: string): string {
+  return stripSuggestionMarkers(value)
 }
 
 export function normalizeDraftText(value: string): string {
@@ -101,7 +106,7 @@ function seedsFor(output: UnknownRecord, platform: ReviewPlatform): Seed[] {
     return ideas.flatMap((raw, sourceIndex) => {
       const item = asRecord(raw)
       if (!item) return []
-      const text = asString(item.post_structure) || asString(item.hook)
+      const text = plainDraft(asString(item.post_structure) || asString(item.hook))
       if (!text.trim()) return []
       return [
         {
@@ -123,7 +128,7 @@ function seedsFor(output: UnknownRecord, platform: ReviewPlatform): Seed[] {
     return calendar.flatMap((raw, sourceIndex) => {
       const item = asRecord(raw)
       if (!item) return []
-      const text = asString(item.copy_paste_post) || asString(item.caption)
+      const text = plainDraft(asString(item.copy_paste_post) || asString(item.caption))
       if (!text.trim()) return []
       return [
         {
@@ -144,7 +149,7 @@ function seedsFor(output: UnknownRecord, platform: ReviewPlatform): Seed[] {
   const threadSeeds: Seed[] = threads.flatMap((raw, sourceIndex) => {
     const item = asRecord(raw)
     if (!item || !Array.isArray(item.tweets)) return []
-    const entries = item.tweets.map((tweet) => asString(tweet)).filter((tweet) => tweet.trim())
+    const entries = item.tweets.map((tweet) => plainDraft(asString(tweet))).filter((tweet) => tweet.trim())
     if (entries.length === 0) return []
     const text = entries.join('\n\n')
     return [
@@ -166,7 +171,7 @@ function seedsFor(output: UnknownRecord, platform: ReviewPlatform): Seed[] {
     const item = asRecord(raw)
     if (!item) return []
     if (asString(item.type).toLowerCase() === 'thread') return []
-    const text = asString(item.full_tweet) || asString(item.hook)
+    const text = plainDraft(asString(item.full_tweet) || asString(item.hook))
     if (!text.trim() || threadBodies.has(normalizeDraftText(text))) return []
     return [
       {
@@ -203,88 +208,78 @@ function storedPosts(output: UnknownRecord): ReviewPost[] {
   return output.review_posts.filter(isReviewPost)
 }
 
-export function requestedDraftDayCount(text: string): number | null {
-  const normalized = text.toLowerCase()
-  if (/\b(?:a|one|1)\s+week\b|\bthis week\b|\bnext week\b|\bfor the week\b/.test(normalized)) {
-    return 7
+/** Empty post composed in Drafts. It is stored only after Save or a Postiz call. */
+export function manualReviewPost(
+  platform: ReviewPlatform,
+  postId: string,
+  messageId: string,
+): ReviewPost {
+  return {
+    id: postId,
+    messageId,
+    platform,
+    source: 'manual',
+    sourceIndex: 0,
+    text: '',
+    originalText: '',
+    entries: null,
+    originalEntries: null,
+    proposedDate: null,
+    media: [],
+    status: 'needs_review',
+    postizPostId: null,
+    statusDetail: null,
   }
-  const digit = /\b([2-7])\s*-?\s*days?\b/.exec(normalized)
-  if (digit) return Number(digit[1])
-  const word = /\b(two|three|four|five|six|seven)\s+days?\b/.exec(normalized)
-  if (!word) return null
-  const counts: Record<string, number> = {
-    two: 2,
-    three: 3,
-    four: 4,
-    five: 5,
-    six: 6,
-    seven: 7,
-  }
-  return counts[word[1]] ?? null
 }
 
-const POST_WORD_COUNTS: Record<string, number> = {
-  two: 2,
-  three: 3,
-  four: 4,
-  five: 5,
-  six: 6,
-  seven: 7,
-  eight: 8,
-  nine: 9,
-  ten: 10,
-  eleven: 11,
-  twelve: 12,
-}
-
-const POST_PLATFORM = '(?:linkedin|instagram|twitter|x)'
-const NOT_AN_IDEA = '(?!\\s+ideas?\\b)'
-
-/** More than one post. A count of ideas does not qualify. There is no upper cap. */
-export function requestedDraftPostCount(text: string): number | null {
-  const normalized = text.toLowerCase()
-  if (
-    new RegExp(`\\b(?:a few|several|some|multiple)\\s+posts?\\b${NOT_AN_IDEA}`).test(normalized) ||
-    new RegExp(`\\ba couple of\\s+posts?\\b${NOT_AN_IDEA}`).test(normalized)
-  ) {
-    return 2
+/** Keep one manual post on its own assistant message. A later stamp has no body to replace it. */
+export function ensureManualReviewMessage<T extends DraftMessage>(
+  messages: T[],
+  post: ReviewPost,
+): T[] {
+  if (post.source !== 'manual') return messages
+  const index = messages.findIndex((message) => message.id === post.messageId)
+  if (index < 0) {
+    return [
+      ...messages,
+      {
+        id: post.messageId,
+        role: 'assistant',
+        content: '',
+        output: { review_posts: [{ ...post }] },
+      } as T,
+    ]
   }
-  const numbered = new RegExp(
-    `\\b(\\d+|${Object.keys(POST_WORD_COUNTS).join('|')})\\s+(?:${POST_PLATFORM}\\s+)?posts?\\b${NOT_AN_IDEA}`,
-  ).exec(normalized)
-  if (!numbered) return null
-  const raw = numbered[1]
-  const count = /^\d+$/.test(raw) ? Number(raw) : POST_WORD_COUNTS[raw]
-  if (count == null || count < 2) return null
-  return count
-}
-
-function nearestUserRequest(messages: DraftMessage[], index: number): string | null {
-  for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
-    const message = messages[cursor]
-    if (message?.role === 'user') return message.content
-  }
-  return null
-}
-
-export function messageQualifiesForDrafts(messages: DraftMessage[], index: number): boolean {
-  const request = nearestUserRequest(messages, index)
-  if (request == null) return false
-  return requestedDraftDayCount(request) != null || requestedDraftPostCount(request) != null
+  const patched = patchReviewPost(messages, post.messageId, post.id, () => post)
+  if (patched !== messages) return patched
+  return messages.map((message) => {
+    if (message.id !== post.messageId) return message
+    const output = asRecord(message.output) ?? {}
+    return {
+      ...message,
+      output: { ...output, review_posts: [...storedPosts(output), { ...post }] },
+    }
+  })
 }
 
 export function readReviewPosts(message: DraftMessage): ReviewPost[] {
   if (message.role !== 'assistant' || message.proposalForPostId) return []
   const output = asRecord(message.output)
   if (!output) return []
-  return storedPosts(output).map((post) => ({ ...post, messageId: message.id }))
+  return storedPosts(output).map((post) => ({
+    ...post,
+    messageId: message.id,
+    text: plainDraft(post.text),
+    originalText: plainDraft(post.originalText),
+    entries: post.entries?.map((entry) => plainDraft(entry)) ?? null,
+    originalEntries: post.originalEntries?.map((entry) => plainDraft(entry)) ?? null,
+  }))
 }
 
 export function collectReviewPosts(messages: DraftMessage[]): ReviewPost[] {
-  return messages.flatMap((message, index) => {
-    if (!messageQualifiesForDrafts(messages, index)) return []
-    return readReviewPosts(message).filter((post) => post.hidden !== true)
-  })
+  return messages.flatMap((message) =>
+    readReviewPosts(message).filter((post) => post.hidden !== true),
+  )
 }
 
 /**
@@ -334,8 +329,7 @@ export function stampMissingReviewPosts<T extends DraftMessage>(
   createId: () => string,
 ): { messages: T[]; changed: boolean } {
   let changed = false
-  const next = messages.map((message, index) => {
-    if (!messageQualifiesForDrafts(messages, index)) return message
+  const next = messages.map((message) => {
     const stamped = stampReviewPosts(message, createId)
     if (!stamped.changed) return message
     changed = true
@@ -447,6 +441,7 @@ export function scheduleSkipReason(
   post: ReviewPost,
   localDateTime: string,
   now: Date,
+  xLimit: number = CHAT_X_SOFT_LIMIT,
 ): ScheduleSkipReason | null {
   if (post.platform === 'instagram') return 'instagram'
   if (post.status === 'published') return 'already_scheduled'
@@ -460,7 +455,7 @@ export function scheduleSkipReason(
   if (post.platform === 'linkedin' && postizContentLength(post.text) > CHAT_LINKEDIN_CONTENT_LIMIT) {
     return 'too_long'
   }
-  if (post.platform === 'x' && parts.some((entry) => postizContentLength(entry) > CHAT_X_SOFT_LIMIT)) {
+  if (post.platform === 'x' && parts.some((entry) => postizContentLength(entry) > xLimit)) {
     return 'too_long'
   }
   return null
@@ -588,6 +583,7 @@ export function parseAgentPayload(value: unknown): UnknownRecord | null {
 export function extractRevision(
   output: unknown,
   platform: ReviewPlatform,
+  xLimit: number = CHAT_X_SOFT_LIMIT,
 ): { text: string; entries: string[] | null } | null {
   const record = parseAgentPayload(output)
   if (!record) return null
@@ -595,24 +591,24 @@ export function extractRevision(
     const ideas = Array.isArray(record.post_ideas) ? record.post_ideas : []
     if (ideas.length !== 1) return null
     const item = asRecord(ideas[0])
-    const text = item ? asString(item.post_structure).trim() || asString(item.hook).trim() : ''
+    const text = item ? plainDraft(asString(item.post_structure).trim() || asString(item.hook).trim()) : ''
     return text ? { text, entries: null } : null
   }
   if (platform === 'instagram') {
     const calendar = Array.isArray(record.content_calendar) ? record.content_calendar : []
     if (calendar.length !== 1) return null
     const item = asRecord(calendar[0])
-    const text = item ? (asString(item.copy_paste_post) || asString(item.caption)).trim() : ''
+    const text = item ? plainDraft((asString(item.copy_paste_post) || asString(item.caption)).trim()) : ''
     return text ? { text, entries: null } : null
   }
   const threads = Array.isArray(record.thread_structures) ? record.thread_structures : []
   if (threads.length === 1) {
     const item = asRecord(threads[0])
     if (!item || !Array.isArray(item.tweets)) return null
-    const entries = item.tweets.map((tweet) => asString(tweet).trim())
+    const entries = item.tweets.map((tweet) => plainDraft(asString(tweet)).trim())
     if (
       entries.length === 0 ||
-      entries.some((entry) => !entry || postizContentLength(entry) > CHAT_X_SOFT_LIMIT)
+      entries.some((entry) => !entry || postizContentLength(entry) > xLimit)
     ) {
       return null
     }
@@ -621,8 +617,8 @@ export function extractRevision(
   const tweets = Array.isArray(record.tweet_ideas) ? record.tweet_ideas : []
   if (tweets.length !== 1 || threads.length > 0) return null
   const item = asRecord(tweets[0])
-  const text = item ? (asString(item.full_tweet) || asString(item.hook)).trim() : ''
-  if (!text || postizContentLength(text) > CHAT_X_SOFT_LIMIT) return null
+  const text = item ? plainDraft((asString(item.full_tweet) || asString(item.hook)).trim()) : ''
+  if (!text || postizContentLength(text) > xLimit) return null
   return { text, entries: null }
 }
 

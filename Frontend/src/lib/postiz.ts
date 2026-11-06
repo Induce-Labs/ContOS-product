@@ -87,10 +87,13 @@ export function buildPostizCreateBody(input: {
   }
 }
 
+export type XAccountType = 'premium' | 'standard'
+
 export type PostizStatusResponse = {
   connected: boolean
   integration: PostizIntegration | null
   claim_candidates: PostizIntegration[]
+  xAccountType: XAccountType | null
 }
 
 function parseIntegration(value: unknown): PostizIntegration | null {
@@ -144,6 +147,19 @@ function parseClaimCandidates(value: unknown): PostizIntegration[] {
   })
 }
 
+function parseXAccountType(value: unknown): XAccountType | null {
+  if (value == null) {
+    return null
+  }
+  if (value === 'premium' || value === 'standard') {
+    return value
+  }
+  const shown = typeof value === 'string' ? value.slice(0, 40) : typeof value
+  throw new PostizApiError(
+    `Postiz status returned an unexpected x_account_type (${shown}).`,
+  )
+}
+
 function parseStatusResponse(data: unknown, context: string): PostizStatusResponse {
   if (
     typeof data !== 'object' ||
@@ -158,6 +174,9 @@ function parseStatusResponse(data: unknown, context: string): PostizStatusRespon
     integration: parseIntegration((data as { integration?: unknown }).integration),
     claim_candidates: parseClaimCandidates(
       (data as { claim_candidates?: unknown }).claim_candidates,
+    ),
+    xAccountType: parseXAccountType(
+      (data as { x_account_type?: unknown }).x_account_type,
     ),
   }
 }
@@ -217,6 +236,39 @@ function requireAvatarId(avatarId: string): string {
     throw new PostizApiError('avatar_id is required for Postiz operations.')
   }
   return trimmed
+}
+
+export async function setPostizXAccountType(
+  avatarId: string,
+  accountType: XAccountType,
+): Promise<XAccountType> {
+  const accessToken = await requireAccessToken()
+  const id = requireAvatarId(avatarId)
+  const path = '/api/postiz/x-account-type'
+  const response = await fetch(`${getApiBaseUrl()}${path}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({ avatar_id: id, account_type: accountType }),
+  })
+
+  if (!response.ok) {
+    await throwPostizResponse(response, 'PUT', path)
+  }
+
+  const data: unknown = await response.json()
+  const returned =
+    typeof data === 'object' && data !== null
+      ? (data as { account_type?: unknown }).account_type
+      : undefined
+  if (returned !== accountType) {
+    throw new PostizApiError(
+      'Postiz x-account-type returned an unexpected response body.',
+    )
+  }
+  return accountType
 }
 
 export async function getPostizStatus(

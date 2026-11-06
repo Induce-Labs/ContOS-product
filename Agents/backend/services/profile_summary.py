@@ -1,29 +1,40 @@
-"""Generate and persist LLM profile summaries from avatars.profiling_data."""
+"""Profiling completion: website crawl + Supermemory profile sync enqueue.
+
+LLM generation of ``avatars.profile_summary`` is disabled. Historical summary
+columns are left untouched. Strategists read profile context from Supermemory.
+"""
 
 from __future__ import annotations
 
 import logging
-import os
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
-from agents.base_agent import get_llm_client
 from context.profiling_data import format_profiling_qa_for_prompt, profiling_data_hash
 from services.website_summary import WebsiteSummaryError, generate_and_store_website_summary
 
 logger = logging.getLogger(__name__)
 
-PROFILE_SUMMARY_MODEL = os.getenv(
-    "PROFILE_SUMMARY_MODEL", "google/gemini-2.5-flash"
-)
-PROFILE_SUMMARY_MAX_RETRIES = int(os.getenv("PROFILE_SUMMARY_MAX_RETRIES", "3"))
-
 
 class ProfileSummaryError(Exception):
-    """Raised when profile summary generation or persistence fails."""
+    """Raised when profiling completion or persistence fails."""
+
+
+@dataclass(frozen=True)
+class ProfileSyncOutcome:
+    """Result of one profile sync attempt. It never changes Supabase."""
+
+    ok: bool
+    retryable: bool
+    error: str | None = None
+    operation: str | None = None
+    status_code: int | None = None
+    retry_after_seconds: int | None = None
 
 
 def build_profile_summary_prompt(avatar: dict[str, Any]) -> str:
+    """Legacy helper retained for tests/docs. Not used by the completion path."""
     profiling = avatar.get("profiling_data") or {}
     qa_pairs = format_profiling_qa_for_prompt(profiling)
     if not qa_pairs:
@@ -51,85 +62,10 @@ def build_profile_summary_prompt(avatar: dict[str, Any]) -> str:
         lines.append(website_summary.strip())
         lines.append("")
 
-    lines.extend(
-        [
-            "Write a concise, structured profile summary for a marketing chatbot.",
-            "Use markdown section headings exactly as listed below.",
-            "Be factual — only use information from the questionnaire answers and website "
-            "context above (when present).",
-            "",
-            "## Background",
-            "(Who they are / what they do)",
-            "",
-            "## Goals",
-            "(Primary content and business goals)",
-            "",
-            "## Audience",
-            "(Ideal reader, customer, or follower)",
-            "",
-            "## Brand Voice & Personality",
-            "(Tone, style, communication preferences)",
-            "",
-            "## Positioning",
-            "(Differentiation, offer, personal brand angle)",
-            "",
-            "## Competitors & Market Context",
-            "(Named competitors and market signals if provided)",
-            "",
-            "## Key Insights & Constraints",
-            "(Blockers, objections, unpopular opinions, things they avoid claiming)",
-            "",
-            "## Narrative Summary",
-            "(2-3 short paragraphs optimized for chatbot context — dense but readable)",
-        ]
+    lines.append(
+        "(LLM profile-summary generation is disabled; answers sync to Supermemory.)"
     )
     return "\n".join(lines)
-
-
-def _call_summary_llm(prompt: str) -> str:
-    client = get_llm_client()
-    last_error: Exception | None = None
-
-    for attempt in range(1, PROFILE_SUMMARY_MAX_RETRIES + 1):
-        try:
-            response = client.chat.completions.create(
-                model=PROFILE_SUMMARY_MODEL,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": (
-                            "You summarize user profiling questionnaires (and optional "
-                            "website context) into structured markdown for a marketing AI "
-                            "assistant. Output markdown only."
-                        ),
-                    },
-                    {"role": "user", "content": prompt},
-                ],
-                temperature=0.3,
-                max_tokens=2000,
-            )
-            content = response.choices[0].message.content
-            if not isinstance(content, str) or not content.strip():
-                raise ProfileSummaryError(
-                    f"Profile summary model returned empty content on attempt {attempt}."
-                )
-            return content.strip()
-        except ProfileSummaryError:
-            raise
-        except Exception as exc:
-            last_error = exc
-            logger.warning(
-                "profile_summary LLM attempt failed",
-                extra={
-                    "attempt": attempt,
-                    "model": PROFILE_SUMMARY_MODEL,
-                    "error": str(exc),
-                },
-            )
-
-    raise ProfileSummaryError(
-        f"Profile summary LLM failed after {PROFILE_SUMMARY_MAX_RETRIES} attempts: {last_error}"
-    ) from last_error
 
 
 def _run_website_summary_best_effort(
@@ -146,7 +82,7 @@ def _run_website_summary_best_effort(
         )
     except WebsiteSummaryError as exc:
         logger.warning(
-            "website_summary step failed (continuing profile summary)",
+            "website_summary step failed (continuing profiling completion)",
             extra={"avatar_id": avatar_id, "error": str(exc)},
         )
         return {
@@ -159,7 +95,7 @@ def _run_website_summary_best_effort(
         }
     except Exception as exc:
         logger.warning(
-            "website_summary step unexpected failure (continuing profile summary)",
+            "website_summary step unexpected failure (continuing profiling completion)",
             extra={"avatar_id": avatar_id, "error": str(exc)},
         )
         return {
@@ -177,13 +113,35 @@ def generate_and_store_profile_summary(
     avatar_id: str,
     user_id: str,
     force: bool = False,
+    schedule_sync: bool = True,
 ) -> dict[str, Any]:
-    """Generate profile summary for an owned avatar and persist on avatars row."""
-    from db import supabase_client as db
+    """Complete profiling: website summary + mark ready + enqueue Supermemory sync.
 
+    Does not call an LLM and does not overwrite historical ``profile_summary``
+    text. Updates ``profile_summary_status`` / ``source_hash`` so the frontend
+    poll and Celery skip logic keep working.
+    """
+    from db import supabase_client as db
+    from services.contos_flow_log import flow_log, short_id
+
+    flow_log("PROFILING", "Started", avatar=short_id(avatar_id), force=force)
     row = db.assert_avatar_owned(avatar_id, user_id)
     profiling = row.get("profiling_data") or {}
+    if not isinstance(profiling, dict) or not format_profiling_qa_for_prompt(profiling):
+        raise ProfileSummaryError(
+            f"Avatar {avatar_id} has no profiling answers to process."
+        )
     source_hash = profiling_data_hash(profiling)
+    existing_status = str(row.get("profile_summary_status") or "").strip() or "pending"
+    flow_log(
+        "PROFILING",
+        "Loaded avatar profiling context from Supabase",
+        avatar=short_id(avatar_id),
+        summary_status=existing_status,
+        profiling_answers="yes",
+        source="Supabase",
+        llm_summary="disabled",
+    )
 
     website_result = _run_website_summary_best_effort(
         avatar_id=avatar_id,
@@ -193,8 +151,19 @@ def generate_and_store_profile_summary(
     website_status = str(website_result.get("status") or "failed")
     website_summary = website_result.get("website_summary")
     website_cached = bool(website_result.get("cached"))
+    flow_log(
+        "PROFILING",
+        "Website context step finished",
+        avatar=short_id(avatar_id),
+        website_status=website_status,
+        website_cached=("yes" if website_cached else "no"),
+        source=(
+            "website_cache"
+            if website_cached
+            else ("website_scraping" if website_status == "completed" else "none")
+        ),
+    )
 
-    # Merge latest website fields into the in-memory row for the profile prompt.
     row = {
         **row,
         "website_summary": website_summary
@@ -206,30 +175,50 @@ def generate_and_store_profile_summary(
     if website_status in {"skipped", "failed"} and not website_summary:
         row["website_summary"] = None
 
-    # Fresh website context must invalidate a previously cached Q&A-only profile summary.
-    website_requires_profile_refresh = (
+    website_requires_refresh = (
         not website_cached and website_status == "completed" and isinstance(website_summary, str)
     )
 
-    if not force and not website_requires_profile_refresh:
+    if not force and not website_requires_refresh:
         status = row.get("profile_summary_status")
-        cached_summary = row.get("profile_summary")
         cached_hash = row.get("profile_summary_source_hash")
-        if (
-            status == "completed"
-            and isinstance(cached_summary, str)
-            and cached_summary.strip()
-            and cached_hash == source_hash
-        ):
+        if status == "completed" and cached_hash == source_hash:
+            flow_log(
+                "PROFILING",
+                "Profiling already processed for current answers",
+                source="Supabase",
+                action="used_cached",
+                avatar=short_id(avatar_id),
+            )
+            sync_enqueued = _enqueue_completed_profile_sync(
+                avatar_id=avatar_id,
+                user_id=user_id,
+                schedule_sync=schedule_sync,
+            )
+            flow_log(
+                "PROFILING",
+                "Completed",
+                avatar=short_id(avatar_id),
+                cached="yes",
+                persisted="already",
+                profile_sync_enqueued=("yes" if sync_enqueued else "no"),
+            )
             return {
                 "avatar_id": avatar_id,
-                "profile_summary": cached_summary,
+                "profile_summary": row.get("profile_summary"),
                 "status": "completed",
                 "generated_at": row.get("profile_summary_generated_at"),
                 "cached": True,
                 "website_summary_status": website_status,
+                "profile_sync_enqueued": sync_enqueued,
             }
 
+    flow_log(
+        "PROFILING",
+        "Marking profiling ready for Supermemory sync",
+        avatar=short_id(avatar_id),
+        context_sources="Supabase+website" if website_status == "completed" else "Supabase",
+    )
     db.update_avatar_profile_summary(
         avatar_id=avatar_id,
         status="generating",
@@ -237,28 +226,25 @@ def generate_and_store_profile_summary(
     )
 
     try:
-        summary = _call_summary_llm(build_profile_summary_prompt(row))
         generated_at = datetime.now(timezone.utc).isoformat()
+        # Do not pass summary= — leave historical profile_summary text intact.
         db.update_avatar_profile_summary(
             avatar_id=avatar_id,
             status="completed",
-            summary=summary,
             generated_at=generated_at,
             source_hash=source_hash,
             error=None,
         )
-        return {
-            "avatar_id": avatar_id,
-            "profile_summary": summary,
-            "status": "completed",
-            "generated_at": generated_at,
-            "cached": False,
-            "website_summary_status": website_status,
-        }
+        flow_log(
+            "PROFILING",
+            "Profiling marked completed (no LLM summary)",
+            avatar=short_id(avatar_id),
+            status="completed",
+        )
     except Exception as exc:
         error_message = str(exc)
         logger.error(
-            "profile_summary generation failed",
+            "profiling completion failed",
             extra={"avatar_id": avatar_id, "user_id": user_id, "error": error_message},
         )
         db.update_avatar_profile_summary(
@@ -266,36 +252,240 @@ def generate_and_store_profile_summary(
             status="failed",
             error=error_message[:2000],
         )
+        flow_log(
+            "PROFILING",
+            "Profiling completion failed",
+            avatar=short_id(avatar_id),
+            error=type(exc).__name__,
+        )
         raise ProfileSummaryError(error_message) from exc
+
+    sync_enqueued = _enqueue_completed_profile_sync(
+        avatar_id=avatar_id,
+        user_id=user_id,
+        schedule_sync=schedule_sync,
+    )
+    flow_log(
+        "PROFILING",
+        "Completed",
+        avatar=short_id(avatar_id),
+        cached="no",
+        persisted="yes",
+        profile_sync_enqueued=("yes" if sync_enqueued else "no"),
+    )
+    return {
+        "avatar_id": avatar_id,
+        "profile_summary": row.get("profile_summary"),
+        "status": "completed",
+        "generated_at": generated_at,
+        "cached": False,
+        "website_summary_status": website_status,
+        "profile_sync_enqueued": sync_enqueued,
+    }
+
+
+def _enqueue_completed_profile_sync(
+    *,
+    avatar_id: str,
+    user_id: str,
+    schedule_sync: bool,
+) -> bool:
+    """Publish the sync task after the summary is stored. Never raises."""
+    if not schedule_sync:
+        return False
+    from services.enqueue_profile_sync import schedule_profile_sync
+
+    return schedule_profile_sync(avatar_id=avatar_id, user_id=user_id)
+
+
+def sync_stored_profile_to_supermemory(
+    *,
+    avatar_id: str,
+    user_id: str,
+    retry_attempt: int = 0,
+) -> ProfileSyncOutcome:
+    """Reload the owned avatar and sync its completed profile.
+
+    The avatar is reloaded after this call acquires the per-avatar sync lock,
+    so an older attempt cannot overwrite a newer stored profile. Failures are
+    logged and do not change ``profile_summary_status``.
+    """
+    from services.job_lock import (
+        PROFILE_SYNC_LOCK_TTL_SECS,
+        acquire_job_lock,
+        profile_sync_lock_key,
+    )
+
+    from services.contos_flow_log import flow_log, short_id
+
+    flow_log(
+        "PROFILE_SYNC",
+        "Started",
+        destination="Supermemory",
+        avatar=short_id(avatar_id),
+        retry_attempt=retry_attempt,
+    )
+    try:
+        with acquire_job_lock(
+            profile_sync_lock_key(avatar_id),
+            ttl_secs=PROFILE_SYNC_LOCK_TTL_SECS,
+        ) as acquired:
+            if not acquired:
+                logger.info(
+                    "profile supermemory sync deferred",
+                    extra={
+                        "avatar_id": avatar_id,
+                        "error": "lock_held",
+                        "retry_attempt": retry_attempt,
+                    },
+                )
+                flow_log(
+                    "PROFILE_SYNC",
+                    "Deferred",
+                    error="lock_held",
+                    avatar=short_id(avatar_id),
+                )
+                return ProfileSyncOutcome(ok=False, retryable=True, error="lock_held")
+            return _sync_locked_profile(
+                avatar_id=avatar_id,
+                user_id=user_id,
+                retry_attempt=retry_attempt,
+            )
+    except Exception as exc:
+        from celery.exceptions import SoftTimeLimitExceeded
+
+        if isinstance(exc, SoftTimeLimitExceeded):
+            raise
+        logger.warning(
+            "profile supermemory sync lock failed",
+            extra={
+                "avatar_id": avatar_id,
+                "error_type": type(exc).__name__,
+                "retry_attempt": retry_attempt,
+            },
+        )
+        return ProfileSyncOutcome(ok=False, retryable=True, error="lock_unavailable")
+
+
+def _sync_locked_profile(
+    *,
+    avatar_id: str,
+    user_id: str,
+    retry_attempt: int,
+) -> ProfileSyncOutcome:
+    """Load owned avatar questionnaire (+ website) and write the SM profile doc."""
+    from services.contos_flow_log import flow_log, short_id
+    from services.profile_sync_policy import profile_sync_is_retryable
+
+    try:
+        from db import supabase_client as db
+        from services.supermemory import sync_profile_to_supermemory
+
+        row = db.assert_avatar_owned(avatar_id, user_id)
+        status = str(row.get("profile_summary_status") or "").strip().lower()
+        profiling = row.get("profiling_data")
+        if not isinstance(profiling, dict):
+            profiling = {}
+        has_answers = bool(format_profiling_qa_for_prompt(profiling))
+        if status != "completed" or not has_answers:
+            logger.info(
+                "profile supermemory sync skipped",
+                extra={
+                    "avatar_id": avatar_id,
+                    "profile_summary_status": status or None,
+                    "retry_attempt": retry_attempt,
+                    "has_profiling_answers": has_answers,
+                },
+            )
+            flow_log(
+                "PROFILE_SYNC",
+                "Skipped",
+                reason="profiling_not_ready",
+                summary_status=status or "none",
+                avatar=short_id(avatar_id),
+            )
+            return ProfileSyncOutcome(ok=False, retryable=False, error="skipped")
+        owned_avatar_id = str(row.get("id") or "").strip()
+        if not owned_avatar_id:
+            logger.warning(
+                "profile supermemory sync skipped",
+                extra={
+                    "avatar_id": avatar_id,
+                    "error": "invalid_request",
+                    "retry_attempt": retry_attempt,
+                },
+            )
+            flow_log(
+                "PROFILE_SYNC",
+                "Skipped",
+                error="invalid_request",
+                avatar=short_id(avatar_id),
+            )
+            return ProfileSyncOutcome(ok=False, retryable=False, error="invalid_request")
+        website_summary = row.get("website_summary")
+        if not isinstance(website_summary, str):
+            website_summary = None
+        flow_log(
+            "PROFILE_SYNC",
+            "Loaded profiling answers from Supabase for sync",
+            avatar=short_id(owned_avatar_id),
+            source="Supabase",
+            has_website=("yes" if website_summary and website_summary.strip() else "no"),
+        )
+        result = sync_profile_to_supermemory(
+            avatar_id=owned_avatar_id,
+            profiling_data=profiling,
+            website_summary=website_summary,
+            retry_attempt=retry_attempt,
+        )
+    except Exception as exc:
+        from celery.exceptions import SoftTimeLimitExceeded
+
+        if isinstance(exc, SoftTimeLimitExceeded):
+            raise
+        logger.warning(
+            "profile supermemory sync failed",
+            extra={
+                "avatar_id": avatar_id,
+                "error_type": type(exc).__name__,
+                "retry_attempt": retry_attempt,
+            },
+        )
+        flow_log(
+            "PROFILE_SYNC",
+            "Failed",
+            error=type(exc).__name__,
+            avatar=short_id(avatar_id),
+        )
+        return ProfileSyncOutcome(ok=False, retryable=False, error="unexpected")
+
+    flow_log(
+        "PROFILE_SYNC",
+        "Completed",
+        ok=("yes" if result.ok else "no"),
+        operation=result.operation,
+        status_code=result.status_code,
+        error=result.error,
+        avatar=short_id(avatar_id),
+    )
+    return ProfileSyncOutcome(
+        ok=result.ok,
+        retryable=profile_sync_is_retryable(result.error, result.status_code),
+        error=result.error,
+        operation=result.operation,
+        status_code=result.status_code,
+        retry_after_seconds=result.retry_after_seconds,
+    )
 
 
 def maybe_refresh_stale_profile_summary(
     row: dict[str, Any],
     user_id: str,
 ) -> dict[str, Any] | None:
-    """Lazy single-attempt refresh when summary missing but profiling answers exist."""
-    status = row.get("profile_summary_status") or "pending"
-    if status == "generating":
-        return None
-    if row.get("profile_summary"):
-        return None
-    profiling = row.get("profiling_data") or {}
-    if not isinstance(profiling, dict) or not profiling:
-        return None
-    if status not in {"pending", "failed"}:
-        return None
+    """No-op: LLM profile-summary refresh on avatar load is disabled.
 
-    try:
-        result = generate_and_store_profile_summary(
-            avatar_id=str(row["id"]),
-            user_id=user_id,
-            force=False,
-        )
-        return result
-    except ProfileSummaryError as exc:
-        logger.warning(
-            "lazy profile_summary refresh failed avatar_id=%s: %s",
-            row.get("id"),
-            exc,
-        )
-        return None
+    Profiling completion + Supermemory sync run only through the Celery
+    ``profiling.run_summarize`` path (and explicit summarize API enqueue).
+    """
+    _ = (row, user_id)
+    return None

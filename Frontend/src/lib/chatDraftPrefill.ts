@@ -3,6 +3,13 @@ import { postizContentLength } from './postiz'
 
 export const CHAT_LINKEDIN_CONTENT_LIMIT = 3000
 export const CHAT_X_SOFT_LIMIT = 280
+export const CHAT_X_PREMIUM_LIMIT = 4000
+
+export function xCharLimitForAccount(
+  accountType: 'premium' | 'standard' | null | undefined,
+): number {
+  return accountType === 'premium' ? CHAT_X_PREMIUM_LIMIT : CHAT_X_SOFT_LIMIT
+}
 
 export type ChatDraftPlatform = 'linkedin' | 'x'
 

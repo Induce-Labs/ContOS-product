@@ -128,12 +128,16 @@ export async function commitReviewPost(input: {
   localDateTime: string
   now: Date
   mode: 'draft' | 'schedule'
+  xLimit?: number
   create: (post: ReviewPost, publishDate: string, mode: 'draft' | 'schedule') => Promise<unknown>
   list: (startDate: string, endDate: string) => Promise<ListedPost[]>
 }): Promise<ScheduleRow> {
-  const { post, localDateTime, now, mode } = input
+  const { post, localDateTime, now, mode, xLimit } = input
   const when = mode === 'draft' ? futureOrFallback(localDateTime, now) : localDateTime
-  const skip = scheduleSkipReason(post, when, now)
+  const skip =
+    xLimit == null
+      ? scheduleSkipReason(post, when, now)
+      : scheduleSkipReason(post, when, now, xLimit)
   if (skip) return { post, outcome: 'skipped', reason: skip }
   let publishDate: string
   try {

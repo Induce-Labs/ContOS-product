@@ -217,6 +217,84 @@ Optional open policies for local/dev if not using the **secret / service_role** 
 | `POST` | `/api/embeddings/store-playbooks` | Embed + store mock playbooks |
 | `GET` | `/api/mcp/tools` | List MCP tool schemas |
 
+### Local flow console logs
+
+When `LLM_ENV` is not `prod` (or `CONTOS_FLOW_LOGS=1`), the Agents process emits filterable lifecycle lines on logger `contos.flow` **and** forwards the same events to Chrome DevTools in local Vite (`import.meta.env.DEV`):
+
+- `[CONTOS:PROFILING]` — summarize enqueue, Supabase Q&A load, website step, mark completed (no LLM summary)
+- `[CONTOS:PROFILE_SYNC]` — Supermemory profile document GET/POST/PATCH/skip and Celery retries
+- `[CONTOS:PROFILE_READ]` — profile retrieval lifecycle for LinkedIn / Instagram / X and chatbot-with-context (gate → SM GET → validation → **Source for this reply** with `destination=Supermemory|Supabase profiling_data|none` → injection → LLM handoff). Counts/status only; never profile text. Forwarded to Chrome via SSE `contos_flow` on `/api/agents/invoke` (same path as MEMORY_READ). Request buffer is thread-local so nested `agent.run()` generators still reach the browser.
+- `[CONTOS:MEMORY_WRITE]` — validated strategist writes to Supermemory (no content logged)
+- `[CONTOS:MEMORY_READ]` — hybrid retrieval, empty-success vs Supabase fallback
+
+**How events reach Chrome**
+- Agent invoke: SSE event `contos_flow` on `/api/agents/invoke` (request-scoped buffer drained during the stream).
+- Celery profiling/sync: events are published to a short-lived Redis list keyed by user+avatar; the frontend drains them via authenticated `GET /api/dev/flow-events?avatar_id=…` while the existing profile-summary poll runs (no extra polling system). Endpoint returns 404 when flow logs are disabled.
+
+Filter terminals or DevTools with `CONTOS:`. Browser DEV dual-emits `console.log` + `console.warn` so Custom levels still show them; each chat invoke also prints `[CONTOS:FLOW] invoke start/done` breadcrumbs and drains Redis via `GET /api/dev/flow-events`. Force off with `CONTOS_FLOW_LOGS=0`. Logs never include API keys, prompts, memory text, or profile bodies.
+
+**Important distinctions**
+- Profiling completion stores questionnaire answers in **Supabase** and syncs the full Q&A (+ optional `website_summary`) into Supermemory document `profile`. It does **not** generate an LLM `profile_summary`.
+- LinkedIn / Instagram / X, and chatbot when brand context is on, load brand profile context via `[CONTOS:PROFILE_READ]` (`GET …/document/profile`) into `brand_profile.profile_context`. Historical `profile_summary` is cleared on that path. When usable `profile_context` is present, raw `profiling_data` is **omitted** from the LLM-facing `brand_profile` (a `profiling_answer_count` may remain). If the SM document already includes a `website_summary:` section, sibling `website_summary*` fields are also omitted. On SM failure/processing/empty, a **compact** deterministic bullet fallback is used — never the old LLM summary and never the full 26-answer dump beside raw `profiling_data`. `assemble_context` also strips raw `profiling_data` from **every** `avatar_profiles` entry (including non-primary multi-avatar rows) without copying the primary’s `profile_context` or issuing extra Supermemory GETs — flattened fields / per-avatar `website_summary` remain. Chatbot with context off and Playbook do not use this path. Draft-judge skips `profiling_answers` when `profile_context` is present. LLM handoff logs `brand_profile_tokens` / `context_tokens` estimates (counts only).
+- `[CONTOS:MEMORY_READ]` / `[CONTOS:MEMORY_WRITE]` remain separate preference memories (`avatar_memory`); profile documents stay excluded from that search.
+- Restart the Agents Celery **website** worker after pulling task/code changes. A stale worker will reject `profiling.sync_profile` as unregistered.
+
+### Strategist profile context (Supermemory primary)
+
+`load_strategist_profile_context` GETs `avatar_<owned uuid>/document/profile`, requires usable non-empty `content` (and rejects processing/failed statuses), and injects `profile_context` + `profile_context_source` into `brand_profile` via `apply_strategist_profile_context` (with token-efficiency stripping of raw questionnaire / duplicate website fields). It does not append to `avatar_memory`. Chatbot uses this path when brand context is on; Playbook and context-off chatbot do not.
+
+### Strategist memory retrieval
+
+LinkedIn, Instagram, and X load durable preferences through `load_strategist_memory`. The helper searches Supermemory namespace `avatar_<owned uuid>` with `searchMode=hybrid` (so chunk-only documents remain searchable), the current user message (trimmed, max 500 characters), limit 8, and threshold 0.4. The search request includes a server-side metadata filter `origin=contos_avatar_memory` so profile document chunks cannot occupy the top-N hybrid slots. Hits may expose text as `memory` or `chunk`; both map into the flat avatar_memory shape. Client-side defense still excludes results with `metadata.kind=profile`, `metadata.origin=contos_profile`, or `metadata.source=contos_profile`. Duplicate kind+content pairs keep the highest-ranked hit. A successful empty search returns no memories and does not read historical `avatar_memory` rows. Timeouts, connection failures, HTTP errors, invalid responses, and missing configuration fall back to Supabase `load_avatar_memory`. Chatbot, playbook, and revise turns do not use this retrieval path. The client default for `search_memories` remains `searchMode=memories` with no filter for unrelated callers. Dedicated `PROFILE_READ` continues to use `GET …/document/profile` and is unaffected.
+
+### Strategist memory writes
+
+After draft grounding (`filter_memory_updates`), LinkedIn, Instagram, and X persist validated `memory_updates` through `save_memory_updates`. Writes go only to Supermemory (no new Supabase `avatar_memory` inserts, no dual write, no historical migration).
+
+`filter_memory_updates` keeps quote grounding and adds durability checks against user-derived `allowed_norm` (latest user message + prior user turns + existing `source=user` memories; never assistant text): reject `source=inferred` + `kind=note`; reject session-meta / imperative one-off requests / scoped one-off phrasing (e.g. “just for this post”, “this time only”); require clear lexical evidence for remaining items (stricter for inferred). `save_memory_updates` also rejects inferred notes and temporary phrasing as defense in depth. Ambiguous proposals fail closed.
+
+- Ownership is checked before any namespace is built; namespace is `avatar_<owned uuid>`
+- Document id: `memory_document_id(kind, content)` (deterministic; repeats are idempotent)
+- Content: validated durable memory text
+- Metadata: `kind`, `source`, `platform` (or null), `origin=contos_avatar_memory`
+- HTTP 409 is treated as success (document already present)
+- Transient timeouts / connection failures / HTTP 408, 429, 5xx retry up to 3 attempts with short backoff; permanent client errors are not retried
+- Write failures are logged (operation, status, error codes only) and never fail the agent response
+- Missing Supermemory configuration skips the write and returns `[]`
+- Profile sync (`document id=profile`) is unchanged and separate from these individual memory documents
+- Explicit delete only: `delete_document` / `delete_documents` call `DELETE /ns/{namespace}/document` with `{"ids":[...]}`. Never invoked implicitly on MEMORY_READ/WRITE. Missing id (404) is success for single-id delete. Callers must already own the namespace.
+
+### Memory supersession (current behavior + recommendation)
+
+Document ids hash `kind` + normalized `content`, so an **updated preference with different wording creates a new document** and leaves the prior `mem_*` searchable. Exact duplicates remain idempotent (same id / 409). There is **no** automatic delete or supersede metadata today.
+
+Recommended minimal lifecycle (not implemented unless product mandates it):
+
+| Event | Intended behavior |
+| --- | --- |
+| New durable preference | `create_document` with new/existing `mem_*` |
+| Exact duplicate | Same id; treat 409 as success |
+| Updated preference (new wording) | Write new id; optionally delete prior id(s) only when the product UI/agent supplies exact old document ids after ownership check |
+| Explicitly forgotten preference | Call `delete_document(namespace, exact_id)` after ownership — never search-and-delete by free text |
+| Superseded preference | Prefer explicit forget + write, or a future optional `supersedes` metadata link — do **not** auto-purge by kind alone (would drop unrelated voice/goal siblings) |
+
+### Profile synchronization
+
+Supabase stores questionnaire answers (`profiling_data`) and optional `website_summary`. There is **no** LLM write to `profile_summary` on the completion path (historical values are left in place). After profiling completion, Celery `profiling.sync_profile` mirrors Q&A (+ website) into Supermemory. Avatar load does **not** trigger summarization (`maybe_refresh_stale_profile_summary` is a no-op). Historical avatars are not bulk-backfilled; re-run profiling (or force) to sync.
+
+- Namespace: `avatar_<avatar uuid>`
+- Document id: `profile`
+- The sync task reloads the owned avatar and builds the document from that row
+- Included: all meaningful questionnaire fields from `profiling_data`, plus `website_summary` when present
+- Not included: competitor posts, scraped competitor data, analytics, embeddings, or an LLM `profile_summary`
+- Metadata: `kind=profile`, `source=contos_profile`, and `source_hash` (SHA-256 of the document text)
+- GET 200 reads `metadata.source_hash`. An equal hash skips PATCH. A different hash sends PATCH
+- GET 404 creates document id `profile`. HTTP 409 from that POST sends one PATCH to the same id
+- One Redis lock, `profile_sync:avatar:<id>`, expires after 90 seconds
+- Retry policy unchanged (`PROFILE_SYNC_MAX_RETRIES`, backoff, Retry-After). Missing configuration does not retry
+- Publish failure after the profiling lock releases still recovers in-process
+- Configuration: `SUPERMEMORY_BASE_URL` and `SUPERMEMORY_API_KEY`
+
 ### Invoke body
 
 ```json
