@@ -108,14 +108,18 @@
     "brandName": "ContOS",
     "panelEyebrow": "Competitor Intelligence",
     "panelHeadline": "Track market signals and stay ahead of the competition.",
+    "panelBody": "Understand what works, spot opportunities, and turn insights into high-performing content.",
+    "or": "or",
     "orContinueWith": "or continue with",
     "email": "Email",
     "password": "Password",
+    "showPassword": "Show password",
+    "hidePassword": "Hide password",
     "language": "Language",
     "login": {
       "title": "Sign in",
       "subtitle": "Access your competitor intelligence workspace.",
-      "footerNeedAccount": "Need an account?",
+      "footerNeedAccount": "No account?",
       "footerSignUp": "Sign up",
       "submit": "Sign in",
       "submitting": "Signing in…",
@@ -124,7 +128,7 @@
       "googleFailedUnexpected": "Google sign in failed unexpectedly"
     },
     "signup": {
-      "title": "Create your account",
+      "title": "Sign up",
       "subtitle": "Start tracking competitors and market signals.",
       "footerHaveAccount": "Already have an account?",
       "footerSignIn": "Sign in",

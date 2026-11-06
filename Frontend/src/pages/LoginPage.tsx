@@ -54,7 +54,6 @@ export function LoginPage() {
   return (
     <AuthLayout
       title={t('auth.login.title')}
-      subtitle={t('auth.login.subtitle')}
       footer={
         <>
           {t('auth.login.footerNeedAccount')}{' '}
@@ -62,9 +61,25 @@ export function LoginPage() {
         </>
       }
     >
-      <form className="space-y-4" onSubmit={handleSubmit}>
-        {errorMessage ? <AuthAlert message={errorMessage} /> : null}
+      {errorMessage ? (
+        <div className="mb-4">
+          <AuthAlert message={errorMessage} />
+        </div>
+      ) : null}
 
+      <GoogleSignInButton
+        label={t('auth.login.google')}
+        onClick={() => void handleGoogleSignIn()}
+        disabled={isSubmitting}
+      />
+
+      <div className="my-5 flex items-center gap-3 sm:my-6">
+        <div className="h-px flex-1 bg-border-hairline" />
+        <span className="text-[13px] font-medium text-ink-muted">{t('auth.or')}</span>
+        <div className="h-px flex-1 bg-border-hairline" />
+      </div>
+
+      <form className="space-y-4" onSubmit={handleSubmit}>
         <AuthFormField
           label={t('auth.email')}
           name="email"
@@ -89,18 +104,6 @@ export function LoginPage() {
           {isSubmitting ? t('auth.login.submitting') : t('auth.login.submit')}
         </PrimaryButton>
       </form>
-
-      <div className="my-5 flex items-center gap-3 sm:my-6">
-        <div className="h-px flex-1 bg-border-hairline" />
-        <span className="text-[13px] font-medium text-ink-muted">{t('auth.orContinueWith')}</span>
-        <div className="h-px flex-1 bg-border-hairline" />
-      </div>
-
-      <GoogleSignInButton
-        label={t('auth.login.google')}
-        onClick={() => void handleGoogleSignIn()}
-        disabled={isSubmitting}
-      />
     </AuthLayout>
   )
 }

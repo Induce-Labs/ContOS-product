@@ -65,7 +65,6 @@ export function SignUpPage() {
   return (
     <AuthLayout
       title={t('auth.signup.title')}
-      subtitle={t('auth.signup.subtitle')}
       footer={
         <>
           {t('auth.signup.footerHaveAccount')}{' '}
@@ -73,13 +72,35 @@ export function SignUpPage() {
         </>
       }
     >
-      <form className="space-y-4" onSubmit={handleSubmit}>
-        {sessionInvalid && !errorMessage ? (
+      {sessionInvalid && !errorMessage ? (
+        <div className="mb-4">
           <AuthAlert message={t('auth.signup.sessionInvalid')} />
-        ) : null}
-        {errorMessage ? <AuthAlert message={errorMessage} /> : null}
-        {successMessage ? <AuthAlert message={successMessage} tone="success" /> : null}
+        </div>
+      ) : null}
+      {errorMessage ? (
+        <div className="mb-4">
+          <AuthAlert message={errorMessage} />
+        </div>
+      ) : null}
+      {successMessage ? (
+        <div className="mb-4">
+          <AuthAlert message={successMessage} tone="success" />
+        </div>
+      ) : null}
 
+      <GoogleSignInButton
+        label={t('auth.signup.google')}
+        onClick={() => void handleGoogleSignUp()}
+        disabled={isSubmitting}
+      />
+
+      <div className="my-5 flex items-center gap-3 sm:my-6">
+        <div className="h-px flex-1 bg-border-hairline" />
+        <span className="text-[13px] font-medium text-ink-muted">{t('auth.or')}</span>
+        <div className="h-px flex-1 bg-border-hairline" />
+      </div>
+
+      <form className="space-y-4" onSubmit={handleSubmit}>
         <AuthFormField
           label={t('auth.email')}
           name="email"
@@ -105,18 +126,6 @@ export function SignUpPage() {
           {isSubmitting ? t('auth.signup.submitting') : t('auth.signup.submit')}
         </PrimaryButton>
       </form>
-
-      <div className="my-5 flex items-center gap-3 sm:my-6">
-        <div className="h-px flex-1 bg-border-hairline" />
-        <span className="text-[13px] font-medium text-ink-muted">{t('auth.orContinueWith')}</span>
-        <div className="h-px flex-1 bg-border-hairline" />
-      </div>
-
-      <GoogleSignInButton
-        label={t('auth.signup.google')}
-        onClick={() => void handleGoogleSignUp()}
-        disabled={isSubmitting}
-      />
     </AuthLayout>
   )
 }
