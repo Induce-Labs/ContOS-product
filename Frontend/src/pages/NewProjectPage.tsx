@@ -186,6 +186,17 @@ export function NewProjectPage() {
       return
     }
 
+    const reusable =
+      avatar != null &&
+      avatar.status === 'onboarding' &&
+      selectableTypeFromProjectType(avatar.type) === selectedType
+    if (reusable) {
+      setFieldError(null)
+      setLastUsedProjectId(avatar.id)
+      setStep('profiling')
+      return
+    }
+
     if (disabledTypes.includes(selectedType)) {
       setFieldError(t('onboarding.projectType.alreadyInUse'))
       setSelectedType(null)
@@ -202,6 +213,9 @@ export function NewProjectPage() {
       )
       setLastUsedProjectId(created.id)
       setAvatar(created)
+      setDisabledTypes((current) =>
+        current.includes(selectedType) ? current : [...current, selectedType],
+      )
       setStep('profiling')
     } catch (error) {
       logDevError('new project create avatar', {
@@ -242,6 +256,12 @@ export function NewProjectPage() {
           if (disabledTypes.includes(type)) return
           setSelectedType(type)
           setFieldError(null)
+          if (
+            avatar != null &&
+            selectableTypeFromProjectType(avatar.type) !== type
+          ) {
+            setAvatar(null)
+          }
         }}
         onContinue={() => void handleTypeContinue()}
         isSubmitting={isCreatingAvatar}
