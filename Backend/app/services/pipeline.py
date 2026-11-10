@@ -13,6 +13,7 @@ from app.services.linkedin_parser import parse_linkedin_posts
 from app.services.llm_content_selection import select_content_for_llm
 from app.services.text_sanitize import sanitize_text
 from app.services.twitter_parser import parse_twitter_tweets
+from app.services.usage_ledger import log_usage_event
 
 logger = logging.getLogger(__name__)
 
@@ -335,6 +336,21 @@ def run_instagram_competitor_pipeline(
         for post in parsed_posts
     ]
     repository.upsert_scraped_content(scraped_rows)
+    log_usage_event(
+        repository,
+        operation="competitor_scrape_instagram",
+        provider="apify",
+        avatar_id=str(avatar_id),
+        model_or_actor=settings.apify_instagram_actor_id,
+        scrape_items=len(raw_items),
+        status="success",
+        source_ref=str(competitor_id),
+        metadata={
+            "parsed_posts": len(parsed_posts),
+            "reel_count": reel_count,
+            "profile_url": profile_url,
+        },
+    )
     logger.info(
         "[PIPELINE] Step 1/3 SCRAPE complete — stored %s posts (%s reels, %s other)",
         len(parsed_posts),
@@ -404,6 +420,22 @@ def run_instagram_competitor_pipeline(
     if pending_rows:
         repository.mark_transcription_in_progress([str(row["id"]) for row in pending_rows])
         transcript_results = apify_client.transcribe_reel_urls(pending_urls)
+        log_usage_event(
+            repository,
+            operation="competitor_transcribe_instagram",
+            provider="apify",
+            avatar_id=str(avatar_id),
+            model_or_actor=settings.apify_transcriber_actor_id,
+            scrape_items=len(pending_urls),
+            status="success",
+            source_ref=str(competitor_id),
+            metadata={
+                "urls_sent": len(pending_urls),
+                "transcripts_received": sum(
+                    1 for result in transcript_results.values() if result.succeeded
+                ),
+            },
+        )
         logger.info(
             "[PIPELINE] Step 2/3 TRANSCRIBE — transcriber returned %s transcripts for %s URLs",
             sum(1 for result in transcript_results.values() if result.succeeded),
@@ -586,6 +618,8 @@ def _analyze_instagram_competitor(
     summary_payload, model_used = llm_client.summarize_competitor_content(
         competitor_handle=profile_url,
         content_items=llm_content,
+        avatar_id=str(avatar_id),
+        competitor_id=str(competitor_id),
     )
     summary_payload = enrich_competitor_summary(summary_payload, summary_content)
     repository.replace_content_summary(
@@ -669,6 +703,17 @@ def run_linkedin_competitor_pipeline(
         for post in parsed_posts
     ]
     repository.upsert_linkedin_scraped_content(scraped_rows)
+    log_usage_event(
+        repository,
+        operation="competitor_scrape_linkedin",
+        provider="apify",
+        avatar_id=str(avatar_id),
+        model_or_actor=settings.apify_linkedin_actor_id,
+        scrape_items=len(raw_items),
+        status="success",
+        source_ref=str(competitor_id),
+        metadata={"parsed_posts": len(parsed_posts), "profile_url": profile_url},
+    )
     logger.info(
         "[PIPELINE] LinkedIn Step 1/2 SCRAPE complete — stored %s posts",
         len(parsed_posts),
@@ -759,6 +804,8 @@ def _analyze_linkedin_competitor(
         competitor_handle=profile_url,
         content_items=llm_content,
         platform="linkedin",
+        avatar_id=str(avatar_id),
+        competitor_id=str(competitor_id),
     )
     summary_payload = enrich_competitor_summary(summary_payload, summary_content)
     repository.replace_linkedin_content_summary(
@@ -845,6 +892,17 @@ def run_twitter_competitor_pipeline(
         for tweet in parsed_tweets
     ]
     repository.upsert_twitter_scraped_content(scraped_rows)
+    log_usage_event(
+        repository,
+        operation="competitor_scrape_twitter",
+        provider="apify",
+        avatar_id=str(avatar_id),
+        model_or_actor=settings.apify_twitter_actor_id,
+        scrape_items=len(raw_items),
+        status="success",
+        source_ref=str(competitor_id),
+        metadata={"parsed_tweets": len(parsed_tweets), "profile_url": profile_url},
+    )
     logger.info(
         "[PIPELINE] Twitter Step 1/2 SCRAPE complete — stored %s tweets",
         len(parsed_tweets),
@@ -938,6 +996,8 @@ def _analyze_twitter_competitor(
         competitor_handle=profile_url,
         content_items=llm_content,
         platform="twitter",
+        avatar_id=str(avatar_id),
+        competitor_id=str(competitor_id),
     )
     summary_payload = enrich_competitor_summary(summary_payload, summary_content)
     summary_dict = summary_payload.model_dump()
@@ -955,6 +1015,7 @@ def _analyze_twitter_competitor(
             repository=repository,
             competitor_id=competitor_id,
             summary=summary_dict,
+            avatar_id=avatar_id,
         )
     except Exception as embed_error:
         # Summaries remain usable via lexical fetch; vector RAG needs a later backfill.

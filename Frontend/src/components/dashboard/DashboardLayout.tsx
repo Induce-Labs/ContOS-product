@@ -181,9 +181,14 @@ export function DashboardLayout({
                 className="hidden h-8 w-8 shrink-0 object-contain dark:block"
               />
               {!railCollapsed ? (
-                <span className="min-w-0 truncate text-base font-semibold leading-tight text-ink">
-                  {t('layout.brandName')}
-                </span>
+                <div className="min-w-0">
+                  <p className="truncate text-base font-semibold leading-tight text-ink">
+                    {t('layout.brandName')}
+                  </p>
+                  <p className="truncate text-[11px] font-medium leading-tight text-ink-muted">
+                    {t('layout.brandTagline')}
+                  </p>
+                </div>
               ) : null}
             </button>
           ) : (
@@ -208,6 +213,9 @@ export function DashboardLayout({
                 <div className="min-w-0">
                   <p className="truncate text-base font-semibold leading-tight text-ink">
                     {t('layout.brandName')}
+                  </p>
+                  <p className="truncate text-[11px] font-medium leading-tight text-ink-muted">
+                    {t('layout.brandTagline')}
                   </p>
                 </div>
               ) : null}

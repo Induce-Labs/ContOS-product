@@ -953,6 +953,28 @@ def _request(
             "elapsed_ms": elapsed_ms,
         },
     )
+    try:
+        from db.usage_ledger import log_usage_event_async
+
+        avatar_id = None
+        parts = [p for p in path.split("/") if p]
+        if len(parts) >= 2 and parts[0] == "ns":
+            avatar_id = parts[1]
+        log_usage_event_async(
+            operation="supermemory_op",
+            provider="supermemory",
+            source="agents",
+            avatar_id=avatar_id,
+            sm_ops=1,
+            status="success",
+            metadata={
+                "sm_operation": operation,
+                "method": method,
+                "elapsed_ms": elapsed_ms,
+            },
+        )
+    except Exception as usage_exc:  # noqa: BLE001
+        logger.warning("supermemory usage log failed: %s", usage_exc)
     return SupermemoryResponse(
         ok=True,
         operation=operation,

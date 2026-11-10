@@ -12,8 +12,11 @@
 | 6 | [phase-6-hardening.md](./phase-6-hardening.md) |
 | LinkedIn | [phase-linkedin.md](./phase-linkedin.md) |
 | Agents | [phase-agents.md](./phase-agents.md) |
+| Supermemory (Railway) | [supermemory-railway.md](./supermemory-railway.md) |
 | Celery / Redis | [phase-celery.md](./phase-celery.md) |
 | i18n / translation | [phase-i18n.md](./phase-i18n.md) |
 | Postiz LinkedIn + calendar | [phase-postiz-linkedin.md](./phase-postiz-linkedin.md) |
 | Postiz LinkedIn scopes fix | [postiz-linkedin-oauth-scopes-fix.md](./postiz-linkedin-oauth-scopes-fix.md) |
 | Same-user avatar isolation | [postiz-same-user-avatar-isolation-fix.md](./postiz-same-user-avatar-isolation-fix.md) |
+| `user_email` columns (Table Editor) | [supabase-user-email-columns.md](./supabase-user-email-columns.md) |
+| Usage & cost ledger | [supabase-usage-cost-ledger.md](./supabase-usage-cost-ledger.md) |

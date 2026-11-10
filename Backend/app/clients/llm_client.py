@@ -38,6 +38,8 @@ class LlmClient:
         content_items: list[dict[str, Any]],
         *,
         platform: str = "instagram",
+        avatar_id: str | None = None,
+        competitor_id: str | None = None,
     ) -> tuple[CompetitorSummaryPayload, str]:
         if not content_items:
             raise LlmServiceError("Cannot summarize an empty content batch.")
@@ -63,7 +65,7 @@ class LlmClient:
 
         for attempt in range(1, self._settings.llm_max_retries + 2):
             try:
-                raw_content, model_used = self._call_provider(prompt)
+                raw_content, model_used, usage = self._call_provider(prompt)
                 if not isinstance(raw_content, str) or not raw_content.strip():
                     raise LlmServiceError(
                         "LLM returned empty message content; cannot parse summary JSON.",
@@ -78,6 +80,31 @@ class LlmClient:
                         "attempt": attempt,
                     },
                 )
+                try:
+                    from app.services.usage_ledger import log_usage_event_with_settings
+
+                    log_usage_event_with_settings(
+                        self._settings,
+                        operation="competitor_summary_llm",
+                        provider="openrouter",
+                        avatar_id=avatar_id,
+                        model_or_actor=model_used,
+                        input_tokens=int(usage.get("input_tokens") or 0),
+                        output_tokens=int(usage.get("output_tokens") or 0),
+                        status="success",
+                        source_ref=competitor_id,
+                        metadata={
+                            "platform": platform,
+                            "competitor_handle": competitor_handle,
+                            "content_item_count": len(content_items),
+                            "llm_provider": self._provider,
+                        },
+                    )
+                except Exception as usage_exc:
+                    logger.warning(
+                        "competitor_summary usage log failed: %s",
+                        usage_exc,
+                    )
                 return summary, model_used
             except (
                 httpx.HTTPError,
@@ -103,7 +130,7 @@ class LlmClient:
             f"LLM summarization failed after retries: {last_error}",
         ) from last_error
 
-    def _call_provider(self, prompt: str) -> tuple[str, str]:
+    def _call_provider(self, prompt: str) -> tuple[str, str, dict[str, int]]:
         if self._provider == "openrouter":
             return self._call_openrouter(prompt)
         return self._call_openai(prompt)
@@ -140,7 +167,17 @@ class LlmClient:
             },
         }
 
-    def _call_openrouter(self, prompt: str) -> tuple[str, str]:
+    @staticmethod
+    def _usage_from_payload(payload: dict[str, Any]) -> dict[str, int]:
+        usage = payload.get("usage") if isinstance(payload, dict) else None
+        if not isinstance(usage, dict):
+            return {"input_tokens": 0, "output_tokens": 0}
+        return {
+            "input_tokens": int(usage.get("prompt_tokens") or 0),
+            "output_tokens": int(usage.get("completion_tokens") or 0),
+        }
+
+    def _call_openrouter(self, prompt: str) -> tuple[str, str, dict[str, int]]:
         model = self._settings.openrouter_model
 
         with httpx.Client(timeout=self._request_timeout()) as client:
@@ -158,9 +195,14 @@ class LlmClient:
                 f"OpenRouter request failed with status {response.status_code}: {response.text}",
             )
 
-        return self._extract_message_content(response.json()), model
+        payload = response.json()
+        return (
+            self._extract_message_content(payload),
+            model,
+            self._usage_from_payload(payload),
+        )
 
-    def _call_openai(self, prompt: str) -> tuple[str, str]:
+    def _call_openai(self, prompt: str) -> tuple[str, str, dict[str, int]]:
         model = self._settings.openai_model
 
         with httpx.Client(timeout=self._request_timeout()) as client:
@@ -178,7 +220,12 @@ class LlmClient:
                 f"OpenAI request failed with status {response.status_code}: {response.text}",
             )
 
-        return self._extract_message_content(response.json()), model
+        payload = response.json()
+        return (
+            self._extract_message_content(payload),
+            model,
+            self._usage_from_payload(payload),
+        )
 
     @staticmethod
     def _normalize_json_content(raw_content: str) -> str:

@@ -166,6 +166,22 @@ def judge_output(
                 or verdict["contradicts_memory"] or unsupported
             ):
                 verdict["pass"] = True
+            try:
+                from db.usage_ledger import log_usage_event_async
+
+                usage = getattr(response, "usage", None)
+                log_usage_event_async(
+                    operation="draft_judge_llm",
+                    provider="openrouter",
+                    source="agents",
+                    model_or_actor=model,
+                    input_tokens=int(getattr(usage, "prompt_tokens", 0) or 0),
+                    output_tokens=int(getattr(usage, "completion_tokens", 0) or 0),
+                    status="success",
+                    metadata={"verdict_pass": verdict["pass"]},
+                )
+            except Exception as usage_exc:  # noqa: BLE001
+                logger.warning("draft judge usage log failed: %s", usage_exc)
             return verdict
         except Exception as exc:  # noqa: BLE001
             last_error = exc

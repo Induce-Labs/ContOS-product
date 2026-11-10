@@ -32,7 +32,13 @@ def get_embedding_client() -> OpenAI:
     return OpenAI(api_key=api_key, base_url=OPENROUTER_BASE)
 
 
-def generate_embedding(text: str) -> list[float]:
+def generate_embedding(
+    text: str,
+    *,
+    user_id: str | None = None,
+    avatar_id: str | None = None,
+    operation: str = "rag_embedding",
+) -> list[float]:
     """Generate a 1536-dim embedding via OpenRouter text-embedding-3-small."""
     if not text or not text.strip():
         raise ValueError("Cannot embed empty text")
@@ -48,6 +54,27 @@ def generate_embedding(text: str) -> list[float]:
             f"Expected {EMBEDDING_DIMENSIONS}-dim embedding, got {len(embedding)} "
             f"(model={EMBEDDING_MODEL})"
         )
+    try:
+        from db.usage_ledger import log_usage_event_async
+
+        usage = getattr(response, "usage", None)
+        embed_tokens = int(
+            getattr(usage, "total_tokens", None)
+            or getattr(usage, "prompt_tokens", None)
+            or max(len(text.strip()) // 4, 1)
+        )
+        log_usage_event_async(
+            operation=operation,
+            provider="openrouter",
+            source="agents",
+            user_id=user_id,
+            avatar_id=avatar_id,
+            model_or_actor=EMBEDDING_MODEL,
+            embed_tokens=embed_tokens,
+            status="success",
+        )
+    except Exception as usage_exc:  # noqa: BLE001
+        logger.warning("embedding usage log failed: %s", usage_exc)
     return embedding
 
 

@@ -16,6 +16,7 @@ from openai import OpenAI
 from constants import response_language_instruction, response_language_user_reminder
 from context.assembly import assemble_context
 from db.supabase_client import log_agent_call
+from db.usage_ledger import AGENT_OPERATION, log_usage_event_async
 from mcp.server import TOOL_TRACE, mcp_server
 from prompts import (
     get_system_prompt,
@@ -1478,3 +1479,21 @@ class BaseAgent:
             threading.Thread(
                 target=log_agent_call, args=(payload,), daemon=True
             ).start()
+            log_usage_event_async(
+                operation=AGENT_OPERATION.get(agent_type, f"agent_{agent_type}"),
+                provider="openrouter",
+                source="agents",
+                user_id=str(user_id) if user_id else None,
+                avatar_id=str(avatar_id) if avatar_id else None,
+                model_or_actor=MODEL,
+                input_tokens=int(usage.get("input_tokens") or 0),
+                output_tokens=int(usage.get("output_tokens") or 0),
+                status=status,
+                error_message=error_message,
+                source_ref=None,
+                metadata={
+                    "agent_type": agent_type,
+                    "tools_used": tools_used,
+                    "live_mode": live_mode,
+                },
+            )

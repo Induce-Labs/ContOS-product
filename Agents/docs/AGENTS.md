@@ -293,7 +293,7 @@ Supabase stores questionnaire answers (`profiling_data`) and optional `website_s
 - One Redis lock, `profile_sync:avatar:<id>`, expires after 90 seconds
 - Retry policy unchanged (`PROFILE_SYNC_MAX_RETRIES`, backoff, Retry-After). Missing configuration does not retry
 - Publish failure after the profiling lock releases still recovers in-process
-- Configuration: `SUPERMEMORY_BASE_URL` and `SUPERMEMORY_API_KEY`
+- Configuration: `SUPERMEMORY_BASE_URL` and `SUPERMEMORY_API_KEY` (Railway self-host: see [Docs/supermemory-railway.md](../../Docs/supermemory-railway.md))
 
 ### Invoke body
 

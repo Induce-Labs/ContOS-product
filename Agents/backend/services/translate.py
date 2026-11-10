@@ -282,6 +282,26 @@ def _call_openrouter_batch_locked(
                     f"Missing translated string for keys {missing!r} "
                     f"(model={TRANSLATION_MODEL}, batch_size={len(texts_by_key)})."
                 )
+            try:
+                from db.usage_ledger import log_usage_event_async
+
+                usage = getattr(response, "usage", None)
+                log_usage_event_async(
+                    operation="translation_llm",
+                    provider="openrouter",
+                    source="agents",
+                    model_or_actor=TRANSLATION_MODEL,
+                    input_tokens=int(getattr(usage, "prompt_tokens", 0) or 0),
+                    output_tokens=int(getattr(usage, "completion_tokens", 0) or 0),
+                    status="success",
+                    metadata={
+                        "source_lang": source_lang,
+                        "target_lang": target_lang,
+                        "batch_size": len(texts_by_key),
+                    },
+                )
+            except Exception as usage_exc:  # noqa: BLE001
+                logger.warning("translation usage log failed: %s", usage_exc)
             return result
         except TranslationError as error:
             last_error = error

@@ -14,23 +14,125 @@ export type Database = {
   }
   public: {
     Tables: {
+      usage_events: {
+        Row: {
+          user_email: string | null
+          id: string
+          created_at: string
+          user_id: string | null
+          avatar_id: string | null
+          operation: string
+          provider: string
+          model_or_actor: string | null
+          input_tokens: number
+          output_tokens: number
+          embed_tokens: number
+          scrape_items: number
+          sm_ops: number
+          estimated_cost_usd: number
+          status: string
+          error_message: string | null
+          source: string
+          source_ref: string | null
+          metadata: Json
+        }
+        Insert: {
+          user_email?: string | null
+          id?: string
+          created_at?: string
+          user_id?: string | null
+          avatar_id?: string | null
+          operation: string
+          provider: string
+          model_or_actor?: string | null
+          input_tokens?: number
+          output_tokens?: number
+          embed_tokens?: number
+          scrape_items?: number
+          sm_ops?: number
+          estimated_cost_usd?: number
+          status?: string
+          error_message?: string | null
+          source: string
+          source_ref?: string | null
+          metadata?: Json
+        }
+        Update: {
+          user_email?: string | null
+          id?: string
+          created_at?: string
+          user_id?: string | null
+          avatar_id?: string | null
+          operation?: string
+          provider?: string
+          model_or_actor?: string | null
+          input_tokens?: number
+          output_tokens?: number
+          embed_tokens?: number
+          scrape_items?: number
+          sm_ops?: number
+          estimated_cost_usd?: number
+          status?: string
+          error_message?: string | null
+          source?: string
+          source_ref?: string | null
+          metadata?: Json
+        }
+        Relationships: []
+      }
+      usage_price_rates: {
+        Row: {
+          id: string
+          provider: string
+          model_or_actor: string | null
+          unit: string
+          unit_price_usd: number
+          effective_from: string
+          notes: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          provider: string
+          model_or_actor?: string | null
+          unit: string
+          unit_price_usd: number
+          effective_from?: string
+          notes?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          provider?: string
+          model_or_actor?: string | null
+          unit?: string
+          unit_price_usd?: number
+          effective_from?: string
+          notes?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
       agent_chat_stores: {
         Row: {
           avatar_id: string
           store: Json
           updated_at: string
+          user_email: string | null
           user_id: string
         }
         Insert: {
           avatar_id: string
           store: Json
           updated_at?: string
+          user_email?: string | null
           user_id: string
         }
         Update: {
           avatar_id?: string
           store?: Json
           updated_at?: string
+          user_email?: string | null
           user_id?: string
         }
         Relationships: [
@@ -55,6 +157,7 @@ export type Database = {
           platform: string
           avatar_id: string
           scrape_status: string
+          user_email: string | null
         }
         Insert: {
           cancel_requested?: boolean
@@ -67,6 +170,7 @@ export type Database = {
           platform: string
           avatar_id: string
           scrape_status?: string
+          user_email?: string | null
         }
         Update: {
           cancel_requested?: boolean
@@ -79,6 +183,7 @@ export type Database = {
           platform?: string
           avatar_id?: string
           scrape_status?: string
+          user_email?: string | null
         }
         Relationships: [
           {
@@ -99,6 +204,7 @@ export type Database = {
           model_used: string
           avatar_id: string
           summary: Json
+          user_email: string | null
         }
         Insert: {
           competitor_id: string
@@ -108,6 +214,7 @@ export type Database = {
           model_used: string
           avatar_id: string
           summary: Json
+          user_email?: string | null
         }
         Update: {
           competitor_id?: string
@@ -117,6 +224,7 @@ export type Database = {
           model_used?: string
           avatar_id?: string
           summary?: Json
+          user_email?: string | null
         }
         Relationships: [
           {
@@ -144,6 +252,7 @@ export type Database = {
           model_used: string
           avatar_id: string
           summary: Json
+          user_email: string | null
         }
         Insert: {
           competitor_id: string
@@ -153,6 +262,7 @@ export type Database = {
           model_used: string
           avatar_id: string
           summary: Json
+          user_email?: string | null
         }
         Update: {
           competitor_id?: string
@@ -162,6 +272,7 @@ export type Database = {
           model_used?: string
           avatar_id?: string
           summary?: Json
+          user_email?: string | null
         }
         Relationships: [
           {
@@ -195,6 +306,7 @@ export type Database = {
           raw_payload: Json | null
           scraped_at: string
           shares: number | null
+          user_email: string | null
         }
         Insert: {
           author_headline?: string | null
@@ -210,6 +322,7 @@ export type Database = {
           raw_payload?: Json | null
           scraped_at?: string
           shares?: number | null
+          user_email?: string | null
         }
         Update: {
           author_headline?: string | null
@@ -225,6 +338,7 @@ export type Database = {
           raw_payload?: Json | null
           scraped_at?: string
           shares?: number | null
+          user_email?: string | null
         }
         Relationships: [
           {
@@ -245,6 +359,7 @@ export type Database = {
           model_used: string
           avatar_id: string
           summary: Json
+          user_email: string | null
         }
         Insert: {
           competitor_id: string
@@ -254,6 +369,7 @@ export type Database = {
           model_used: string
           avatar_id: string
           summary: Json
+          user_email?: string | null
         }
         Update: {
           competitor_id?: string
@@ -263,6 +379,7 @@ export type Database = {
           model_used?: string
           avatar_id?: string
           summary?: Json
+          user_email?: string | null
         }
         Relationships: [
           {
@@ -295,6 +412,7 @@ export type Database = {
           posted_at: string | null
           raw_payload: Json | null
           scraped_at: string
+          user_email: string | null
         }
         Insert: {
           author_description?: string | null
@@ -309,6 +427,7 @@ export type Database = {
           posted_at?: string | null
           raw_payload?: Json | null
           scraped_at?: string
+          user_email?: string | null
         }
         Update: {
           author_description?: string | null
@@ -323,6 +442,7 @@ export type Database = {
           posted_at?: string | null
           raw_payload?: Json | null
           scraped_at?: string
+          user_email?: string | null
         }
         Relationships: [
           {
@@ -367,6 +487,7 @@ export type Database = {
           onboarding_step: string
           preferred_language: string | null
           updated_at: string
+          user_email: string | null
           user_id: string
         }
         Insert: {
@@ -377,6 +498,7 @@ export type Database = {
           onboarding_step?: string
           preferred_language?: string | null
           updated_at?: string
+          user_email?: string | null
           user_id: string
         }
         Update: {
@@ -387,6 +509,7 @@ export type Database = {
           onboarding_step?: string
           preferred_language?: string | null
           updated_at?: string
+          user_email?: string | null
           user_id?: string
         }
         Relationships: [
@@ -422,6 +545,7 @@ export type Database = {
           website_summary_source_hash: string | null
           website_summary_status: string
           website_summary_url: string | null
+          user_email: string | null
         }
         Insert: {
           created_at?: string
@@ -439,6 +563,7 @@ export type Database = {
           type: string
           updated_at?: string
           user_id: string
+          user_email?: string | null
           website_summary?: string | null
           website_summary_error?: string | null
           website_summary_generated_at?: string | null
@@ -462,6 +587,7 @@ export type Database = {
           type?: string
           updated_at?: string
           user_id?: string
+          user_email?: string | null
           website_summary?: string | null
           website_summary_error?: string | null
           website_summary_generated_at?: string | null
@@ -490,6 +616,7 @@ export type Database = {
           transcript_source: string | null
           transcription_status: string
           views: number | null
+          user_email: string | null
         }
         Insert: {
           caption?: string | null
@@ -509,6 +636,7 @@ export type Database = {
           transcript_source?: string | null
           transcription_status?: string
           views?: number | null
+          user_email?: string | null
         }
         Update: {
           caption?: string | null
@@ -528,6 +656,7 @@ export type Database = {
           transcript_source?: string | null
           transcription_status?: string
           views?: number | null
+          user_email?: string | null
         }
         Relationships: [
           {
@@ -541,9 +670,53 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      usage_daily_by_user: {
+        Row: {
+          day_utc: string | null
+          user_email: string | null
+          user_id: string | null
+          operation: string | null
+          provider: string | null
+          event_count: number | null
+          input_tokens: number | null
+          output_tokens: number | null
+          embed_tokens: number | null
+          scrape_items: number | null
+          sm_ops: number | null
+          estimated_cost_usd: number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
+      contos_log_usage_event: {
+        Args: {
+          p_user_id?: string | null
+          p_avatar_id?: string | null
+          p_operation: string
+          p_provider: string
+          p_model_or_actor?: string | null
+          p_input_tokens?: number
+          p_output_tokens?: number
+          p_embed_tokens?: number
+          p_scrape_items?: number
+          p_sm_ops?: number
+          p_status?: string
+          p_error_message?: string | null
+          p_source?: string
+          p_source_ref?: string | null
+          p_metadata?: Json
+        }
+        Returns: string
+      }
+      contos_usage_unit_price: {
+        Args: {
+          p_provider: string
+          p_model_or_actor: string | null
+          p_unit: string
+        }
+        Returns: number
+      }
       resolve_profiling_template: {
         Args: { p_avatar_type: string }
         Returns: string

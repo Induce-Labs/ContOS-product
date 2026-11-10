@@ -65,7 +65,12 @@ def build_website_summary_prompt(*, website_url: str, crawl_text: str) -> str:
     )
 
 
-def _call_website_summary_llm(prompt: str) -> str:
+def _call_website_summary_llm(
+    prompt: str,
+    *,
+    user_id: str | None = None,
+    avatar_id: str | None = None,
+) -> str:
     client = get_llm_client()
     last_error: Exception | None = None
 
@@ -91,6 +96,24 @@ def _call_website_summary_llm(prompt: str) -> str:
                 raise WebsiteSummaryError(
                     f"Website summary model returned empty content on attempt {attempt}."
                 )
+            try:
+                from db.usage_ledger import log_usage_event_async
+
+                usage = getattr(response, "usage", None)
+                log_usage_event_async(
+                    operation="website_summary_llm",
+                    provider="openrouter",
+                    source="agents",
+                    user_id=user_id,
+                    avatar_id=avatar_id,
+                    model_or_actor=PROFILE_SUMMARY_MODEL,
+                    input_tokens=int(getattr(usage, "prompt_tokens", 0) or 0),
+                    output_tokens=int(getattr(usage, "completion_tokens", 0) or 0),
+                    status="success",
+                    metadata={"attempt": attempt},
+                )
+            except Exception as usage_exc:  # noqa: BLE001
+                logger.warning("website_summary usage log failed: %s", usage_exc)
             return content.strip()
         except WebsiteSummaryError:
             raise
@@ -179,9 +202,35 @@ def generate_and_store_website_summary(
 
     try:
         crawler = ApifyWebsiteCrawler()
-        crawl_text = crawler.crawl_text(website_url)
+        crawl_items = crawler.crawl(website_url)
+        from clients.apify_website import extract_crawl_text
+
+        crawl_text = extract_crawl_text(crawl_items)
+        if not crawl_text:
+            raise WebsiteCrawlError(
+                f"Website crawl returned no usable text content for URL: {website_url}"
+            )
+        owner_id = str(avatar_row.get("user_id") or "") or None
+        try:
+            from db.usage_ledger import log_usage_event_async
+
+            log_usage_event_async(
+                operation="website_scrape",
+                provider="apify",
+                source="agents",
+                user_id=owner_id,
+                avatar_id=avatar_id,
+                model_or_actor=crawler._actor_id,
+                scrape_items=len(crawl_items),
+                status="success",
+                metadata={"website_url": website_url},
+            )
+        except Exception as usage_exc:  # noqa: BLE001
+            logger.warning("website_scrape usage log failed: %s", usage_exc)
         summary = _call_website_summary_llm(
-            build_website_summary_prompt(website_url=website_url, crawl_text=crawl_text)
+            build_website_summary_prompt(website_url=website_url, crawl_text=crawl_text),
+            user_id=owner_id,
+            avatar_id=avatar_id,
         )
         generated_at = datetime.now(timezone.utc).isoformat()
         db.update_avatar_website_summary(

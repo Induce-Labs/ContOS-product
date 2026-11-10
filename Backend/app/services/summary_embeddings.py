@@ -48,7 +48,7 @@ def summary_to_embed_text(summary: dict[str, Any] | Any) -> str:
     return json.dumps(summary, ensure_ascii=False)[:4000]
 
 
-def generate_openrouter_embedding(settings: Settings, text: str) -> list[float]:
+def generate_openrouter_embedding(settings: Settings, text: str) -> tuple[list[float], int]:
     api_key = (settings.openrouter_api_key or "").strip()
     if not api_key:
         raise RuntimeError(
@@ -87,7 +87,13 @@ def generate_openrouter_embedding(settings: Settings, text: str) -> list[float]:
                 raise RuntimeError(
                     f"Expected {EMBEDDING_DIMENSIONS}-dim embedding, got {len(embedding)}",
                 )
-            return embedding
+            usage = data.get("usage") if isinstance(data, dict) else None
+            embed_tokens = 0
+            if isinstance(usage, dict):
+                embed_tokens = int(usage.get("total_tokens") or usage.get("prompt_tokens") or 0)
+            if embed_tokens <= 0:
+                embed_tokens = max(len(text.strip()) // 4, 1)
+            return embedding, embed_tokens
         except Exception as error:
             last_error = error
             logger.warning(
@@ -104,14 +110,31 @@ def embed_twitter_content_summary(
     repository: SupabaseRepository,
     competitor_id: UUID,
     summary: dict[str, Any],
+    avatar_id: UUID | None = None,
 ) -> None:
     """Write embedding onto the latest twitter_content_summaries row for this competitor."""
     text = summary_to_embed_text(summary)
-    embedding = generate_openrouter_embedding(settings, text)
+    embedding, embed_tokens = generate_openrouter_embedding(settings, text)
     repository.update_twitter_content_summary_embedding(
         competitor_id=competitor_id,
         embedding=embedding,
     )
+    try:
+        from app.services.usage_ledger import log_usage_event
+
+        log_usage_event(
+            repository,
+            operation="summary_embedding",
+            provider="openrouter",
+            avatar_id=str(avatar_id) if avatar_id else None,
+            model_or_actor=EMBEDDING_MODEL,
+            embed_tokens=embed_tokens,
+            status="success",
+            source_ref=str(competitor_id),
+            metadata={"platform": "twitter"},
+        )
+    except Exception as usage_exc:
+        logger.warning("summary_embedding usage log failed: %s", usage_exc)
     logger.info(
         "Embedded twitter_content_summaries for competitor",
         extra={"competitor_id": str(competitor_id), "dims": len(embedding)},
