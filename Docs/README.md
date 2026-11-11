@@ -13,6 +13,7 @@
 | LinkedIn | [phase-linkedin.md](./phase-linkedin.md) |
 | Agents | [phase-agents.md](./phase-agents.md) |
 | Supermemory (Railway) | [supermemory-railway.md](./supermemory-railway.md) |
+| RLS restore (email-first) | [rls-restore-after-email-first.md](./rls-restore-after-email-first.md) |
 | Celery / Redis | [phase-celery.md](./phase-celery.md) |
 | i18n / translation | [phase-i18n.md](./phase-i18n.md) |
 | Postiz LinkedIn + calendar | [phase-postiz-linkedin.md](./phase-postiz-linkedin.md) |
@@ -20,3 +21,4 @@
 | Same-user avatar isolation | [postiz-same-user-avatar-isolation-fix.md](./postiz-same-user-avatar-isolation-fix.md) |
 | `user_email` columns (Table Editor) | [supabase-user-email-columns.md](./supabase-user-email-columns.md) |
 | Usage & cost ledger | [supabase-usage-cost-ledger.md](./supabase-usage-cost-ledger.md) |
+| SM OpenRouter usage ingest | [supermemory-openrouter-usage-ingest.md](./supermemory-openrouter-usage-ingest.md) |

@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 from celery import Celery
+from celery.schedules import crontab
 from celery.signals import worker_process_init
 from dotenv import load_dotenv
 
@@ -50,8 +51,12 @@ HARD_LIMIT = int(os.getenv("CELERY_TASK_TIME_LIMIT", "360"))
 celery_app = Celery(
     "contos_agents",
     broker=REDIS_URL,
-    include=["tasks.profiling", "tasks.translate"],
+    include=["tasks.profiling", "tasks.translate", "tasks.usage_metering"],
 )
+
+# Daily SM OpenRouter activity lands after UTC midnight; run early morning UTC.
+_SM_USAGE_CRON_HOUR = int(os.getenv("SUPERMEMORY_USAGE_INGEST_HOUR_UTC", "2"))
+_SM_USAGE_CRON_MINUTE = int(os.getenv("SUPERMEMORY_USAGE_INGEST_MINUTE_UTC", "15"))
 
 celery_app.conf.update(
     task_serializer="json",
@@ -72,6 +77,17 @@ celery_app.conf.update(
         "profiling.run_summarize": {"queue": "website"},
         "profiling.sync_profile": {"queue": "website"},
         "translate.translate_content": {"queue": "website"},
+        "usage.ingest_supermemory_openrouter": {"queue": "website"},
+    },
+    beat_schedule={
+        "supermemory-openrouter-usage-daily": {
+            "task": "usage.ingest_supermemory_openrouter",
+            "schedule": crontab(
+                minute=_SM_USAGE_CRON_MINUTE,
+                hour=_SM_USAGE_CRON_HOUR,
+            ),
+            "options": {"queue": "website"},
+        },
     },
 )
 

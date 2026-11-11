@@ -36,15 +36,20 @@ def log_usage_event(
     error_message: str | None = None,
     source_ref: str | None = None,
     metadata: dict[str, Any] | None = None,
+    raise_on_error: bool = False,
 ) -> str | None:
-    """Insert one usage_events row. Never raises to callers."""
+    """Insert one usage_events row.
+
+    Default is best-effort (never raises) for product request paths.
+    Metering jobs should pass ``raise_on_error=True``.
+    """
     try:
         client = get_supabase_client()
         if client is None:
-            logger.info(
-                "usage_events skip (no supabase) operation=%s",
-                operation,
-            )
+            message = f"usage_events skip (no supabase) operation={operation}"
+            if raise_on_error:
+                raise RuntimeError(message)
+            logger.info(message)
             return None
         payload = {
             "p_user_id": user_id,
@@ -67,13 +72,24 @@ def log_usage_event(
         event_id = result.data
         if isinstance(event_id, list) and event_id:
             event_id = event_id[0]
-        return str(event_id) if event_id else None
+        if not event_id:
+            message = (
+                f"contos_log_usage_event returned empty id operation={operation} "
+                f"source_ref={source_ref!r}"
+            )
+            if raise_on_error:
+                raise RuntimeError(message)
+            logger.error(message)
+            return None
+        return str(event_id)
     except Exception as exc:
         logger.error(
             "Failed to log usage_event operation=%s: %s",
             operation,
             exc,
         )
+        if raise_on_error:
+            raise
         return None
 
 

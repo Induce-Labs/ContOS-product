@@ -31,6 +31,20 @@ RPC: `contos_log_usage_event(...)` looks up rates, resolves `user_email`, insert
 | `draft_judge_llm` | openrouter | tokens |
 | `rag_embedding` | openrouter | `embed_tokens` |
 | `translation_llm` | openrouter | tokens |
+| `supermemory_llm` | openrouter | `input_tokens` / `output_tokens` (SM-only OpenRouter key, daily ingest) |
+| `supermemory_embed` | openrouter | `embed_tokens` (SM remote embeddings via OpenRouter) |
+
+Supermemory infra tokens are **not** logged per request. A daily job pulls OpenRouter `/activity` for the SM-only key (Management API) and writes one row per `(date, model, kind)` with idempotent `source_ref` like `sm-or:2026-11-10:openai_text-embedding-3-small:embed`. Metadata includes `openrouter_usage_usd` (provider-reported) and `scope=supermemory_infra`.
+
+Env (Agents web + worker + beat):
+
+| Variable | Role |
+| --- | --- |
+| `OPENROUTER_MANAGEMENT_KEY` | Management/provisioning key for `/keys` + `/activity` |
+| `SUPERMEMORY_OPENROUTER_API_KEY_HASH` | Hash of the SM inference key (preferred) |
+| `SUPERMEMORY_OPENROUTER_KEY_NAME` | Fallback label match (default `supermemory`) |
+
+Manual trigger: `POST /api/admin/usage/supermemory-openrouter/ingest` (admin). Celery: `usage.ingest_supermemory_openrouter` (Beat daily ~02:15 UTC). Requires a Railway **beat** process from `Procfile`.
 
 ## How to use
 
@@ -40,7 +54,8 @@ RPC: `contos_log_usage_event(...)` looks up rates, resolves `user_email`, insert
 
 ## Writers
 
-- Agents: `Agents/backend/db/usage_ledger.py` (base agent, judge, website, embed, translate, supermemory)
+- Agents: `Agents/backend/db/usage_ledger.py` (base agent, judge, website, embed, translate, supermemory ops)
+- Agents: `Agents/backend/services/supermemory_usage_ingest.py` + `tasks/usage_metering.py` (SM OpenRouter LLM/embed activity)
 - Backend: `Backend/app/services/usage_ledger.py` (competitor pipeline scrape / transcribe / summary / Twitter embedding)
 
 Logging is **best-effort** — failures are logged and never break product flows.
@@ -54,7 +69,9 @@ Logging is **best-effort** — failures are logged and never break product flows
 ## Known limitations
 
 - Estimates only — OpenRouter provider routing and Apify actor billing can differ from seeded rates.
-- Supermemory is self-hosted: ops are metered at **$0** by default (visibility), not vendor tokens.
+- Self-hosted Supermemory API ops remain `supermemory_op` at **$0**; LLM/embed spend is metered separately via OpenRouter activity (`supermemory_llm` / `supermemory_embed`).
+- OpenRouter `/activity` is day-grain and can lag; same-day live metering is not available.
+- `estimated_cost_usd` uses ContOS `usage_price_rates`; provider-reported USD is also stored in metadata as `openrouter_usage_usd`.
 - Historical `agent_calls` are not backfilled into `usage_events`.
 - Draft-judge / nested LLM calls are separate rows from the main agent invoke.
 - No Dodo / plan quota enforcement in this change.

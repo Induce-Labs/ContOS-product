@@ -755,6 +755,55 @@ def backfill_twitter_summaries(
         ) from exc
 
 
+class SupermemoryUsageIngestRequest(BaseModel):
+    """Optional UTC calendar day for OpenRouter activity ingest (default: yesterday)."""
+
+    usage_date: str | None = Field(
+        default=None,
+        description="UTC date YYYY-MM-DD. Defaults to yesterday UTC.",
+    )
+    async_enqueue: bool = Field(
+        default=False,
+        description="If true, enqueue Celery task instead of running inline.",
+    )
+
+
+@app.post("/api/admin/usage/supermemory-openrouter/ingest")
+def ingest_supermemory_openrouter_usage_admin(
+    body: SupermemoryUsageIngestRequest | None = None,
+    user_id: UUID = Depends(get_current_user_id),
+) -> dict[str, Any]:
+    """Pull SM-only OpenRouter activity into usage_events (admin)."""
+    require_admin_user(user_id)
+    payload = body or SupermemoryUsageIngestRequest()
+    from services.openrouter_analytics import OpenRouterAnalyticsError
+    from services.supermemory_usage_ingest import ingest_supermemory_openrouter_usage
+
+    try:
+        if payload.async_enqueue:
+            from tasks.usage_metering import ingest_supermemory_openrouter_task
+
+            async_result = ingest_supermemory_openrouter_task.delay(
+                usage_date=payload.usage_date,
+            )
+            return {
+                "queued": True,
+                "task_id": async_result.id,
+                "usage_date": payload.usage_date,
+            }
+
+        return ingest_supermemory_openrouter_usage(usage_date=payload.usage_date)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except OpenRouterAnalyticsError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Supermemory OpenRouter usage ingest failed: {exc}",
+        ) from exc
+
+
 @app.get("/api/mcp/tools")
 def list_mcp_tools(
     user_id: UUID = Depends(get_current_user_id),
